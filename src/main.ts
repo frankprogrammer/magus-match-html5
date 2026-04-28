@@ -8,6 +8,7 @@ import {
 } from './platform-browser/BrowserInputAdapter';
 import { loadBrowserImages } from './platform-browser/BrowserImageLoader';
 import { LocalLeaderboardStore } from './platform-browser/LocalLeaderboardStore';
+import { BoardAnimationPresenter } from './render-2d/BoardAnimationPresenter';
 import { Canvas2DRenderer } from './render-2d/Canvas2DRenderer';
 import { renderFrame } from './render-2d/RenderFrame';
 import { ThreeHeroStage } from './render-three/ThreeHeroStage';
@@ -70,6 +71,7 @@ if (ctx == null) {
 
 const renderer = new Canvas2DRenderer(ctx, {}, LOGICAL_WIDTH, LOGICAL_HEIGHT);
 const heroStage = new ThreeHeroStage(heroStageElement);
+const boardAnimationPresenter = new BoardAnimationPresenter();
 let audio: BrowserAudio | null = null;
 const leaderboardStore = new LocalLeaderboardStore();
 let leaderboardRows: readonly LeaderboardEntry[] = leaderboardStore.load();
@@ -116,7 +118,7 @@ function tick(timeMs: number): void {
   renderHud(hudState);
   renderFrame(
     renderer,
-    app.getBoardRenderState(),
+    boardAnimationPresenter.present(app.getBoardRenderState(), timeMs / 1000),
     hudState,
     timeMs / 1000,
     screenState,
@@ -129,7 +131,7 @@ resizeLogicalStage();
 renderHud();
 renderFrame(
   renderer,
-  app.getBoardRenderState(),
+  boardAnimationPresenter.present(app.getBoardRenderState(), 0),
   getBrowserHudState(),
   0,
   getBrowserScreenState(),

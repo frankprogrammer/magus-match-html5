@@ -14,6 +14,7 @@ import { createRandomSeed, SeededRng } from './Rng';
 import type { GamePhase, LevelType, RunState } from './Types';
 import type { Board } from '../board/Board';
 import { cloneBoard, createEmptyBoard, getAllPlayableCoords } from '../board/Board';
+import { stampBoardAnimationTrace, type BoardAnimationTrace } from '../board/BoardAnimationTrace';
 import type { TileType } from '../board/TileTypes';
 import { AssetIds } from '../assets/AssetIds';
 import type { GeneratedLevel } from '../generator/LevelGenerator';
@@ -96,6 +97,8 @@ export class MagusMatchGameApp implements GameApp {
   private visualCues: RuntimeBoardVisualCue[] = [];
   private shakeTimerSec = 0;
   private shakeAmplitudePixels = 0;
+  private latestBoardAnimationTrace: BoardAnimationTrace | null = null;
+  private nextBoardAnimationRevision = 1;
 
   constructor(seed?: number, private readonly options: MagusMatchGameAppOptions = {}) {
     this.debugSeed = seed;
@@ -152,6 +155,7 @@ export class MagusMatchGameApp implements GameApp {
           }
 
           return {
+            tileId: tile.id,
             coord,
             assetId: assetIdForTileType(tile.type),
             tileType: tile.type,
@@ -171,6 +175,7 @@ export class MagusMatchGameApp implements GameApp {
       queuedSwap: null,
       shakePixels: this.getShakePixels(),
       visualCues: this.getBoardVisualCueState(),
+      animationTrace: this.latestBoardAnimationTrace,
     };
   }
 
@@ -242,6 +247,8 @@ export class MagusMatchGameApp implements GameApp {
     this.visualCues = [];
     this.shakeTimerSec = 0;
     this.shakeAmplitudePixels = 0;
+    this.latestBoardAnimationTrace = null;
+    this.nextBoardAnimationRevision = 1;
     this.phase = 'TITLE';
     this.events = [];
   }
@@ -318,6 +325,7 @@ export class MagusMatchGameApp implements GameApp {
     this.visualCues = [];
     this.shakeTimerSec = 0;
     this.shakeAmplitudePixels = 0;
+    this.latestBoardAnimationTrace = null;
   }
 
   private startPreparedLevel(): void {
@@ -459,6 +467,7 @@ export class MagusMatchGameApp implements GameApp {
     this.journeyRuntime = result.runtime;
     this.levelMatchCount += result.scoringStats.matchCount;
     this.levelValidSwapCount += result.scoringStats.validSwapCount;
+    this.captureBoardAnimationTrace(result.animationTrace);
     this.emitMatchAudioAndJuice(result.scoringStats, to);
     this.emitJourneyAudioAndJuice(result, previousMageCell, to);
     const scoreDelta = result.scoreDelta + scoreSwapStats(result.scoringStats);
@@ -488,6 +497,7 @@ export class MagusMatchGameApp implements GameApp {
     this.trialRuntime = result.runtime;
     this.levelMatchCount += result.scoringStats.matchCount;
     this.levelValidSwapCount += result.scoringStats.validSwapCount;
+    this.captureBoardAnimationTrace(result.animationTrace);
     this.emitMatchAudioAndJuice(result.scoringStats, to);
     this.emitTrialAudioAndJuice(result.damageEvents, to);
     const scoreDelta = result.scoreDelta + scoreSwapStats(result.scoringStats);
@@ -520,6 +530,16 @@ export class MagusMatchGameApp implements GameApp {
     }
 
     return 0;
+  }
+
+  private captureBoardAnimationTrace(trace: BoardAnimationTrace | undefined): void {
+    const stampedTrace = stampBoardAnimationTrace(trace, this.nextBoardAnimationRevision);
+    if (stampedTrace == null) {
+      return;
+    }
+
+    this.latestBoardAnimationTrace = stampedTrace;
+    this.nextBoardAnimationRevision += 1;
   }
 
   private requestSound(

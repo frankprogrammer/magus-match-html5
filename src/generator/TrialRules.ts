@@ -1,4 +1,5 @@
 import type { Board } from '../board/Board';
+import type { BoardAnimationTrace } from '../board/BoardAnimationTrace';
 import {
   cloneBoard,
   createTileIdFactory,
@@ -73,6 +74,7 @@ export interface TrialSwapResult {
   scoreDelta: number;
   damageEvents: readonly TrialDamageEvent[];
   scoringStats: SwapScoringStats;
+  animationTrace?: BoardAnimationTrace;
 }
 
 interface TrialDamageSource {
@@ -150,8 +152,10 @@ export function processTrialSwap(
   }
 
   const powerUpActivation = getPowerUpActivation(board, from, to);
+  const preSwapBoard = cloneBoard(board);
   const swappedBoard = cloneBoard(board);
   swapTilesInPlace(swappedBoard, from, to);
+  const postSwapBoard = cloneBoard(swappedBoard);
 
   const nextTileId = createTileIdFactory('trial-cascade-tile');
   const damageSources: TrialDamageSource[] = [];
@@ -165,9 +169,27 @@ export function processTrialSwap(
     damageSources.push(powerUpDamageSource(level, detonation, powerUpActivation.targetType));
     applyGravity(swappedBoard);
     fillEmptyCellsWithStandardTiles(swappedBoard, rng, nextTileId);
-    cascadeResult = resolveCascades(swappedBoard, rng, { preferredSpawnCell: to, nextTileId });
+    cascadeResult = resolveCascades(swappedBoard, rng, {
+      preferredSpawnCell: to,
+      nextTileId,
+      animation: {
+        revisionId: 0,
+        preSwapBoard,
+        postSwapBoard,
+        swappedCells: { from, to },
+      },
+    });
   } else {
-    cascadeResult = resolveCascades(swappedBoard, rng, { preferredSpawnCell: to, nextTileId });
+    cascadeResult = resolveCascades(swappedBoard, rng, {
+      preferredSpawnCell: to,
+      nextTileId,
+      animation: {
+        revisionId: 0,
+        preSwapBoard,
+        postSwapBoard,
+        swappedCells: { from, to },
+      },
+    });
   }
 
   damageSources.push(...cascadeDamageSources(level, cascadeResult));
@@ -182,6 +204,7 @@ export function processTrialSwap(
     scoreDelta: damageApplication.scoreDelta,
     damageEvents: damageApplication.damageEvents,
     scoringStats: createSwapScoringStats(matchCount, powerUpsCreated),
+    animationTrace: cascadeResult.animationTrace,
   };
 }
 
@@ -516,5 +539,6 @@ function invalidTrialSwap(board: Board, runtime: TrialRuntimeState): TrialSwapRe
     scoreDelta: 0,
     damageEvents: [],
     scoringStats: EMPTY_SWAP_SCORING_STATS,
+    animationTrace: undefined,
   };
 }

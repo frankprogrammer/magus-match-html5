@@ -1,6 +1,13 @@
 import type { CellCoord } from '../core/Layout';
 import { BOARD_SIZE } from '../core/Layout';
 import type { SeededRng } from '../core/Rng';
+import {
+  buildBoardAnimationCascadeStep,
+  createBoardAnimationTrace,
+  type BoardAnimationCascadeStep,
+  type BoardAnimationTrace,
+  type BoardAnimationTraceOptions,
+} from './BoardAnimationTrace';
 import type { Board, TileIdFactory } from './Board';
 import {
   cloneBoard,
@@ -27,11 +34,13 @@ export interface CascadeStep {
 export interface CascadeResult {
   board: Board;
   steps: readonly CascadeStep[];
+  animationTrace?: BoardAnimationTrace;
 }
 
 export interface ResolveCascadeOptions extends DetectMatchOptions {
   maxIterations?: number;
   nextTileId?: TileIdFactory;
+  animation?: BoardAnimationTraceOptions;
 }
 
 export function resolveCascades(
@@ -41,6 +50,7 @@ export function resolveCascades(
 ): CascadeResult {
   const workingBoard = cloneBoard(board);
   const steps: CascadeStep[] = [];
+  const animationSteps: BoardAnimationCascadeStep[] = [];
   const maxIterations = options.maxIterations ?? 50;
   const nextTileId = options.nextTileId ?? createTileIdFactory('cascade-tile');
 
@@ -50,19 +60,42 @@ export function resolveCascades(
     });
 
     if (matches.length === 0) {
-      return { board: workingBoard, steps };
+      return {
+        board: workingBoard,
+        steps,
+        animationTrace:
+          options.animation == null
+            ? undefined
+            : createBoardAnimationTrace(options.animation, animationSteps, workingBoard),
+      };
     }
 
+    const beforeClearBoard = cloneBoard(workingBoard);
     const clearedCells = uniqueCoords(matches.flatMap((match) => match.tiles));
     const spawnedPowerUps = clearMatchesAndSpawnPowerUps(workingBoard, matches, nextTileId);
+    const beforeGravityBoard = cloneBoard(workingBoard);
     applyGravity(workingBoard);
+    const afterGravityBoard = cloneBoard(workingBoard);
     fillEmptyCellsWithStandardTiles(workingBoard, rng, nextTileId);
+    const finalBoard = cloneBoard(workingBoard);
 
     steps.push({
       matches,
       clearedCells,
       spawnedPowerUps,
     });
+    if (options.animation != null) {
+      animationSteps.push(
+        buildBoardAnimationCascadeStep(
+          iteration,
+          beforeClearBoard,
+          beforeGravityBoard,
+          afterGravityBoard,
+          finalBoard,
+          clearedCells,
+        ),
+      );
+    }
   }
 
   throw new Error(`Cascade did not settle after ${maxIterations} iterations.`);

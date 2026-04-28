@@ -1,12 +1,19 @@
 import type { CellCoord } from '../core/Layout';
 import type { TileType } from '../board/TileTypes';
+import type { BoardAnimationTrace } from '../board/BoardAnimationTrace';
 
 export interface BoardCellVisualState {
+  tileId: string;
   coord: CellCoord;
   assetId: string;
   tileType: TileType;
   isPath: boolean;
   alpha: number;
+  renderX?: number;
+  renderY?: number;
+  scale?: number;
+  zIndex?: number;
+  isGhost?: boolean;
 }
 
 export type BoardVisualCueKind = 'matchFlash' | 'pathGlow' | 'powerPulse' | 'damagePopup';
@@ -30,4 +37,5 @@ export interface BoardRenderState {
   queuedSwap: { from: CellCoord; to: CellCoord } | null;
   shakePixels: number;
   visualCues: readonly BoardVisualCueState[];
+  animationTrace?: BoardAnimationTrace | null;
 }

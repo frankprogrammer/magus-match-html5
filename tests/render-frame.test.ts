@@ -11,6 +11,7 @@ describe('buildBoardCellVisuals', () => {
       logicalHeight: 1920,
       boardCells: [
         {
+          tileId: 'tile-0',
           coord: { col: 0, row: 0 },
           assetId: 'tile.fire',
           tileType: 'FIRE',
@@ -18,6 +19,7 @@ describe('buildBoardCellVisuals', () => {
           alpha: 1,
         },
         {
+          tileId: 'tile-1',
           coord: { col: 7, row: 7 },
           assetId: 'tile.land',
           tileType: 'LAND',
@@ -134,6 +136,7 @@ function oneTileState(assetId: string): BoardRenderState {
     logicalHeight: 1920,
     boardCells: [
       {
+        tileId: 'tile-0',
         coord: { col: 0, row: 0 },
         assetId,
         tileType: 'FIRE',
@@ -182,6 +185,10 @@ class FakeRenderer implements GameRenderer {
 
   pushRotate(): void {
     this.calls.push('pushRotate');
+  }
+
+  pushAlpha(): void {
+    this.calls.push('pushAlpha');
   }
 
   pop(): void {

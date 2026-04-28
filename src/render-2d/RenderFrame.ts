@@ -1,4 +1,4 @@
-import { BOARD_RECT, BOARD_SIZE, HERO_STAGE_HEIGHT, HUD_HEIGHT, LOGICAL_HEIGHT, LOGICAL_WIDTH } from '../core/Layout';
+import { BOARD_RECT, HERO_STAGE_HEIGHT, HUD_HEIGHT, LOGICAL_HEIGHT, LOGICAL_WIDTH } from '../core/Layout';
 import type { CellCoord } from '../core/Layout';
 import type { TileType } from '../board/TileTypes';
 import type { HudRenderState } from './HudRenderState';
@@ -7,6 +7,7 @@ import type { GameRenderer } from './GameRenderer';
 import type { ScreenRenderState } from './ScreenRenderState';
 
 export interface BoardCellVisual {
+  tileId: string;
   coord: CellCoord;
   x: number;
   y: number;
@@ -25,6 +26,7 @@ export interface BoardCellVisual {
   alpha: number;
   scale: number;
   flash: number;
+  zIndex: number;
 }
 
 export function renderFrame(
@@ -45,7 +47,6 @@ export function renderFrame(
 
 export function buildBoardCellVisuals(boardState: BoardRenderState, elapsedSec: number): BoardCellVisual[] {
   const hinted = new Set(boardState.hintedCells.map(coordKey));
-  const cellByCoord = new Map(boardState.boardCells.map((cell) => [coordKey(cell.coord), cell]));
   const cuesByCoord = new Map<string, BoardRenderState['visualCues']>();
   for (const cue of boardState.visualCues) {
     const key = coordKey(cue.coord);
@@ -55,14 +56,8 @@ export function buildBoardCellVisuals(boardState: BoardRenderState, elapsedSec: 
   const visuals: BoardCellVisual[] = [];
   const hintPulse = (Math.sin(elapsedSec * Math.PI * 3) + 1) / 2;
 
-  for (let row = 0; row < BOARD_SIZE; row += 1) {
-    for (let col = 0; col < BOARD_SIZE; col += 1) {
-      const coord = { col, row };
-      const state = cellByCoord.get(coordKey(coord));
-      if (state == null) {
-        continue;
-      }
-
+  for (const state of boardState.boardCells) {
+      const coord = state.coord;
       const isHinted = hinted.has(coordKey(coord));
       const cueValues = cuesByCoord.get(coordKey(coord)) ?? [];
       const cueFlash = cueValues.reduce((highest, cue) => {
@@ -75,16 +70,19 @@ export function buildBoardCellVisuals(boardState: BoardRenderState, elapsedSec: 
       const cueScale = cueValues.some((cue) => cue.kind === 'powerPulse')
         ? 1 + cueValues.reduce((highest, cue) => Math.max(highest, cue.value), 0) * 0.1
         : 1;
-      const x = BOARD_RECT.x + col * BOARD_RECT.cellSize;
-      const y = BOARD_RECT.y + row * BOARD_RECT.cellSize;
+      const x = BOARD_RECT.x + coord.col * BOARD_RECT.cellSize;
+      const y = BOARD_RECT.y + coord.row * BOARD_RECT.cellSize;
+      const renderX = state.renderX ?? x;
+      const renderY = state.renderY ?? y;
       visuals.push({
+        tileId: state.tileId,
         coord,
-        x,
-        y,
+        x: renderX,
+        y: renderY,
         width: BOARD_RECT.cellSize,
         height: BOARD_RECT.cellSize,
-        centerX: x + BOARD_RECT.cellSize / 2,
-        centerY: y + BOARD_RECT.cellSize / 2,
+        centerX: renderX + BOARD_RECT.cellSize / 2,
+        centerY: renderY + BOARD_RECT.cellSize / 2,
         assetId: state.assetId,
         tileType: state.tileType,
         fillColor: colorForTile(state.tileType),
@@ -94,10 +92,10 @@ export function buildBoardCellVisuals(boardState: BoardRenderState, elapsedSec: 
         hasMage: coordsEqual(boardState.mageCell, coord),
         hasGoal: coordsEqual(boardState.goalCell, coord),
         alpha: state.alpha,
-        scale: Math.max(isHinted ? 1 + hintPulse * 0.05 : 1, cueScale),
+        scale: state.scale ?? Math.max(isHinted ? 1 + hintPulse * 0.05 : 1, cueScale),
         flash: Math.max(isHinted ? 0.35 + hintPulse * 0.45 : 0, cueFlash * 0.5),
+        zIndex: state.zIndex ?? 0,
       });
-    }
   }
 
   return visuals;
@@ -149,7 +147,14 @@ function drawBoard(renderer: GameRenderer, boardState: BoardRenderState, elapsed
   renderer.drawRect('#c8a24b', BOARD_RECT.x - 8, BOARD_RECT.y - 8, BOARD_RECT.width + 16, BOARD_RECT.height + 16);
   renderer.drawRect('#302340', BOARD_RECT.x, BOARD_RECT.y, BOARD_RECT.width, BOARD_RECT.height);
 
-  for (const visual of buildBoardCellVisuals(boardState, elapsedSec)) {
+  const visuals = buildBoardCellVisuals(boardState, elapsedSec).sort(
+    (first, second) =>
+      first.zIndex - second.zIndex ||
+      first.coord.row - second.coord.row ||
+      first.coord.col - second.coord.col,
+  );
+
+  for (const visual of visuals) {
     drawCell(renderer, visual);
   }
 
@@ -166,6 +171,11 @@ function drawCell(renderer: GameRenderer, visual: BoardCellVisual): void {
   const x = visual.centerX - scaledWidth / 2;
   const y = visual.centerY - scaledHeight / 2;
 
+  if (visual.alpha <= 0) {
+    return;
+  }
+
+  renderer.pushAlpha(visual.alpha);
   renderer.drawRect('#171225', visual.x, visual.y, visual.width, visual.height);
 
   const imageRef = { id: visual.assetId };
@@ -211,6 +221,7 @@ function drawCell(renderer: GameRenderer, visual: BoardCellVisual): void {
       align: 'center',
     });
   }
+  renderer.pop();
 }
 
 function drawDamagePopups(renderer: GameRenderer, boardState: BoardRenderState): void {

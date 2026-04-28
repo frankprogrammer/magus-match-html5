@@ -16,6 +16,7 @@ export interface GameRenderer {
   pushTranslate(x: number, y: number): void;
   pushScale(scaleX: number, scaleY: number, originX?: number, originY?: number): void;
   pushRotate(degrees: number, originX?: number, originY?: number): void;
+  pushAlpha(alpha: number): void;
   pop(): void;
 
   drawRect(color: string, x: number, y: number, width: number, height: number): void;

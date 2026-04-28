@@ -2,6 +2,13 @@ import type { CellCoord } from '../core/Layout';
 import { BOARD_SIZE } from '../core/Layout';
 import type { SeededRng } from '../core/Rng';
 import {
+  buildBoardAnimationCascadeStep,
+  createBoardAnimationTrace,
+  type BoardAnimationCascadeStep,
+  type BoardAnimationTrace,
+  type BoardAnimationTraceOptions,
+} from '../board/BoardAnimationTrace';
+import {
   cloneBoard,
   coordKey,
   coordsEqual,
@@ -38,6 +45,7 @@ export interface JourneySwapResult {
   convertedPathCells: readonly CellCoord[];
   clearedStandardCells: readonly CellCoord[];
   scoringStats: SwapScoringStats;
+  animationTrace?: BoardAnimationTrace;
 }
 
 export function createJourneyRuntime(level: GeneratedJourneyLevel): JourneyRuntimeState {
@@ -69,7 +77,15 @@ export function processJourneySwap(
   const swappedBoard = cloneBoard(board);
   swapTilesInPlace(swappedBoard, from, to);
 
-  const resolution = resolveJourneyBoard(swappedBoard, rng, { preferredSpawnCell: to });
+  const resolution = resolveJourneyBoard(swappedBoard, rng, {
+    preferredSpawnCell: to,
+    animation: {
+      revisionId: 0,
+      preSwapBoard: board,
+      postSwapBoard: swappedBoard,
+      swappedCells: { from, to },
+    },
+  });
   const nextMovesRemaining = Math.max(0, runtime.movesRemaining - 1);
   const nextMageCell =
     resolution.convertedPathCells.length > 0
@@ -90,6 +106,7 @@ export function processJourneySwap(
     convertedPathCells: resolution.convertedPathCells,
     clearedStandardCells: resolution.clearedStandardCells,
     scoringStats: createSwapScoringStats(resolution.matchCount, resolution.powerUpsCreated),
+    animationTrace: resolution.animationTrace,
   };
 }
 
@@ -99,12 +116,14 @@ export interface JourneyBoardResolution {
   clearedStandardCells: readonly CellCoord[];
   matchCount: number;
   powerUpsCreated: number;
+  animationTrace?: BoardAnimationTrace;
 }
 
 export interface ResolveJourneyBoardOptions {
   preferredSpawnCell?: CellCoord;
   maxIterations?: number;
   nextTileId?: TileIdFactory;
+  animation?: BoardAnimationTraceOptions;
 }
 
 export function resolveJourneyBoard(
@@ -117,6 +136,7 @@ export function resolveJourneyBoard(
   const clearedStandardCells: CellCoord[] = [];
   let matchCount = 0;
   let powerUpsCreated = 0;
+  const animationSteps: BoardAnimationCascadeStep[] = [];
   const maxIterations = options.maxIterations ?? 50;
   const nextTileId = options.nextTileId ?? createTileIdFactory('journey-cascade-tile');
 
@@ -132,16 +152,38 @@ export function resolveJourneyBoard(
         clearedStandardCells: uniqueCoords(clearedStandardCells),
         matchCount,
         powerUpsCreated,
+        animationTrace:
+          options.animation == null
+            ? undefined
+            : createBoardAnimationTrace(options.animation, animationSteps, workingBoard),
       };
     }
 
+    const beforeClearBoard = cloneBoard(workingBoard);
+    const clearedCells = uniqueCoords(matches.flatMap((match) => match.tiles));
     const matchedCells = applyJourneyMatches(workingBoard, matches, nextTileId);
+    const beforeGravityBoard = cloneBoard(workingBoard);
     matchCount += matches.length;
     powerUpsCreated += matchedCells.powerUpsCreated;
     convertedPathCells.push(...matchedCells.convertedPathCells);
     clearedStandardCells.push(...matchedCells.clearedStandardCells);
     applyGravity(workingBoard);
+    const afterGravityBoard = cloneBoard(workingBoard);
     fillEmptyCellsWithStandardTiles(workingBoard, rng, nextTileId);
+    const finalBoard = cloneBoard(workingBoard);
+
+    if (options.animation != null) {
+      animationSteps.push(
+        buildBoardAnimationCascadeStep(
+          iteration,
+          beforeClearBoard,
+          beforeGravityBoard,
+          afterGravityBoard,
+          finalBoard,
+          clearedCells,
+        ),
+      );
+    }
   }
 
   throw new Error(`Journey board did not settle after ${maxIterations} iterations.`);
@@ -232,6 +274,7 @@ function invalidJourneySwap(board: Board, runtime: JourneyRuntimeState): Journey
     convertedPathCells: [],
     clearedStandardCells: [],
     scoringStats: EMPTY_SWAP_SCORING_STATS,
+    animationTrace: undefined,
   };
 }
 

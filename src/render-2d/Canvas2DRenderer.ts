@@ -35,6 +35,11 @@ export class Canvas2DRenderer implements GameRenderer {
     this.ctx.translate(-originX, -originY);
   }
 
+  pushAlpha(alpha: number): void {
+    this.ctx.save();
+    this.ctx.globalAlpha *= Math.max(0, Math.min(1, alpha));
+  }
+
   pop(): void {
     this.ctx.restore();
   }

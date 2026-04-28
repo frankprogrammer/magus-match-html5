@@ -5,6 +5,7 @@ import { GAME_OVER_TRY_AGAIN_BUTTON_RECT, TITLE_PLAY_BUTTON_RECT } from '../src/
 import { MagusMatchGameApp } from '../src/core/GameApp';
 import type { GameEvent } from '../src/core/GameEvents';
 import { CAMERA_SHAKE_MAX, CAMERA_SHAKE_MIN } from '../src/data/tuning';
+import { BoardAnimationPresenter } from '../src/render-2d/BoardAnimationPresenter';
 
 describe('MagusMatchGameApp', () => {
   it('resets to the initial run values for a provided seed', () => {
@@ -119,6 +120,31 @@ describe('MagusMatchGameApp', () => {
     expect(boardState.shakePixels).toBeLessThanOrEqual(CAMERA_SHAKE_MAX);
     expect(boardState.visualCues.length).toBeGreaterThan(0);
     expect(boardState.visualCues.every((cue) => cue.value >= 0 && cue.value <= 1)).toBe(true);
+  });
+
+  it('accepts another valid swap while a board animation is active', () => {
+    const app = new MagusMatchGameApp(555);
+    const level = app.getCurrentLevelForDebug();
+    if (level?.type !== 'JOURNEY') {
+      throw new Error('Expected generated Journey level.');
+    }
+
+    tap(app, TITLE_PLAY_BUTTON_RECT);
+    app.drainEvents();
+    app.update(0, [{ type: 'swap', from: level.journey.firstHint.from, to: level.journey.firstHint.to }]);
+    const firstStats = app.getLevelStatsForDebug();
+    const firstTrace = app.getBoardRenderState().animationTrace;
+    const presenter = new BoardAnimationPresenter();
+    presenter.present(app.getBoardRenderState(), 0);
+    presenter.present(app.getBoardRenderState(), 0.12);
+
+    const nextMove = findValidMoves(app.getBoardForDebug())[0];
+    app.update(0, [{ type: 'swap', from: nextMove.from, to: nextMove.to }]);
+    const secondStats = app.getLevelStatsForDebug();
+
+    expect(firstTrace?.revisionId).toBeDefined();
+    expect(secondStats.validSwapCount).toBe(firstStats.validSwapCount + 1);
+    expect(app.getBoardRenderState().animationTrace?.revisionId).toBeGreaterThan(firstTrace?.revisionId ?? 0);
   });
 
   it('starts on Title and emits levelStarted when Play is tapped', () => {

@@ -3,7 +3,7 @@ import type { GameInputCommand } from './GameInput';
 import { BOARD_SIZE, LOGICAL_HEIGHT, LOGICAL_WIDTH } from './Layout';
 import type { CellCoord } from './Layout';
 import { createRandomSeed, SeededRng } from './Rng';
-import type { GamePhase, RunState } from './Types';
+import type { GamePhase, LevelType, RunState } from './Types';
 import type { Board } from '../board/Board';
 import { cloneBoard, createEmptyBoard, getAllPlayableCoords } from '../board/Board';
 import type { TileType } from '../board/TileTypes';
@@ -16,6 +16,14 @@ import {
   getVisibleJourneyHintCells,
   processJourneySwap,
 } from '../generator/JourneyRules';
+import type { ActiveTrialMonster, TrialRuntimeState } from '../generator/TrialRules';
+import {
+  createTrialRuntime,
+  getTrialMageWorldPosition,
+  getTrialMonsterWorldPosition,
+  processTrialSwap,
+  updateTrialRuntime,
+} from '../generator/TrialRules';
 import type { BoardRenderState } from '../render-2d/BoardRenderState';
 import type { HudRenderState } from '../render-2d/HudRenderState';
 import { HeroStageTemplateIds } from '../world-3d/HeroStageTemplates';
@@ -32,6 +40,10 @@ export interface GameApp {
   reset(seed?: number): void;
 }
 
+export interface MagusMatchGameAppOptions {
+  debugLevelType?: LevelType;
+}
+
 export class MagusMatchGameApp implements GameApp {
   private events: GameEvent[] = [];
   private rng = new SeededRng();
@@ -40,14 +52,16 @@ export class MagusMatchGameApp implements GameApp {
   private board: Board = createEmptyBoard();
   private currentLevel: GeneratedLevel | null = null;
   private journeyRuntime: JourneyRuntimeState | null = null;
+  private trialRuntime: TrialRuntimeState | null = null;
   private phase: GamePhase = 'IDLE';
 
-  constructor(seed?: number) {
+  constructor(seed?: number, private readonly options: MagusMatchGameAppOptions = {}) {
     this.reset(seed);
   }
 
   update(dtSec: number, commands: readonly GameInputCommand[]): void {
     this.elapsedSec += Math.max(0, dtSec);
+    this.updateTrialStage(dtSec);
 
     for (const command of commands) {
       if (command.type === 'restart') {
@@ -97,11 +111,11 @@ export class MagusMatchGameApp implements GameApp {
   getHeroWorldState(): HeroWorldState {
     const objects = this.getHeroWorldObjects();
     return {
-      levelType: 'JOURNEY',
+      levelType: this.currentLevel?.type ?? 'JOURNEY',
       backdropId: 'backdrop.forest',
       cinematicState: phaseToCinematicState(this.phase),
       objects,
-      activeProjectiles: [],
+      activeProjectiles: this.trialRuntime?.projectiles ?? [],
       camera: {
         mode: 'fixed',
         position: { x: 0, y: 0, z: 12 },
@@ -136,9 +150,13 @@ export class MagusMatchGameApp implements GameApp {
       levelNumber: this.run.levelNumber,
       difficulty: this.run.difficulty,
       seed,
+      forcedLevelType: this.options.debugLevelType,
     });
     this.board = cloneBoard(this.currentLevel.initialBoard);
-    this.journeyRuntime = createJourneyRuntime(this.currentLevel);
+    this.journeyRuntime =
+      this.currentLevel.type === 'JOURNEY' ? createJourneyRuntime(this.currentLevel) : null;
+    this.trialRuntime =
+      this.currentLevel.type === 'TRIAL' ? createTrialRuntime(this.currentLevel) : null;
     this.elapsedSec = 0;
     this.phase = 'IDLE';
     this.events = [];
@@ -168,7 +186,34 @@ export class MagusMatchGameApp implements GameApp {
     return this.journeyRuntime == null ? null : { ...this.journeyRuntime };
   }
 
+  getTrialRuntimeForDebug(): TrialRuntimeState | null {
+    return this.trialRuntime == null
+      ? null
+      : {
+          ...this.trialRuntime,
+          monsters: this.trialRuntime.monsters.map((monster) => ({ ...monster })),
+          projectiles: this.trialRuntime.projectiles.map((projectile) => ({ ...projectile })),
+          defeatedMonsterIds: [...this.trialRuntime.defeatedMonsterIds],
+        };
+  }
+
+  private updateTrialStage(dtSec: number): void {
+    if (this.currentLevel?.type !== 'TRIAL' || this.trialRuntime == null) {
+      return;
+    }
+
+    const nextRuntime = updateTrialRuntime(this.trialRuntime, this.currentLevel, dtSec);
+    this.trialRuntime = nextRuntime;
+    this.phase =
+      nextRuntime.result === 'won' ? 'WIN' : nextRuntime.result === 'lost' ? 'LOSE' : this.phase;
+  }
+
   private handleSwap(from: { col: number; row: number }, to: { col: number; row: number }): void {
+    if (this.currentLevel?.type === 'TRIAL' && this.trialRuntime != null) {
+      this.handleTrialSwap(from, to);
+      return;
+    }
+
     if (this.currentLevel?.type !== 'JOURNEY' || this.journeyRuntime == null) {
       return;
     }
@@ -197,7 +242,47 @@ export class MagusMatchGameApp implements GameApp {
       result.runtime.result === 'won' ? 'WIN' : result.runtime.result === 'lost' ? 'LOSE' : 'IDLE';
   }
 
+  private handleTrialSwap(from: CellCoord, to: CellCoord): void {
+    if (this.currentLevel?.type !== 'TRIAL' || this.trialRuntime == null) {
+      return;
+    }
+
+    const result = processTrialSwap(this.board, this.trialRuntime, this.currentLevel, from, to, this.rng);
+    if (!result.valid) {
+      return;
+    }
+
+    this.board = result.board;
+    this.trialRuntime = result.runtime;
+
+    if (result.scoreDelta > 0) {
+      this.run = { ...this.run, score: this.run.score + result.scoreDelta };
+      this.events.push({ type: 'scoreChanged', score: this.run.score });
+    }
+
+    if (result.damageEvents.some((event) => event.defeated)) {
+      this.events.push({ type: 'soundRequested', soundId: AssetIds.sounds.monsterDefeat });
+    } else if (result.damageEvents.length > 0) {
+      this.events.push({ type: 'soundRequested', soundId: AssetIds.sounds.monsterDamage });
+    }
+
+    this.phase =
+      result.runtime.result === 'won' ? 'WIN' : result.runtime.result === 'lost' ? 'LOSE' : 'IDLE';
+  }
+
   private getObjectiveText(): string {
+    if (this.currentLevel?.type === 'TRIAL' && this.trialRuntime != null) {
+      if (this.trialRuntime.result === 'won') {
+        return 'Trial cleared';
+      }
+
+      if (this.trialRuntime.result === 'lost') {
+        return 'Monsters broke through';
+      }
+
+      return `Monsters ${this.trialRuntime.defeatedMonsterIds.length}/${this.trialRuntime.totalMonsters}`;
+    }
+
     if (this.currentLevel?.type !== 'JOURNEY' || this.journeyRuntime == null) {
       return 'Journey';
     }
@@ -228,6 +313,10 @@ export class MagusMatchGameApp implements GameApp {
         scale: { x: 12, y: 5, z: 1 },
       }),
     ];
+
+    if (this.currentLevel?.type === 'TRIAL' && this.trialRuntime != null) {
+      return [...objects, ...this.getTrialHeroWorldObjects()];
+    }
 
     if (this.currentLevel?.type !== 'JOURNEY' || this.journeyRuntime == null) {
       return objects;
@@ -266,6 +355,43 @@ export class MagusMatchGameApp implements GameApp {
         replication: 'localCosmetic',
       }),
     );
+
+    return objects;
+  }
+
+  private getTrialHeroWorldObjects(): WorldObjectState[] {
+    if (this.currentLevel?.type !== 'TRIAL' || this.trialRuntime == null) {
+      return [];
+    }
+
+    const objects: WorldObjectState[] = [
+      createWorldObject('actor-mage', HeroStageTemplateIds.mage, {
+        position: getTrialMageWorldPosition(this.currentLevel),
+        scale: { x: 0.4, y: 0.68, z: 0.4 },
+        renderOrder: 5,
+        animationId: phaseToMageAnimation(this.phase),
+      }),
+      createWorldObject('trial-fail-line', HeroStageTemplateIds.pathMarker, {
+        position: { x: 0, y: this.currentLevel.trial.failLineY, z: -0.03 },
+        scale: { x: 4.7, y: 0.04, z: 0.18 },
+        renderOrder: 1,
+        replication: 'localCosmetic',
+        tintHex: '#eb5757',
+        opacity: 0.6,
+      }),
+    ];
+
+    for (const monster of this.trialRuntime.monsters) {
+      objects.push(
+        createWorldObject(`trial-monster-${monster.monsterId}`, HeroStageTemplateIds.monsterPlaceholder, {
+          position: getTrialMonsterWorldPosition(this.currentLevel, monster),
+          scale: scaleForTrialMonster(monster.kind),
+          renderOrder: 4,
+          animationId: this.phase === 'LOSE' ? 'victory' : 'walk',
+          tintHex: tintForTrialMonster(monster.kind),
+        }),
+      );
+    }
 
     return objects;
   }
@@ -341,6 +467,28 @@ function phaseToPrinceAnimation(phase: GamePhase): string {
   return 'cower';
 }
 
+function scaleForTrialMonster(kind: ActiveTrialMonster['kind']): TransformState['scale'] {
+  switch (kind) {
+    case 'kobold':
+      return { x: 0.46, y: 0.62, z: 0.46 };
+    case 'tallKobold':
+      return { x: 0.52, y: 0.86, z: 0.52 };
+    case 'miniBoss':
+      return { x: 0.7, y: 1.05, z: 0.7 };
+  }
+}
+
+function tintForTrialMonster(kind: ActiveTrialMonster['kind']): string {
+  switch (kind) {
+    case 'kobold':
+      return '#27ae60';
+    case 'tallKobold':
+      return '#8b6f47';
+    case 'miniBoss':
+      return '#eb5757';
+  }
+}
+
 function createWorldObject(
   objectId: string,
   templateId: string,
@@ -350,6 +498,8 @@ function createWorldObject(
     renderOrder?: number;
     replication?: WorldObjectState['replication'];
     animationId?: string;
+    tintHex?: string;
+    opacity?: number;
   },
 ): WorldObjectState {
   return {
@@ -365,6 +515,8 @@ function createWorldObject(
     replication: options.replication ?? 'sharedGameplay',
     renderLayer: 'heroStage',
     renderOrder: options.renderOrder,
+    tintHex: options.tintHex,
+    opacity: options.opacity,
     animationId: options.animationId,
   };
 }

@@ -1,7 +1,11 @@
 import './styles.css';
 import { MagusMatchGameApp } from './core/GameApp';
 import { LOGICAL_HEIGHT, LOGICAL_WIDTH } from './core/Layout';
-import { BrowserInputAdapter, parseDebugSeed } from './platform-browser/BrowserInputAdapter';
+import {
+  BrowserInputAdapter,
+  parseDebugLevelType,
+  parseDebugSeed,
+} from './platform-browser/BrowserInputAdapter';
 import { Canvas2DRenderer } from './render-2d/Canvas2DRenderer';
 import { renderFrame } from './render-2d/RenderFrame';
 import { ThreeHeroStage } from './render-three/ThreeHeroStage';
@@ -12,7 +16,9 @@ if (root == null) {
   throw new Error('Missing #app root element.');
 }
 
-const app = new MagusMatchGameApp(parseDebugSeed(window.location.search));
+const app = new MagusMatchGameApp(parseDebugSeed(window.location.search), {
+  debugLevelType: parseDebugLevelType(window.location.search),
+});
 
 root.innerHTML = `
   <main class="game-shell" aria-label="Magus Match prototype shell">

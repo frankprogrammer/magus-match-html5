@@ -42,4 +42,13 @@ describe('HeroWorldState', () => {
     });
     expect(JSON.parse(JSON.stringify(camera))).toEqual(camera);
   });
+
+  it('includes Trial mage and monster placeholders for debug Trial levels', () => {
+    const app = new MagusMatchGameApp(789, { debugLevelType: 'TRIAL' });
+    const state = app.getHeroWorldState();
+
+    expect(state.levelType).toBe('TRIAL');
+    expect(state.objects.some((object) => object.templateId === HeroStageTemplateIds.mage)).toBe(true);
+    expect(state.objects.some((object) => object.templateId === HeroStageTemplateIds.monsterPlaceholder)).toBe(true);
+  });
 });

@@ -165,5 +165,20 @@ function projectilesToObjects(projectiles: readonly ProjectileState[]): WorldObj
     replication: 'localCosmetic',
     renderLayer: 'heroStage',
     renderOrder: 10,
+    tintHex: projectileColor(projectile.schoolId),
+    opacity: Math.min(1, Math.max(0.15, projectile.remainingSec / 0.08)),
   }));
+}
+
+function projectileColor(schoolId: ProjectileState['schoolId']): string {
+  switch (schoolId) {
+    case 'fire':
+      return '#eb5757';
+    case 'ice':
+      return '#2d9cdb';
+    case 'lightning':
+      return '#f2c94c';
+    case 'earth':
+      return '#27ae60';
+  }
 }

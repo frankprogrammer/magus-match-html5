@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { findValidMoves } from '../src/board/BoardRules';
 import { MagusMatchGameApp } from '../src/core/GameApp';
 
 describe('MagusMatchGameApp', () => {
@@ -43,5 +44,19 @@ describe('MagusMatchGameApp', () => {
     expect(app.getJourneyRuntimeForDebug()?.movesRemaining).toBe(20);
     expect(app.getBoardRenderState().mageCell).toEqual({ col: 0, row: 0 });
     expect(app.getBoardRenderState().goalCell).toEqual({ col: 7, row: 7 });
+  });
+
+  it('can start a debug Trial level and apply Trial swap damage', () => {
+    const app = new MagusMatchGameApp(666, { debugLevelType: 'TRIAL' });
+    const firstMove = findValidMoves(app.getBoardForDebug())[0];
+
+    expect(app.getCurrentLevelForDebug()?.type).toBe('TRIAL');
+    expect(app.getTrialRuntimeForDebug()?.monsters.length).toBeGreaterThan(0);
+
+    app.update(0, [{ type: 'swap', from: firstMove.from, to: firstMove.to }]);
+
+    expect(app.getRunStateForDebug().score).toBeGreaterThan(0);
+    expect(app.getHeroWorldState().levelType).toBe('TRIAL');
+    expect(app.getHeroWorldState().activeProjectiles.length).toBeGreaterThan(0);
   });
 });

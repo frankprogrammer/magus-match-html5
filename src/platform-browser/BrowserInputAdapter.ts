@@ -6,6 +6,7 @@ import {
   logicalPointToBoardCell,
 } from '../core/Layout';
 import type { GameInputCommand } from '../core/GameInput';
+import type { LevelType } from '../core/Types';
 
 export interface ViewportRect {
   left: number;
@@ -49,6 +50,12 @@ export function parseDebugSeed(search: string): number | undefined {
 
   const seed = Math.trunc(parsed) >>> 0;
   return seed === 0 ? undefined : seed;
+}
+
+export function parseDebugLevelType(search: string): LevelType | undefined {
+  const params = new URLSearchParams(search);
+  const value = params.get('levelType')?.toUpperCase();
+  return value === 'TRIAL' || value === 'JOURNEY' ? value : undefined;
 }
 
 export class BrowserInputAdapter {

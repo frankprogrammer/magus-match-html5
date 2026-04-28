@@ -1,1 +1,10 @@
+export const SWAP_DURATION_MS = 150;
+export const MATCH_POP_DURATION_MS = 220;
+export const CASCADE_FALL_DURATION_PER_ROW_MS = 60;
+export const CASCADE_ROW_STAGGER_MS = 20;
+export const INPUT_QUEUE_MAX_DEPTH = 1;
+export const CAMERA_SHAKE_MIN = 2;
+export const CAMERA_SHAKE_MAX = 12;
+export const MAGE_WALK_DURATION_MS = 350;
+export const SPELL_PROJECTILE_VISUAL_MS = 80;
 export const FIRST_MATCH_HINT_DELAY_MS = 2500;

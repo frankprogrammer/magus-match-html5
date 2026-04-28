@@ -1,7 +1,9 @@
 import './styles.css';
 import { MagusMatchGameApp } from './core/GameApp';
-import { BOARD_SIZE, LOGICAL_HEIGHT, LOGICAL_WIDTH } from './core/Layout';
+import { LOGICAL_HEIGHT, LOGICAL_WIDTH } from './core/Layout';
 import { BrowserInputAdapter, parseDebugSeed } from './platform-browser/BrowserInputAdapter';
+import { Canvas2DRenderer } from './render-2d/Canvas2DRenderer';
+import { renderFrame } from './render-2d/RenderFrame';
 
 const root = document.querySelector<HTMLDivElement>('#app');
 
@@ -14,19 +16,9 @@ const app = new MagusMatchGameApp(parseDebugSeed(window.location.search));
 root.innerHTML = `
   <main class="game-shell" aria-label="Magus Match prototype shell">
     <section class="logical-stage">
+      <canvas class="game-canvas" width="${LOGICAL_WIDTH}" height="${LOGICAL_HEIGHT}" aria-label="Magus Match board and HUD"></canvas>
       <div class="hero-stage">
         <div class="stage-label">Magus Match</div>
-      </div>
-      <div class="hud-strip">
-        <div data-hud="level"></div>
-        <div data-hud="lives"></div>
-        <div data-hud="score"></div>
-        <div data-hud="objective"></div>
-      </div>
-      <div class="board-section">
-        <div class="board-placeholder" aria-label="8 by 8 board placeholder">
-          ${Array.from({ length: BOARD_SIZE * BOARD_SIZE }, () => '<div class="board-cell"></div>').join('')}
-        </div>
       </div>
       <div class="debug-panel" data-debug></div>
     </section>
@@ -42,12 +34,15 @@ if (shell == null || logicalStage == null) {
 
 const gameShell = shell;
 const stageElement = logicalStage;
-const levelHud = mustQuery(root, '[data-hud="level"]');
-const livesHud = mustQuery(root, '[data-hud="lives"]');
-const scoreHud = mustQuery(root, '[data-hud="score"]');
-const objectiveHud = mustQuery(root, '[data-hud="objective"]');
 const debugPanel = mustQuery(root, '[data-debug]');
-const boardCells = [...root.querySelectorAll<HTMLElement>('.board-cell')];
+const canvas = mustQuery(root, '.game-canvas') as HTMLCanvasElement;
+const ctx = canvas.getContext('2d');
+
+if (ctx == null) {
+  throw new Error('Unable to create 2D canvas context.');
+}
+
+const renderer = new Canvas2DRenderer(ctx, {}, LOGICAL_WIDTH, LOGICAL_HEIGHT);
 
 const input = new BrowserInputAdapter(gameShell);
 
@@ -59,48 +54,7 @@ function resizeLogicalStage(): void {
 
 function renderHud(): void {
   const hud = app.getHudState();
-  levelHud.textContent = hud.levelText;
-  livesHud.textContent = hud.livesText;
-  scoreHud.textContent = `Score ${hud.scoreText}`;
-  objectiveHud.textContent = hud.objectiveText;
   debugPanel.textContent = `${hud.phase} | ${hud.debugText ?? ''}`;
-}
-
-function renderBoardDebug(): void {
-  const state = app.getBoardRenderState();
-  const cellByCoord = new Map(state.boardCells.map((cell) => [`${cell.coord.col},${cell.coord.row}`, cell]));
-  const pathCells = new Set(state.pathCells.map((coord) => `${coord.col},${coord.row}`));
-  const hintedCells = new Set(state.hintedCells.map((coord) => `${coord.col},${coord.row}`));
-
-  boardCells.forEach((element, index) => {
-    const col = index % BOARD_SIZE;
-    const row = Math.floor(index / BOARD_SIZE);
-    const key = `${col},${row}`;
-    const cell = cellByCoord.get(key);
-
-    element.className = 'board-cell';
-    element.textContent = '';
-
-    if (cell != null) {
-      element.classList.add(tileClassName(cell.tileType));
-    }
-
-    if (pathCells.has(key)) {
-      element.classList.add('is-path');
-    }
-
-    if (state.goalCell != null && state.goalCell.col === col && state.goalCell.row === row) {
-      element.classList.add('is-goal');
-    }
-
-    if (state.mageCell != null && state.mageCell.col === col && state.mageCell.row === row) {
-      element.classList.add('is-mage');
-    }
-
-    if (hintedCells.has(key)) {
-      element.classList.add('is-hint');
-    }
-  });
 }
 
 let lastTimeMs = 0;
@@ -111,13 +65,13 @@ function tick(timeMs: number): void {
   app.update(dtSec, input.drainCommands());
   app.drainEvents();
   renderHud();
-  renderBoardDebug();
+  renderFrame(renderer, app.getBoardRenderState(), app.getHudState(), timeMs / 1000);
   requestAnimationFrame(tick);
 }
 
 resizeLogicalStage();
 renderHud();
-renderBoardDebug();
+renderFrame(renderer, app.getBoardRenderState(), app.getHudState(), 0);
 window.addEventListener('resize', resizeLogicalStage);
 requestAnimationFrame(tick);
 
@@ -128,8 +82,4 @@ function mustQuery(parent: ParentNode, selector: string): HTMLElement {
   }
 
   return element;
-}
-
-function tileClassName(tileType: string): string {
-  return `tile-${tileType.toLowerCase().replace('_', '-')}`;
 }

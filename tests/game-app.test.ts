@@ -15,7 +15,7 @@ describe('MagusMatchGameApp', () => {
       score: 0,
       levelsCleared: 0,
     });
-    expect(app.getHudState().phase).toBe('TITLE');
+    expect(app.getHudState().phase).toBe('IDLE');
     expect(app.getElapsedSecForDebug()).toBe(0);
   });
 
@@ -34,5 +34,14 @@ describe('MagusMatchGameApp', () => {
 
     expect(first.getBoardRenderState().boardCells).toHaveLength(64);
     expect(first.getBoardRenderState().boardCells).toEqual(second.getBoardRenderState().boardCells);
+  });
+
+  it('starts level 1 as a Journey level', () => {
+    const app = new MagusMatchGameApp(555);
+
+    expect(app.getCurrentLevelForDebug()?.type).toBe('JOURNEY');
+    expect(app.getJourneyRuntimeForDebug()?.movesRemaining).toBe(20);
+    expect(app.getBoardRenderState().mageCell).toEqual({ col: 0, row: 0 });
+    expect(app.getBoardRenderState().goalCell).toEqual({ col: 7, row: 7 });
   });
 });

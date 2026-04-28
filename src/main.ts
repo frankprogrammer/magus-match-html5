@@ -47,6 +47,7 @@ const livesHud = mustQuery(root, '[data-hud="lives"]');
 const scoreHud = mustQuery(root, '[data-hud="score"]');
 const objectiveHud = mustQuery(root, '[data-hud="objective"]');
 const debugPanel = mustQuery(root, '[data-debug]');
+const boardCells = [...root.querySelectorAll<HTMLElement>('.board-cell')];
 
 const input = new BrowserInputAdapter(gameShell);
 
@@ -65,6 +66,43 @@ function renderHud(): void {
   debugPanel.textContent = `${hud.phase} | ${hud.debugText ?? ''}`;
 }
 
+function renderBoardDebug(): void {
+  const state = app.getBoardRenderState();
+  const cellByCoord = new Map(state.boardCells.map((cell) => [`${cell.coord.col},${cell.coord.row}`, cell]));
+  const pathCells = new Set(state.pathCells.map((coord) => `${coord.col},${coord.row}`));
+  const hintedCells = new Set(state.hintedCells.map((coord) => `${coord.col},${coord.row}`));
+
+  boardCells.forEach((element, index) => {
+    const col = index % BOARD_SIZE;
+    const row = Math.floor(index / BOARD_SIZE);
+    const key = `${col},${row}`;
+    const cell = cellByCoord.get(key);
+
+    element.className = 'board-cell';
+    element.textContent = '';
+
+    if (cell != null) {
+      element.classList.add(tileClassName(cell.tileType));
+    }
+
+    if (pathCells.has(key)) {
+      element.classList.add('is-path');
+    }
+
+    if (state.goalCell != null && state.goalCell.col === col && state.goalCell.row === row) {
+      element.classList.add('is-goal');
+    }
+
+    if (state.mageCell != null && state.mageCell.col === col && state.mageCell.row === row) {
+      element.classList.add('is-mage');
+    }
+
+    if (hintedCells.has(key)) {
+      element.classList.add('is-hint');
+    }
+  });
+}
+
 let lastTimeMs = 0;
 
 function tick(timeMs: number): void {
@@ -73,11 +111,13 @@ function tick(timeMs: number): void {
   app.update(dtSec, input.drainCommands());
   app.drainEvents();
   renderHud();
+  renderBoardDebug();
   requestAnimationFrame(tick);
 }
 
 resizeLogicalStage();
 renderHud();
+renderBoardDebug();
 window.addEventListener('resize', resizeLogicalStage);
 requestAnimationFrame(tick);
 
@@ -88,4 +128,8 @@ function mustQuery(parent: ParentNode, selector: string): HTMLElement {
   }
 
   return element;
+}
+
+function tileClassName(tileType: string): string {
+  return `tile-${tileType.toLowerCase().replace('_', '-')}`;
 }

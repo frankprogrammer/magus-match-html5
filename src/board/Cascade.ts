@@ -96,7 +96,7 @@ function clearMatchesAndSpawnPowerUps(
   return spawnedPowerUps;
 }
 
-function applyGravity(board: Board): void {
+export function applyGravity(board: Board): void {
   for (let col = 0; col < BOARD_SIZE; col += 1) {
     const fallingTiles = [];
     for (let row = BOARD_SIZE - 1; row >= 0; row -= 1) {

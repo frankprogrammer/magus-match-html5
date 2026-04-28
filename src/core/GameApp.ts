@@ -2,12 +2,19 @@ import type { GameEvent } from './GameEvents';
 import type { GameInputCommand } from './GameInput';
 import { LOGICAL_HEIGHT, LOGICAL_WIDTH } from './Layout';
 import { createRandomSeed, SeededRng } from './Rng';
-import type { RunState } from './Types';
+import type { GamePhase, RunState } from './Types';
 import type { Board } from '../board/Board';
-import { createEmptyBoard, getAllPlayableCoords } from '../board/Board';
-import { createPlayableStandardBoard } from '../board/BoardSolver';
+import { cloneBoard, createEmptyBoard, getAllPlayableCoords } from '../board/Board';
 import type { TileType } from '../board/TileTypes';
 import { AssetIds } from '../assets/AssetIds';
+import type { GeneratedLevel } from '../generator/LevelGenerator';
+import { generateLevel } from '../generator/LevelGenerator';
+import type { JourneyRuntimeState } from '../generator/JourneyRules';
+import {
+  createJourneyRuntime,
+  getVisibleJourneyHintCells,
+  processJourneySwap,
+} from '../generator/JourneyRules';
 import type { BoardRenderState } from '../render-2d/BoardRenderState';
 import type { HudRenderState } from '../render-2d/HudRenderState';
 import type { HeroWorldState } from '../world-3d/HeroWorldState';
@@ -27,7 +34,9 @@ export class MagusMatchGameApp implements GameApp {
   private elapsedSec = 0;
   private run: RunState = createInitialRunState(createRandomSeed());
   private board: Board = createEmptyBoard();
-  private phase: 'TITLE' = 'TITLE';
+  private currentLevel: GeneratedLevel | null = null;
+  private journeyRuntime: JourneyRuntimeState | null = null;
+  private phase: GamePhase = 'IDLE';
 
   constructor(seed?: number) {
     this.reset(seed);
@@ -39,6 +48,11 @@ export class MagusMatchGameApp implements GameApp {
     for (const command of commands) {
       if (command.type === 'restart') {
         this.reset();
+        continue;
+      }
+
+      if (command.type === 'swap') {
+        this.handleSwap(command.from, command.to);
       }
     }
   }
@@ -57,11 +71,19 @@ export class MagusMatchGameApp implements GameApp {
           return {
             coord,
             assetId: assetIdForTileType(tile.type),
+            tileType: tile.type,
             isPath: this.board[coord.row][coord.col].isPath,
             alpha: 1,
           };
         })
         .filter((cell) => cell != null),
+      pathCells: getAllPlayableCoords(this.board).filter((coord) => this.board[coord.row][coord.col].isPath),
+      mageCell: this.journeyRuntime?.mageCell ?? null,
+      goalCell: this.currentLevel?.type === 'JOURNEY' ? this.currentLevel.journey.goalCell : null,
+      hintedCells:
+        this.currentLevel?.type === 'JOURNEY' && this.journeyRuntime != null
+          ? getVisibleJourneyHintCells(this.currentLevel, this.journeyRuntime, this.elapsedSec)
+          : [],
       selectedCell: null,
       queuedSwap: null,
       shakePixels: 0,
@@ -89,7 +111,7 @@ export class MagusMatchGameApp implements GameApp {
       levelText: `Level ${this.run.levelNumber}`,
       livesText: `Lives ${this.run.lives}`,
       scoreText: `${this.run.score}`,
-      objectiveText: 'Tap Play',
+      objectiveText: this.getObjectiveText(),
       muted: false,
       debugText: `Seed ${this.run.seed}`,
     };
@@ -104,9 +126,15 @@ export class MagusMatchGameApp implements GameApp {
   reset(seed = createRandomSeed()): void {
     this.rng = new SeededRng(seed);
     this.run = createInitialRunState(seed);
-    this.board = createPlayableStandardBoard(this.rng);
+    this.currentLevel = generateLevel({
+      levelNumber: this.run.levelNumber,
+      difficulty: this.run.difficulty,
+      seed,
+    });
+    this.board = cloneBoard(this.currentLevel.initialBoard);
+    this.journeyRuntime = createJourneyRuntime(this.currentLevel);
     this.elapsedSec = 0;
-    this.phase = 'TITLE';
+    this.phase = 'IDLE';
     this.events = [];
   }
 
@@ -124,6 +152,67 @@ export class MagusMatchGameApp implements GameApp {
 
   getBoardForDebug(): Board {
     return this.board;
+  }
+
+  getCurrentLevelForDebug(): GeneratedLevel | null {
+    return this.currentLevel;
+  }
+
+  getJourneyRuntimeForDebug(): JourneyRuntimeState | null {
+    return this.journeyRuntime == null ? null : { ...this.journeyRuntime };
+  }
+
+  private handleSwap(from: { col: number; row: number }, to: { col: number; row: number }): void {
+    if (this.currentLevel?.type !== 'JOURNEY' || this.journeyRuntime == null) {
+      return;
+    }
+
+    const result = processJourneySwap(
+      this.board,
+      this.journeyRuntime,
+      this.currentLevel,
+      from,
+      to,
+      this.rng,
+    );
+
+    if (!result.valid) {
+      return;
+    }
+
+    this.board = result.board;
+    this.journeyRuntime = result.runtime;
+    if (result.scoreDelta > 0) {
+      this.run = { ...this.run, score: this.run.score + result.scoreDelta };
+      this.events.push({ type: 'scoreChanged', score: this.run.score });
+    }
+
+    this.phase =
+      result.runtime.result === 'won' ? 'WIN' : result.runtime.result === 'lost' ? 'LOSE' : 'IDLE';
+  }
+
+  private getObjectiveText(): string {
+    if (this.currentLevel?.type !== 'JOURNEY' || this.journeyRuntime == null) {
+      return 'Journey';
+    }
+
+    if (this.journeyRuntime.result === 'won') {
+      return 'Goal reached';
+    }
+
+    if (this.journeyRuntime.result === 'lost') {
+      return 'Out of moves';
+    }
+
+    const hintVisible = getVisibleJourneyHintCells(
+      this.currentLevel,
+      this.journeyRuntime,
+      this.elapsedSec,
+    ).length > 0;
+
+    return hintVisible
+      ? `Moves ${this.journeyRuntime.movesRemaining} - hinted path swap`
+      : `Moves ${this.journeyRuntime.movesRemaining}`;
   }
 }
 

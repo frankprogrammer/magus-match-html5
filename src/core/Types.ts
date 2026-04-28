@@ -32,4 +32,6 @@ export interface RunState {
   levelsCleared: number;
 }
 
+export type LevelResult = 'playing' | 'won' | 'lost';
+
 export type { CellCoord };

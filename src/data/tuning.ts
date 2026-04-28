@@ -1,0 +1,1 @@
+export const FIRST_MATCH_HINT_DELAY_MS = 2500;

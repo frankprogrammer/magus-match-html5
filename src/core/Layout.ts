@@ -15,6 +15,34 @@ export const BOARD_RECT = {
   cellSize: LOGICAL_WIDTH / BOARD_SIZE,
 } as const;
 
+export interface UiRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export const TITLE_PLAY_BUTTON_RECT: UiRect = {
+  x: 300,
+  y: 1040,
+  width: 480,
+  height: 112,
+};
+
+export const GAME_OVER_TRY_AGAIN_BUTTON_RECT: UiRect = {
+  x: 300,
+  y: 1570,
+  width: 480,
+  height: 112,
+};
+
+export const HUD_MUTE_TOGGLE_RECT: UiRect = {
+  x: 930,
+  y: HERO_STAGE_HEIGHT,
+  width: 150,
+  height: HUD_HEIGHT,
+};
+
 export interface LogicalPoint {
   x: number;
   y: number;
@@ -23,6 +51,15 @@ export interface LogicalPoint {
 export interface CellCoord {
   col: number;
   row: number;
+}
+
+export function pointInRect(point: LogicalPoint, rect: UiRect): boolean {
+  return (
+    point.x >= rect.x &&
+    point.y >= rect.y &&
+    point.x < rect.x + rect.width &&
+    point.y < rect.y + rect.height
+  );
 }
 
 export function logicalPointToBoardCell(point: LogicalPoint): CellCoord | null {

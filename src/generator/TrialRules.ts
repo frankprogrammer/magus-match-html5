@@ -23,6 +23,7 @@ import type { CellCoord } from '../core/Layout';
 import type { SeededRng } from '../core/Rng';
 import type { LevelResult, Vec3Data } from '../core/Types';
 import { SPELL_PROJECTILE_VISUAL_MS } from '../data/tuning';
+import { createSwapScoringStats, EMPTY_SWAP_SCORING_STATS, type SwapScoringStats } from '../run/Scoring';
 import type { GeneratedTrialLevel, TrialMonsterKind, TrialMonsterManifestEntry } from './TrialGenerator';
 
 export type SpellSchoolId = 'fire' | 'ice' | 'lightning' | 'earth';
@@ -71,6 +72,7 @@ export interface TrialSwapResult {
   runtime: TrialRuntimeState;
   scoreDelta: number;
   damageEvents: readonly TrialDamageEvent[];
+  scoringStats: SwapScoringStats;
 }
 
 interface TrialDamageSource {
@@ -139,12 +141,12 @@ export function processTrialSwap(
   rng: SeededRng,
 ): TrialSwapResult {
   if (runtime.result !== 'playing') {
-    return { valid: false, board, runtime, scoreDelta: 0, damageEvents: [] };
+    return invalidTrialSwap(board, runtime);
   }
 
   const validation = validateSwap(board, from, to);
   if (!validation.valid) {
-    return { valid: false, board, runtime, scoreDelta: 0, damageEvents: [] };
+    return invalidTrialSwap(board, runtime);
   }
 
   const powerUpActivation = getPowerUpActivation(board, from, to);
@@ -170,6 +172,8 @@ export function processTrialSwap(
 
   damageSources.push(...cascadeDamageSources(level, cascadeResult));
   const damageApplication = applyDamageSources(runtime, level, damageSources);
+  const matchCount = cascadeResult.steps.reduce((sum, step) => sum + step.matches.length, 0);
+  const powerUpsCreated = cascadeResult.steps.reduce((sum, step) => sum + step.spawnedPowerUps.length, 0);
 
   return {
     valid: true,
@@ -177,6 +181,7 @@ export function processTrialSwap(
     runtime: damageApplication.runtime,
     scoreDelta: damageApplication.scoreDelta,
     damageEvents: damageApplication.damageEvents,
+    scoringStats: createSwapScoringStats(matchCount, powerUpsCreated),
   };
 }
 
@@ -501,4 +506,15 @@ function zForMonsterKind(kind: TrialMonsterKind): number {
     case 'miniBoss':
       return 0.55;
   }
+}
+
+function invalidTrialSwap(board: Board, runtime: TrialRuntimeState): TrialSwapResult {
+  return {
+    valid: false,
+    board,
+    runtime,
+    scoreDelta: 0,
+    damageEvents: [],
+    scoringStats: EMPTY_SWAP_SCORING_STATS,
+  };
 }

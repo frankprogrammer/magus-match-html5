@@ -4,6 +4,7 @@ import type { TileType } from '../board/TileTypes';
 import type { HudRenderState } from './HudRenderState';
 import type { BoardRenderState } from './BoardRenderState';
 import type { GameRenderer } from './GameRenderer';
+import type { ScreenRenderState } from './ScreenRenderState';
 
 export interface BoardCellVisual {
   coord: CellCoord;
@@ -31,11 +32,15 @@ export function renderFrame(
   boardState: BoardRenderState,
   hudState: HudRenderState,
   elapsedSec: number,
+  screenState?: ScreenRenderState,
 ): void {
   renderer.clear();
   drawCanvasBands(renderer);
   drawHud(renderer, hudState);
   drawBoard(renderer, boardState, elapsedSec);
+  if (screenState != null) {
+    drawScreenOverlay(renderer, screenState);
+  }
 }
 
 export function buildBoardCellVisuals(boardState: BoardRenderState, elapsedSec: number): BoardCellVisual[] {
@@ -180,6 +185,134 @@ function drawCell(renderer: GameRenderer, visual: BoardCellVisual): void {
       align: 'center',
     });
   }
+}
+
+function drawScreenOverlay(renderer: GameRenderer, screenState: ScreenRenderState): void {
+  if (screenState.screen === 'title') {
+    drawTitleScreen(renderer, screenState);
+    return;
+  }
+
+  if (screenState.screen === 'gameOver') {
+    drawGameOverScreen(renderer, screenState);
+    return;
+  }
+
+  if (screenState.transitionText != null) {
+    drawTransitionOverlay(renderer, screenState.transitionText);
+  }
+}
+
+function drawTitleScreen(renderer: GameRenderer, screenState: ScreenRenderState): void {
+  renderer.drawRect('rgba(20, 14, 32, 0.78)', 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+  renderer.drawText('MAGUS MATCH', 100, 250, 880, 150, {
+    fontSize: 86,
+    fontWeight: 'bold',
+    color: '#f5e9c9',
+    align: 'center',
+  });
+  renderer.drawText('Save the prince one spell at a time', 160, 390, 760, 60, {
+    fontSize: 34,
+    fontWeight: 'normal',
+    color: '#c8a24b',
+    align: 'center',
+  });
+  drawButton(renderer, screenState.buttonRects.play, 'PLAY');
+  drawLeaderboardPreview(renderer, screenState, 1260, 5);
+}
+
+function drawGameOverScreen(renderer: GameRenderer, screenState: ScreenRenderState): void {
+  renderer.drawRect('rgba(20, 14, 32, 0.86)', 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+  renderer.drawText('GAME OVER', 120, 185, 840, 110, {
+    fontSize: 72,
+    fontWeight: 'bold',
+    color: '#f5e9c9',
+    align: 'center',
+  });
+  renderer.drawText(`Final ${screenState.finalScore}`, 140, 320, 800, 70, {
+    fontSize: 42,
+    fontWeight: 'bold',
+    color: '#c8a24b',
+    align: 'center',
+  });
+  renderer.drawText(`High ${screenState.highScore}`, 140, 390, 800, 54, {
+    fontSize: 30,
+    fontWeight: 'bold',
+    color: '#f5e9c9',
+    align: 'center',
+  });
+  drawLeaderboardPreview(renderer, screenState, 520, 10);
+  drawButton(renderer, screenState.buttonRects.tryAgain, 'TRY AGAIN');
+}
+
+function drawTransitionOverlay(renderer: GameRenderer, text: string): void {
+  renderer.drawRect('rgba(20, 14, 32, 0.55)', 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+  renderer.drawText(text, 120, 800, 840, 120, {
+    fontSize: 70,
+    fontWeight: 'bold',
+    color: '#f5e9c9',
+    align: 'center',
+  });
+}
+
+function drawButton(
+  renderer: GameRenderer,
+  rect: { x: number; y: number; width: number; height: number },
+  label: string,
+): void {
+  renderer.drawRect('#c8a24b', rect.x, rect.y, rect.width, rect.height);
+  renderer.drawRect('#4b2e83', rect.x + 8, rect.y + 8, rect.width - 16, rect.height - 16);
+  renderer.drawText(label, rect.x, rect.y, rect.width, rect.height, {
+    fontSize: 44,
+    fontWeight: 'bold',
+    color: '#f5e9c9',
+    align: 'center',
+  });
+}
+
+function drawLeaderboardPreview(
+  renderer: GameRenderer,
+  screenState: ScreenRenderState,
+  y: number,
+  maxRows: number,
+): void {
+  renderer.drawText('HALL OF HEROES', 150, y, 780, 56, {
+    fontSize: 34,
+    fontWeight: 'bold',
+    color: '#f5e9c9',
+    align: 'center',
+  });
+
+  const rows = screenState.leaderboardRows.slice(0, maxRows);
+  if (rows.length === 0) {
+    renderer.drawText('No champions yet', 190, y + 74, 700, 44, {
+      fontSize: 26,
+      fontWeight: 'normal',
+      color: '#c8a24b',
+      align: 'center',
+    });
+    return;
+  }
+
+  rows.forEach((entry, index) => {
+    const rowY = y + 72 + index * 52;
+    const isHighlighted = screenState.highlightedRank === index + 1;
+    if (isHighlighted) {
+      renderer.drawRect('rgba(200, 162, 75, 0.35)', 120, rowY - 3, 840, 46);
+    }
+    renderer.drawText(`${index + 1}. ${entry.name}`, 145, rowY, 520, 42, {
+      fontSize: 26,
+      fontWeight: isHighlighted ? 'bold' : 'normal',
+      color: '#f5e9c9',
+      align: 'left',
+    });
+    renderer.drawText(`${entry.score}`, 665, rowY, 260, 42, {
+      fontSize: 26,
+      fontWeight: isHighlighted ? 'bold' : 'normal',
+      color: '#c8a24b',
+      align: 'right',
+    });
+  });
 }
 
 function colorForTile(tileType: TileType): string {

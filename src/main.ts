@@ -6,9 +6,16 @@ import {
   parseDebugLevelType,
   parseDebugSeed,
 } from './platform-browser/BrowserInputAdapter';
+import { LocalLeaderboardStore } from './platform-browser/LocalLeaderboardStore';
 import { Canvas2DRenderer } from './render-2d/Canvas2DRenderer';
 import { renderFrame } from './render-2d/RenderFrame';
 import { ThreeHeroStage } from './render-three/ThreeHeroStage';
+import type { GameEvent } from './core/GameEvents';
+import {
+  createLeaderboardEntry,
+  insertLeaderboardEntry,
+  type LeaderboardEntry,
+} from './run/Leaderboard';
 
 const root = document.querySelector<HTMLDivElement>('#app');
 
@@ -50,6 +57,9 @@ if (ctx == null) {
 
 const renderer = new Canvas2DRenderer(ctx, {}, LOGICAL_WIDTH, LOGICAL_HEIGHT);
 const heroStage = new ThreeHeroStage(heroStageElement);
+const leaderboardStore = new LocalLeaderboardStore();
+let leaderboardRows: readonly LeaderboardEntry[] = leaderboardStore.load();
+let highlightedRank: number | null = null;
 
 const input = new BrowserInputAdapter(gameShell);
 
@@ -71,20 +81,54 @@ function tick(timeMs: number): void {
   const dtSec = lastTimeMs === 0 ? 0 : Math.min((timeMs - lastTimeMs) / 1000, 1 / 30);
   lastTimeMs = timeMs;
   app.update(dtSec, input.drainCommands());
-  app.drainEvents();
+  handleEvents(app.drainEvents());
   renderHud();
-  renderFrame(renderer, app.getBoardRenderState(), app.getHudState(), timeMs / 1000);
+  renderFrame(
+    renderer,
+    app.getBoardRenderState(),
+    app.getHudState(),
+    timeMs / 1000,
+    app.getScreenState(leaderboardRows, highlightedRank),
+  );
   heroStage.render(app.getHeroWorldState(), dtSec);
   requestAnimationFrame(tick);
 }
 
 resizeLogicalStage();
 renderHud();
-renderFrame(renderer, app.getBoardRenderState(), app.getHudState(), 0);
+renderFrame(
+  renderer,
+  app.getBoardRenderState(),
+  app.getHudState(),
+  0,
+  app.getScreenState(leaderboardRows, highlightedRank),
+);
 heroStage.render(app.getHeroWorldState(), 0);
 window.addEventListener('resize', resizeLogicalStage);
 window.addEventListener('beforeunload', () => heroStage.dispose());
 requestAnimationFrame(tick);
+
+function handleEvents(events: readonly GameEvent[]): void {
+  for (const event of events) {
+    if (event.type === 'levelStarted') {
+      highlightedRank = null;
+      continue;
+    }
+
+    if (event.type === 'runEnded') {
+      const entry = createLeaderboardEntry(
+        event.finalScore,
+        event.levelsCleared,
+        app.getRunStateForDebug().seed,
+        Date.now(),
+      );
+      const result = insertLeaderboardEntry(leaderboardRows, entry);
+      leaderboardRows = result.entries;
+      highlightedRank = result.qualifiedRank;
+      leaderboardStore.save(leaderboardRows);
+    }
+  }
+}
 
 function mustQuery(parent: ParentNode, selector: string): HTMLElement {
   const element = parent.querySelector<HTMLElement>(selector);

@@ -61,6 +61,7 @@ export function parseDebugLevelType(search: string): LevelType | undefined {
 export class BrowserInputAdapter {
   private commands: GameInputCommand[] = [];
   private dragStartCell: CellCoord | null = null;
+  private dragStartPoint: LogicalPoint | null = null;
 
   constructor(private readonly stageElement: HTMLElement) {
     this.stageElement.addEventListener('pointerdown', this.onPointerDown);
@@ -81,15 +82,17 @@ export class BrowserInputAdapter {
   private readonly onPointerDown = (event: PointerEvent): void => {
     const logicalPoint = this.eventToLogicalPoint(event);
     this.commands.push({ type: 'dragStart', x: logicalPoint.x, y: logicalPoint.y });
+    this.dragStartPoint = logicalPoint;
     this.dragStartCell = logicalPointToBoardCell(logicalPoint);
   };
 
   private readonly onPointerUp = (event: PointerEvent): void => {
     const logicalPoint = this.eventToLogicalPoint(event);
     this.commands.push({ type: 'dragEnd', x: logicalPoint.x, y: logicalPoint.y });
+    this.commands.push({ type: 'tap', x: logicalPoint.x, y: logicalPoint.y });
 
     const endCell = logicalPointToBoardCell(logicalPoint);
-    if (this.dragStartCell != null && endCell != null) {
+    if (this.dragStartCell != null && endCell != null && !isTapGesture(this.dragStartPoint, logicalPoint)) {
       const dCol = endCell.col - this.dragStartCell.col;
       const dRow = endCell.row - this.dragStartCell.row;
       if (Math.abs(dCol) + Math.abs(dRow) === 1) {
@@ -98,6 +101,7 @@ export class BrowserInputAdapter {
     }
 
     this.dragStartCell = null;
+    this.dragStartPoint = null;
   };
 
   private eventToLogicalPoint(event: PointerEvent): LogicalPoint {
@@ -106,3 +110,11 @@ export class BrowserInputAdapter {
 }
 
 export { BOARD_RECT, logicalPointToBoardCell };
+
+function isTapGesture(start: LogicalPoint | null, end: LogicalPoint): boolean {
+  if (start == null) {
+    return true;
+  }
+
+  return Math.hypot(end.x - start.x, end.y - start.y) < 16;
+}

@@ -18,6 +18,7 @@ import { applyGravity } from '../board/Cascade';
 import { detectMatches, type MatchGroup } from '../board/MatchDetection';
 import { isStandardTileType } from '../board/TileTypes';
 import { FIRST_MATCH_HINT_DELAY_MS } from '../data/tuning';
+import { createSwapScoringStats, EMPTY_SWAP_SCORING_STATS, type SwapScoringStats } from '../run/Scoring';
 import type { GeneratedJourneyLevel } from './JourneyGenerator';
 
 export type JourneyResult = 'playing' | 'won' | 'lost';
@@ -36,6 +37,7 @@ export interface JourneySwapResult {
   scoreDelta: number;
   convertedPathCells: readonly CellCoord[];
   clearedStandardCells: readonly CellCoord[];
+  scoringStats: SwapScoringStats;
 }
 
 export function createJourneyRuntime(level: GeneratedJourneyLevel): JourneyRuntimeState {
@@ -56,12 +58,12 @@ export function processJourneySwap(
   rng: SeededRng,
 ): JourneySwapResult {
   if (runtime.result !== 'playing') {
-    return { valid: false, board, runtime, scoreDelta: 0, convertedPathCells: [], clearedStandardCells: [] };
+    return invalidJourneySwap(board, runtime);
   }
 
   const validation = validateSwap(board, from, to);
   if (!validation.valid) {
-    return { valid: false, board, runtime, scoreDelta: 0, convertedPathCells: [], clearedStandardCells: [] };
+    return invalidJourneySwap(board, runtime);
   }
 
   const swappedBoard = cloneBoard(board);
@@ -87,6 +89,7 @@ export function processJourneySwap(
     scoreDelta: resolution.clearedStandardCells.length * 10,
     convertedPathCells: resolution.convertedPathCells,
     clearedStandardCells: resolution.clearedStandardCells,
+    scoringStats: createSwapScoringStats(resolution.matchCount, resolution.powerUpsCreated),
   };
 }
 
@@ -94,6 +97,8 @@ export interface JourneyBoardResolution {
   board: Board;
   convertedPathCells: readonly CellCoord[];
   clearedStandardCells: readonly CellCoord[];
+  matchCount: number;
+  powerUpsCreated: number;
 }
 
 export interface ResolveJourneyBoardOptions {
@@ -110,6 +115,8 @@ export function resolveJourneyBoard(
   const workingBoard = cloneBoard(board);
   const convertedPathCells: CellCoord[] = [];
   const clearedStandardCells: CellCoord[] = [];
+  let matchCount = 0;
+  let powerUpsCreated = 0;
   const maxIterations = options.maxIterations ?? 50;
   const nextTileId = options.nextTileId ?? createTileIdFactory('journey-cascade-tile');
 
@@ -123,10 +130,14 @@ export function resolveJourneyBoard(
         board: workingBoard,
         convertedPathCells: uniqueCoords(convertedPathCells),
         clearedStandardCells: uniqueCoords(clearedStandardCells),
+        matchCount,
+        powerUpsCreated,
       };
     }
 
     const matchedCells = applyJourneyMatches(workingBoard, matches, nextTileId);
+    matchCount += matches.length;
+    powerUpsCreated += matchedCells.powerUpsCreated;
     convertedPathCells.push(...matchedCells.convertedPathCells);
     clearedStandardCells.push(...matchedCells.clearedStandardCells);
     applyGravity(workingBoard);
@@ -172,9 +183,10 @@ function applyJourneyMatches(
   board: Board,
   matches: readonly MatchGroup[],
   nextTileId: TileIdFactory,
-): { convertedPathCells: CellCoord[]; clearedStandardCells: CellCoord[] } {
+): { convertedPathCells: CellCoord[]; clearedStandardCells: CellCoord[]; powerUpsCreated: number } {
   const convertedPathCells: CellCoord[] = [];
   const clearedStandardCells: CellCoord[] = [];
+  let powerUpsCreated = 0;
 
   for (const match of matches) {
     if (match.tileType === 'LAND') {
@@ -199,6 +211,7 @@ function applyJourneyMatches(
       const spawnCell = board[match.spawnCell.row][match.spawnCell.col];
       if (!spawnCell.isVoid) {
         spawnCell.tile = createTile(match.spawnPowerUp, match.spawnCell.col, match.spawnCell.row, nextTileId);
+        powerUpsCreated += 1;
       }
     }
   }
@@ -206,6 +219,19 @@ function applyJourneyMatches(
   return {
     convertedPathCells,
     clearedStandardCells,
+    powerUpsCreated,
+  };
+}
+
+function invalidJourneySwap(board: Board, runtime: JourneyRuntimeState): JourneySwapResult {
+  return {
+    valid: false,
+    board,
+    runtime,
+    scoreDelta: 0,
+    convertedPathCells: [],
+    clearedStandardCells: [],
+    scoringStats: EMPTY_SWAP_SCORING_STATS,
   };
 }
 

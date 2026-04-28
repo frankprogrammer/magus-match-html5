@@ -1,6 +1,14 @@
 import type { GameEvent } from './GameEvents';
 import type { GameInputCommand } from './GameInput';
-import { BOARD_SIZE, LOGICAL_HEIGHT, LOGICAL_WIDTH } from './Layout';
+import {
+  BOARD_SIZE,
+  GAME_OVER_TRY_AGAIN_BUTTON_RECT,
+  HUD_MUTE_TOGGLE_RECT,
+  LOGICAL_HEIGHT,
+  LOGICAL_WIDTH,
+  TITLE_PLAY_BUTTON_RECT,
+  pointInRect,
+} from './Layout';
 import type { CellCoord } from './Layout';
 import { createRandomSeed, SeededRng } from './Rng';
 import type { GamePhase, LevelType, RunState } from './Types';
@@ -26,6 +34,18 @@ import {
 } from '../generator/TrialRules';
 import type { BoardRenderState } from '../render-2d/BoardRenderState';
 import type { HudRenderState } from '../render-2d/HudRenderState';
+import type { ScreenRenderState } from '../render-2d/ScreenRenderState';
+import type { LeaderboardEntry } from '../run/Leaderboard';
+import { getHighScore } from '../run/Leaderboard';
+import {
+  LEVEL_TRANSITION_HOLD_SEC,
+  advanceRunAfterLoss,
+  advanceRunAfterWin,
+  createInitialRunState,
+  deriveLevelSeed,
+  selectLevelTypeForRun,
+} from '../run/RunProgression';
+import { scoreJourneyClear, scoreSwapStats, scoreTrialClear } from '../run/Scoring';
 import { HeroStageTemplateIds } from '../world-3d/HeroStageTemplates';
 import type { HeroWorldState } from '../world-3d/HeroWorldState';
 import type { TransformState } from '../world-3d/TransformState';
@@ -36,6 +56,10 @@ export interface GameApp {
   getBoardRenderState(): BoardRenderState;
   getHeroWorldState(): HeroWorldState;
   getHudState(): HudRenderState;
+  getScreenState(
+    leaderboardRows?: readonly LeaderboardEntry[],
+    highlightedRank?: number | null,
+  ): ScreenRenderState;
   drainEvents(): GameEvent[];
   reset(seed?: number): void;
 }
@@ -53,24 +77,54 @@ export class MagusMatchGameApp implements GameApp {
   private currentLevel: GeneratedLevel | null = null;
   private journeyRuntime: JourneyRuntimeState | null = null;
   private trialRuntime: TrialRuntimeState | null = null;
-  private phase: GamePhase = 'IDLE';
+  private phase: GamePhase = 'TITLE';
+  private muted = false;
+  private transitionTimerSec = 0;
+  private pendingLevelResult: 'win' | 'loss' | null = null;
+  private pendingClearScore = 0;
+  private levelMatchCount = 0;
+  private levelValidSwapCount = 0;
+  private finalScore = 0;
+  private readonly debugSeed?: number;
 
   constructor(seed?: number, private readonly options: MagusMatchGameAppOptions = {}) {
+    this.debugSeed = seed;
     this.reset(seed);
   }
 
   update(dtSec: number, commands: readonly GameInputCommand[]): void {
-    this.elapsedSec += Math.max(0, dtSec);
-    this.updateTrialStage(dtSec);
+    const clampedDtSec = Math.max(0, dtSec);
 
     for (const command of commands) {
       if (command.type === 'restart') {
-        this.reset();
+        this.tryAgain();
+        continue;
+      }
+
+      if (command.type === 'muteToggle') {
+        this.muted = !this.muted;
+        continue;
+      }
+
+      if (command.type === 'tap') {
+        this.handleTap(command.x, command.y);
         continue;
       }
 
       if (command.type === 'swap') {
         this.handleSwap(command.from, command.to);
+      }
+    }
+
+    if (this.phase === 'IDLE') {
+      this.elapsedSec += clampedDtSec;
+      this.updateTrialStage(clampedDtSec);
+    }
+
+    if (this.phase === 'WIN' || this.phase === 'LOSE') {
+      this.transitionTimerSec += clampedDtSec;
+      if (this.transitionTimerSec >= LEVEL_TRANSITION_HOLD_SEC) {
+        this.advanceAfterLevelResult();
       }
     }
   }
@@ -132,8 +186,29 @@ export class MagusMatchGameApp implements GameApp {
       livesText: `Lives ${this.run.lives}`,
       scoreText: `${this.run.score}`,
       objectiveText: this.getObjectiveText(),
-      muted: false,
+      muted: this.muted,
       debugText: `Seed ${this.run.seed}`,
+    };
+  }
+
+  getScreenState(
+    leaderboardRows: readonly LeaderboardEntry[] = [],
+    highlightedRank: number | null = null,
+  ): ScreenRenderState {
+    return {
+      screen: screenForPhase(this.phase),
+      phase: this.phase,
+      finalScore: this.phase === 'GAME_OVER' ? this.finalScore : this.run.score,
+      highScore: getHighScore(leaderboardRows),
+      leaderboardRows,
+      highlightedRank,
+      buttonRects: {
+        play: TITLE_PLAY_BUTTON_RECT,
+        tryAgain: GAME_OVER_TRY_AGAIN_BUTTON_RECT,
+        mute: HUD_MUTE_TOGGLE_RECT,
+      },
+      muted: this.muted,
+      transitionText: transitionTextForPhase(this.phase),
     };
   }
 
@@ -146,19 +221,13 @@ export class MagusMatchGameApp implements GameApp {
   reset(seed = createRandomSeed()): void {
     this.rng = new SeededRng(seed);
     this.run = createInitialRunState(seed);
-    this.currentLevel = generateLevel({
-      levelNumber: this.run.levelNumber,
-      difficulty: this.run.difficulty,
-      seed,
-      forcedLevelType: this.options.debugLevelType,
-    });
-    this.board = cloneBoard(this.currentLevel.initialBoard);
-    this.journeyRuntime =
-      this.currentLevel.type === 'JOURNEY' ? createJourneyRuntime(this.currentLevel) : null;
-    this.trialRuntime =
-      this.currentLevel.type === 'TRIAL' ? createTrialRuntime(this.currentLevel) : null;
+    this.prepareCurrentLevel();
     this.elapsedSec = 0;
-    this.phase = 'IDLE';
+    this.transitionTimerSec = 0;
+    this.pendingLevelResult = null;
+    this.pendingClearScore = 0;
+    this.finalScore = 0;
+    this.phase = 'TITLE';
     this.events = [];
   }
 
@@ -197,6 +266,58 @@ export class MagusMatchGameApp implements GameApp {
         };
   }
 
+  getLevelStatsForDebug(): { matchCount: number; validSwapCount: number } {
+    return {
+      matchCount: this.levelMatchCount,
+      validSwapCount: this.levelValidSwapCount,
+    };
+  }
+
+  private prepareCurrentLevel(): void {
+    const levelType = selectLevelTypeForRun(
+      this.run.seed,
+      this.run.levelNumber,
+      this.options.debugLevelType,
+    );
+    const levelSeed = this.run.levelNumber === 1
+      ? this.run.seed
+      : deriveLevelSeed(this.run.seed, this.run.levelNumber);
+
+    this.currentLevel = generateLevel({
+      levelNumber: this.run.levelNumber,
+      difficulty: this.run.difficulty,
+      seed: levelSeed,
+      forcedLevelType: levelType,
+    });
+    this.board = cloneBoard(this.currentLevel.initialBoard);
+    this.journeyRuntime =
+      this.currentLevel.type === 'JOURNEY' ? createJourneyRuntime(this.currentLevel) : null;
+    this.trialRuntime =
+      this.currentLevel.type === 'TRIAL' ? createTrialRuntime(this.currentLevel) : null;
+    this.elapsedSec = 0;
+    this.transitionTimerSec = 0;
+    this.pendingLevelResult = null;
+    this.pendingClearScore = 0;
+    this.levelMatchCount = 0;
+    this.levelValidSwapCount = 0;
+  }
+
+  private startPreparedLevel(): void {
+    if (this.currentLevel == null) {
+      this.prepareCurrentLevel();
+    }
+
+    this.phase = 'IDLE';
+    this.elapsedSec = 0;
+    this.transitionTimerSec = 0;
+    this.events.push({
+      type: 'levelStarted',
+      levelNumber: this.run.levelNumber,
+      levelType: this.currentLevel?.type ?? 'JOURNEY',
+      seed: this.currentLevel?.seed ?? this.run.seed,
+    });
+  }
+
   private updateTrialStage(dtSec: number): void {
     if (this.currentLevel?.type !== 'TRIAL' || this.trialRuntime == null) {
       return;
@@ -204,11 +325,90 @@ export class MagusMatchGameApp implements GameApp {
 
     const nextRuntime = updateTrialRuntime(this.trialRuntime, this.currentLevel, dtSec);
     this.trialRuntime = nextRuntime;
-    this.phase =
-      nextRuntime.result === 'won' ? 'WIN' : nextRuntime.result === 'lost' ? 'LOSE' : this.phase;
+    if (nextRuntime.result === 'won') {
+      this.beginLevelResult('win');
+    } else if (nextRuntime.result === 'lost') {
+      this.beginLevelResult('loss');
+    }
+  }
+
+  private handleTap(x: number, y: number): void {
+    const point = { x, y };
+    if (pointInRect(point, HUD_MUTE_TOGGLE_RECT)) {
+      this.muted = !this.muted;
+      return;
+    }
+
+    if (this.phase === 'TITLE' && pointInRect(point, TITLE_PLAY_BUTTON_RECT)) {
+      this.startPreparedLevel();
+      return;
+    }
+
+    if (this.phase === 'GAME_OVER' && pointInRect(point, GAME_OVER_TRY_AGAIN_BUTTON_RECT)) {
+      this.tryAgain();
+      this.startPreparedLevel();
+    }
+  }
+
+  private tryAgain(): void {
+    this.reset(this.debugSeed ?? createRandomSeed());
+  }
+
+  private beginLevelResult(result: 'win' | 'loss'): void {
+    if (this.pendingLevelResult != null || this.currentLevel == null) {
+      return;
+    }
+
+    this.pendingLevelResult = result;
+    this.transitionTimerSec = 0;
+    this.phase = result === 'win' ? 'WIN' : 'LOSE';
+    this.pendingClearScore = result === 'win' ? this.getLevelClearScore() : 0;
+    this.events.push({
+      type: 'levelEnded',
+      levelNumber: this.run.levelNumber,
+      levelType: this.currentLevel.type,
+      result,
+    });
+  }
+
+  private advanceAfterLevelResult(): void {
+    if (this.pendingLevelResult == null) {
+      return;
+    }
+
+    if (this.pendingLevelResult === 'win') {
+      this.run = advanceRunAfterWin(this.run, this.pendingClearScore);
+      if (this.pendingClearScore > 0) {
+        this.events.push({ type: 'scoreChanged', score: this.run.score });
+      }
+      this.prepareCurrentLevel();
+      this.startPreparedLevel();
+      return;
+    }
+
+    this.run = advanceRunAfterLoss(this.run);
+    if (this.run.lives <= 0) {
+      this.finalScore = this.run.score;
+      this.phase = 'GAME_OVER';
+      this.pendingLevelResult = null;
+      this.transitionTimerSec = 0;
+      this.events.push({
+        type: 'runEnded',
+        finalScore: this.run.score,
+        levelsCleared: this.run.levelsCleared,
+      });
+      return;
+    }
+
+    this.prepareCurrentLevel();
+    this.startPreparedLevel();
   }
 
   private handleSwap(from: { col: number; row: number }, to: { col: number; row: number }): void {
+    if (this.phase !== 'IDLE') {
+      return;
+    }
+
     if (this.currentLevel?.type === 'TRIAL' && this.trialRuntime != null) {
       this.handleTrialSwap(from, to);
       return;
@@ -233,13 +433,19 @@ export class MagusMatchGameApp implements GameApp {
 
     this.board = result.board;
     this.journeyRuntime = result.runtime;
-    if (result.scoreDelta > 0) {
-      this.run = { ...this.run, score: this.run.score + result.scoreDelta };
+    this.levelMatchCount += result.scoringStats.matchCount;
+    this.levelValidSwapCount += result.scoringStats.validSwapCount;
+    const scoreDelta = result.scoreDelta + scoreSwapStats(result.scoringStats);
+    if (scoreDelta > 0) {
+      this.run = { ...this.run, score: this.run.score + scoreDelta };
       this.events.push({ type: 'scoreChanged', score: this.run.score });
     }
 
-    this.phase =
-      result.runtime.result === 'won' ? 'WIN' : result.runtime.result === 'lost' ? 'LOSE' : 'IDLE';
+    if (result.runtime.result === 'won') {
+      this.beginLevelResult('win');
+    } else if (result.runtime.result === 'lost') {
+      this.beginLevelResult('loss');
+    }
   }
 
   private handleTrialSwap(from: CellCoord, to: CellCoord): void {
@@ -254,9 +460,12 @@ export class MagusMatchGameApp implements GameApp {
 
     this.board = result.board;
     this.trialRuntime = result.runtime;
+    this.levelMatchCount += result.scoringStats.matchCount;
+    this.levelValidSwapCount += result.scoringStats.validSwapCount;
+    const scoreDelta = result.scoreDelta + scoreSwapStats(result.scoringStats);
 
-    if (result.scoreDelta > 0) {
-      this.run = { ...this.run, score: this.run.score + result.scoreDelta };
+    if (scoreDelta > 0) {
+      this.run = { ...this.run, score: this.run.score + scoreDelta };
       this.events.push({ type: 'scoreChanged', score: this.run.score });
     }
 
@@ -266,8 +475,23 @@ export class MagusMatchGameApp implements GameApp {
       this.events.push({ type: 'soundRequested', soundId: AssetIds.sounds.monsterDamage });
     }
 
-    this.phase =
-      result.runtime.result === 'won' ? 'WIN' : result.runtime.result === 'lost' ? 'LOSE' : 'IDLE';
+    if (result.runtime.result === 'won') {
+      this.beginLevelResult('win');
+    } else if (result.runtime.result === 'lost') {
+      this.beginLevelResult('loss');
+    }
+  }
+
+  private getLevelClearScore(): number {
+    if (this.currentLevel?.type === 'JOURNEY' && this.journeyRuntime != null) {
+      return scoreJourneyClear(this.run.difficulty, this.journeyRuntime.movesRemaining);
+    }
+
+    if (this.currentLevel?.type === 'TRIAL') {
+      return scoreTrialClear(this.run.difficulty, this.levelMatchCount, this.elapsedSec);
+    }
+
+    return 0;
   }
 
   private getObjectiveText(): string {
@@ -397,17 +621,6 @@ export class MagusMatchGameApp implements GameApp {
   }
 }
 
-export function createInitialRunState(seed: number): RunState {
-  return {
-    seed,
-    lives: 3,
-    levelNumber: 1,
-    difficulty: 1,
-    score: 0,
-    levelsCleared: 0,
-  };
-}
-
 function assetIdForTileType(type: TileType): string {
   switch (type) {
     case 'FIRE':
@@ -487,6 +700,30 @@ function tintForTrialMonster(kind: ActiveTrialMonster['kind']): string {
     case 'miniBoss':
       return '#eb5757';
   }
+}
+
+function screenForPhase(phase: GamePhase): ScreenRenderState['screen'] {
+  if (phase === 'TITLE') {
+    return 'title';
+  }
+
+  if (phase === 'GAME_OVER') {
+    return 'gameOver';
+  }
+
+  return 'play';
+}
+
+function transitionTextForPhase(phase: GamePhase): string | null {
+  if (phase === 'WIN') {
+    return 'Level Clear';
+  }
+
+  if (phase === 'LOSE') {
+    return 'Life Lost';
+  }
+
+  return null;
 }
 
 function createWorldObject(

@@ -8,8 +8,11 @@
     "build": "tsc --noEmit && vite build",
     "test": "vitest run"
   },
-  "dependencies": {},
+  "dependencies": {
+    "three": "^0.184.0"
+  },
   "devDependencies": {
+    "@types/three": "^0.184.0",
     "typescript": "^5.8.3",
     "vite": "^6.3.4",
     "vitest": "^3.1.2"

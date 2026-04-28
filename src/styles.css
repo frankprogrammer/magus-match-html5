@@ -65,18 +65,14 @@ body {
   width: 1080px;
   top: 0;
   height: 500px;
-  background: linear-gradient(180deg, #4b2e83 0%, #2b2242 100%);
+  overflow: hidden;
   z-index: 2;
 }
 
-.stage-label {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  font-size: 54px;
-  font-weight: 800;
-  letter-spacing: 0;
+.hero-stage-canvas {
+  display: block;
+  width: 1080px;
+  height: 500px;
 }
 
 .debug-panel {

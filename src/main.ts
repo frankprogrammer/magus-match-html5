@@ -4,6 +4,7 @@ import { LOGICAL_HEIGHT, LOGICAL_WIDTH } from './core/Layout';
 import { BrowserInputAdapter, parseDebugSeed } from './platform-browser/BrowserInputAdapter';
 import { Canvas2DRenderer } from './render-2d/Canvas2DRenderer';
 import { renderFrame } from './render-2d/RenderFrame';
+import { ThreeHeroStage } from './render-three/ThreeHeroStage';
 
 const root = document.querySelector<HTMLDivElement>('#app');
 
@@ -17,9 +18,7 @@ root.innerHTML = `
   <main class="game-shell" aria-label="Magus Match prototype shell">
     <section class="logical-stage">
       <canvas class="game-canvas" width="${LOGICAL_WIDTH}" height="${LOGICAL_HEIGHT}" aria-label="Magus Match board and HUD"></canvas>
-      <div class="hero-stage">
-        <div class="stage-label">Magus Match</div>
-      </div>
+      <div class="hero-stage" data-hero-stage aria-label="Magus Match hero stage"></div>
       <div class="debug-panel" data-debug></div>
     </section>
   </main>
@@ -36,6 +35,7 @@ const gameShell = shell;
 const stageElement = logicalStage;
 const debugPanel = mustQuery(root, '[data-debug]');
 const canvas = mustQuery(root, '.game-canvas') as HTMLCanvasElement;
+const heroStageElement = mustQuery(root, '[data-hero-stage]');
 const ctx = canvas.getContext('2d');
 
 if (ctx == null) {
@@ -43,6 +43,7 @@ if (ctx == null) {
 }
 
 const renderer = new Canvas2DRenderer(ctx, {}, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+const heroStage = new ThreeHeroStage(heroStageElement);
 
 const input = new BrowserInputAdapter(gameShell);
 
@@ -50,6 +51,7 @@ function resizeLogicalStage(): void {
   const rect = gameShell.getBoundingClientRect();
   const scale = Math.min(rect.width / LOGICAL_WIDTH, rect.height / LOGICAL_HEIGHT);
   stageElement.style.transform = `scale(${scale})`;
+  heroStage.resize(1080, 500);
 }
 
 function renderHud(): void {
@@ -66,13 +68,16 @@ function tick(timeMs: number): void {
   app.drainEvents();
   renderHud();
   renderFrame(renderer, app.getBoardRenderState(), app.getHudState(), timeMs / 1000);
+  heroStage.render(app.getHeroWorldState(), dtSec);
   requestAnimationFrame(tick);
 }
 
 resizeLogicalStage();
 renderHud();
 renderFrame(renderer, app.getBoardRenderState(), app.getHudState(), 0);
+heroStage.render(app.getHeroWorldState(), 0);
 window.addEventListener('resize', resizeLogicalStage);
+window.addEventListener('beforeunload', () => heroStage.dispose());
 requestAnimationFrame(tick);
 
 function mustQuery(parent: ParentNode, selector: string): HTMLElement {

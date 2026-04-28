@@ -1,6 +1,7 @@
 import type { GameEvent } from './GameEvents';
 import type { GameInputCommand } from './GameInput';
-import { LOGICAL_HEIGHT, LOGICAL_WIDTH } from './Layout';
+import { BOARD_SIZE, LOGICAL_HEIGHT, LOGICAL_WIDTH } from './Layout';
+import type { CellCoord } from './Layout';
 import { createRandomSeed, SeededRng } from './Rng';
 import type { GamePhase, RunState } from './Types';
 import type { Board } from '../board/Board';
@@ -17,7 +18,10 @@ import {
 } from '../generator/JourneyRules';
 import type { BoardRenderState } from '../render-2d/BoardRenderState';
 import type { HudRenderState } from '../render-2d/HudRenderState';
+import { HeroStageTemplateIds } from '../world-3d/HeroStageTemplates';
 import type { HeroWorldState } from '../world-3d/HeroWorldState';
+import type { TransformState } from '../world-3d/TransformState';
+import type { WorldObjectState } from '../world-3d/WorldObjectState';
 
 export interface GameApp {
   update(dtSec: number, commands: readonly GameInputCommand[]): void;
@@ -91,15 +95,17 @@ export class MagusMatchGameApp implements GameApp {
   }
 
   getHeroWorldState(): HeroWorldState {
+    const objects = this.getHeroWorldObjects();
     return {
       levelType: 'JOURNEY',
       backdropId: 'backdrop.forest',
-      cinematicState: 'none',
-      objects: [],
+      cinematicState: phaseToCinematicState(this.phase),
+      objects,
       activeProjectiles: [],
       camera: {
         mode: 'fixed',
-        position: { x: 0, y: 0, z: 10 },
+        position: { x: 0, y: 0, z: 12 },
+        target: { x: 0, y: 0, z: 0 },
         fovDeg: 35,
       },
     };
@@ -214,6 +220,55 @@ export class MagusMatchGameApp implements GameApp {
       ? `Moves ${this.journeyRuntime.movesRemaining} - hinted path swap`
       : `Moves ${this.journeyRuntime.movesRemaining}`;
   }
+
+  private getHeroWorldObjects(): WorldObjectState[] {
+    const objects: WorldObjectState[] = [
+      createWorldObject('stage-backdrop', HeroStageTemplateIds.backdropForest, {
+        position: { x: 0, y: 0, z: -0.2 },
+        scale: { x: 12, y: 5, z: 1 },
+      }),
+    ];
+
+    if (this.currentLevel?.type !== 'JOURNEY' || this.journeyRuntime == null) {
+      return objects;
+    }
+
+    for (const coord of getAllPlayableCoords(this.board)) {
+      if (this.board[coord.row][coord.col].isPath) {
+        objects.push(
+          createWorldObject(`journey-path-${coord.col}-${coord.row}`, HeroStageTemplateIds.pathMarker, {
+            position: heroPositionForCell(coord, -0.05),
+            scale: { x: 0.35, y: 0.05, z: 0.35 },
+            renderOrder: 1,
+            replication: 'localCosmetic',
+          }),
+        );
+      }
+    }
+
+    objects.push(
+      createWorldObject('actor-mage', HeroStageTemplateIds.mage, {
+        position: heroPositionForCell(this.journeyRuntime.mageCell, 0.35),
+        scale: { x: 0.42, y: 0.75, z: 0.42 },
+        renderOrder: 4,
+        animationId: phaseToMageAnimation(this.phase),
+      }),
+      createWorldObject('actor-prince-cage', HeroStageTemplateIds.princeCage, {
+        position: heroPositionForCell(this.currentLevel.journey.goalCell, 0.55),
+        scale: { x: 0.55, y: 0.75, z: 0.55 },
+        renderOrder: 3,
+        animationId: phaseToPrinceAnimation(this.phase),
+      }),
+      createWorldObject('prop-goal-flag', HeroStageTemplateIds.goalFlag, {
+        position: heroPositionForCell(this.currentLevel.journey.goalCell, 0.15),
+        scale: { x: 0.35, y: 0.55, z: 0.35 },
+        renderOrder: 2,
+        replication: 'localCosmetic',
+      }),
+    );
+
+    return objects;
+  }
 }
 
 export function createInitialRunState(seed: number): RunState {
@@ -248,4 +303,78 @@ function assetIdForTileType(type: TileType): string {
     case 'LIGHTBALL':
       return AssetIds.powerUps.lightball;
   }
+}
+
+export function phaseToCinematicState(phase: GamePhase): HeroWorldState['cinematicState'] {
+  if (phase === 'WIN') {
+    return 'victory';
+  }
+
+  if (phase === 'LOSE') {
+    return 'fail';
+  }
+
+  return 'none';
+}
+
+function phaseToMageAnimation(phase: GamePhase): string {
+  if (phase === 'WIN') {
+    return 'victory';
+  }
+
+  if (phase === 'LOSE') {
+    return 'stunned';
+  }
+
+  return 'idle';
+}
+
+function phaseToPrinceAnimation(phase: GamePhase): string {
+  if (phase === 'WIN') {
+    return 'yank';
+  }
+
+  if (phase === 'LOSE') {
+    return 'cower';
+  }
+
+  return 'cower';
+}
+
+function createWorldObject(
+  objectId: string,
+  templateId: string,
+  options: {
+    position: TransformState['position'];
+    scale: TransformState['scale'];
+    renderOrder?: number;
+    replication?: WorldObjectState['replication'];
+    animationId?: string;
+  },
+): WorldObjectState {
+  return {
+    objectId,
+    templateId,
+    transform: {
+      position: options.position,
+      rotation: { x: 0, y: 0, z: 0, w: 1 },
+      scale: options.scale,
+    },
+    visible: true,
+    lifetime: 'persistent',
+    replication: options.replication ?? 'sharedGameplay',
+    renderLayer: 'heroStage',
+    renderOrder: options.renderOrder,
+    animationId: options.animationId,
+  };
+}
+
+function heroPositionForCell(coord: CellCoord, z: number): TransformState['position'] {
+  const normalizedX = coord.col / (BOARD_SIZE - 1);
+  const normalizedY = coord.row / (BOARD_SIZE - 1);
+  return {
+    x: -4.6 + normalizedX * 9.2,
+    y: 1.6 - normalizedY * 2.7,
+    z,
+  };
 }

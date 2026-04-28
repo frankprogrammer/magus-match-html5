@@ -46,6 +46,12 @@ export function renderFrame(
 export function buildBoardCellVisuals(boardState: BoardRenderState, elapsedSec: number): BoardCellVisual[] {
   const hinted = new Set(boardState.hintedCells.map(coordKey));
   const cellByCoord = new Map(boardState.boardCells.map((cell) => [coordKey(cell.coord), cell]));
+  const cuesByCoord = new Map<string, BoardRenderState['visualCues']>();
+  for (const cue of boardState.visualCues) {
+    const key = coordKey(cue.coord);
+    cuesByCoord.set(key, [...(cuesByCoord.get(key) ?? []), cue]);
+  }
+
   const visuals: BoardCellVisual[] = [];
   const hintPulse = (Math.sin(elapsedSec * Math.PI * 3) + 1) / 2;
 
@@ -58,6 +64,17 @@ export function buildBoardCellVisuals(boardState: BoardRenderState, elapsedSec: 
       }
 
       const isHinted = hinted.has(coordKey(coord));
+      const cueValues = cuesByCoord.get(coordKey(coord)) ?? [];
+      const cueFlash = cueValues.reduce((highest, cue) => {
+        if (cue.kind === 'damagePopup') {
+          return highest;
+        }
+
+        return Math.max(highest, cue.value);
+      }, 0);
+      const cueScale = cueValues.some((cue) => cue.kind === 'powerPulse')
+        ? 1 + cueValues.reduce((highest, cue) => Math.max(highest, cue.value), 0) * 0.1
+        : 1;
       const x = BOARD_RECT.x + col * BOARD_RECT.cellSize;
       const y = BOARD_RECT.y + row * BOARD_RECT.cellSize;
       visuals.push({
@@ -77,8 +94,8 @@ export function buildBoardCellVisuals(boardState: BoardRenderState, elapsedSec: 
         hasMage: coordsEqual(boardState.mageCell, coord),
         hasGoal: coordsEqual(boardState.goalCell, coord),
         alpha: state.alpha,
-        scale: isHinted ? 1 + hintPulse * 0.05 : 1,
-        flash: isHinted ? 0.35 + hintPulse * 0.45 : 0,
+        scale: Math.max(isHinted ? 1 + hintPulse * 0.05 : 1, cueScale),
+        flash: Math.max(isHinted ? 0.35 + hintPulse * 0.45 : 0, cueFlash * 0.5),
       });
     }
   }
@@ -136,6 +153,7 @@ function drawBoard(renderer: GameRenderer, boardState: BoardRenderState, elapsed
     drawCell(renderer, visual);
   }
 
+  drawDamagePopups(renderer, boardState);
   renderer.pop();
 }
 
@@ -149,7 +167,13 @@ function drawCell(renderer: GameRenderer, visual: BoardCellVisual): void {
   const y = visual.centerY - scaledHeight / 2;
 
   renderer.drawRect('#171225', visual.x, visual.y, visual.width, visual.height);
-  renderer.drawRect(visual.fillColor, x, y, scaledWidth, scaledHeight);
+
+  const imageRef = { id: visual.assetId };
+  if (renderer.hasImage(imageRef)) {
+    renderer.drawImage(imageRef, x, y, scaledWidth, scaledHeight);
+  } else {
+    renderer.drawRect(visual.fillColor, x, y, scaledWidth, scaledHeight);
+  }
 
   if (visual.isPath) {
     renderer.drawRect('rgba(245, 233, 201, 0.55)', visual.x + 12, visual.y + 12, visual.width - 24, visual.height - 24);
@@ -159,12 +183,14 @@ function drawCell(renderer: GameRenderer, visual: BoardCellVisual): void {
     renderer.drawRect(`rgba(255, 255, 255, ${visual.flash.toFixed(3)})`, visual.x + 4, visual.y + 4, visual.width - 8, visual.height - 8);
   }
 
-  renderer.drawText(visual.glyph, visual.x, visual.y, visual.width, visual.height, {
-    fontSize: 54,
-    fontWeight: 'bold',
-    color: visual.tileType === 'LIGHTNING' ? '#241832' : '#f5e9c9',
-    align: 'center',
-  });
+  if (!renderer.hasImage(imageRef)) {
+    renderer.drawText(visual.glyph, visual.x, visual.y, visual.width, visual.height, {
+      fontSize: 54,
+      fontWeight: 'bold',
+      color: visual.tileType === 'LIGHTNING' ? '#241832' : '#f5e9c9',
+      align: 'center',
+    });
+  }
 
   if (visual.hasGoal) {
     renderer.drawText('G', visual.x + visual.width - 44, visual.y + 10, 34, 34, {
@@ -182,6 +208,23 @@ function drawCell(renderer: GameRenderer, visual: BoardCellVisual): void {
       fontSize: 30,
       fontWeight: 'bold',
       color: '#241832',
+      align: 'center',
+    });
+  }
+}
+
+function drawDamagePopups(renderer: GameRenderer, boardState: BoardRenderState): void {
+  for (const cue of boardState.visualCues) {
+    if (cue.kind !== 'damagePopup' || cue.text == null) {
+      continue;
+    }
+
+    const x = BOARD_RECT.x + cue.coord.col * BOARD_RECT.cellSize;
+    const y = BOARD_RECT.y + cue.coord.row * BOARD_RECT.cellSize - (1 - cue.value) * 42;
+    renderer.drawText(cue.text, x, y, BOARD_RECT.cellSize, 42, {
+      fontSize: 30,
+      fontWeight: 'bold',
+      color: `rgba(245, 233, 201, ${Math.max(0, cue.value).toFixed(3)})`,
       align: 'center',
     });
   }

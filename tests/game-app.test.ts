@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { AssetIds } from '../src/assets/AssetIds';
 import { findValidMoves } from '../src/board/BoardRules';
 import { GAME_OVER_TRY_AGAIN_BUTTON_RECT, TITLE_PLAY_BUTTON_RECT } from '../src/core/Layout';
 import { MagusMatchGameApp } from '../src/core/GameApp';
+import type { GameEvent } from '../src/core/GameEvents';
+import { CAMERA_SHAKE_MAX, CAMERA_SHAKE_MIN } from '../src/data/tuning';
 
 describe('MagusMatchGameApp', () => {
   it('resets to the initial run values for a provided seed', () => {
@@ -63,6 +66,61 @@ describe('MagusMatchGameApp', () => {
     expect(app.getHeroWorldState().activeProjectiles.length).toBeGreaterThan(0);
   });
 
+  it('emits Journey match, path, and mage audio through events', () => {
+    const app = new MagusMatchGameApp(555);
+    const level = app.getCurrentLevelForDebug();
+    if (level?.type !== 'JOURNEY') {
+      throw new Error('Expected generated Journey level.');
+    }
+
+    tap(app, TITLE_PLAY_BUTTON_RECT);
+    app.drainEvents();
+    const previousMageCell = app.getJourneyRuntimeForDebug()?.mageCell;
+    app.update(0, [{ type: 'swap', from: level.journey.firstHint.from, to: level.journey.firstHint.to }]);
+
+    const sounds = soundEvents(app.drainEvents()).map((event) => event.soundId);
+    expect(sounds).toContain(AssetIds.sounds.tileMatch);
+    expect(sounds).toContain(AssetIds.sounds.pathConvert);
+    if (JSON.stringify(previousMageCell) !== JSON.stringify(app.getJourneyRuntimeForDebug()?.mageCell)) {
+      expect(sounds).toContain(AssetIds.sounds.mageWalk);
+    }
+  });
+
+  it('emits Trial spell and monster audio through events', () => {
+    const app = new MagusMatchGameApp(666, { debugLevelType: 'TRIAL' });
+    const firstMove = findValidMoves(app.getBoardForDebug())[0];
+
+    tap(app, TITLE_PLAY_BUTTON_RECT);
+    app.drainEvents();
+    app.update(0, [{ type: 'swap', from: firstMove.from, to: firstMove.to }]);
+
+    const sounds = soundEvents(app.drainEvents()).map((event) => event.soundId);
+    expect(sounds).toContain(AssetIds.sounds.tileMatch);
+    expect(sounds.some((soundId) => soundId.endsWith('.whoosh'))).toBe(true);
+    expect(sounds.some((soundId) => soundId.endsWith('.impact'))).toBe(true);
+    expect(
+      sounds.includes(AssetIds.sounds.monsterDamage) || sounds.includes(AssetIds.sounds.monsterDefeat),
+    ).toBe(true);
+  });
+
+  it('keeps board shake and visual cue render state within comfort limits', () => {
+    const app = new MagusMatchGameApp(555);
+    const level = app.getCurrentLevelForDebug();
+    if (level?.type !== 'JOURNEY') {
+      throw new Error('Expected generated Journey level.');
+    }
+
+    tap(app, TITLE_PLAY_BUTTON_RECT);
+    app.drainEvents();
+    app.update(0, [{ type: 'swap', from: level.journey.firstHint.from, to: level.journey.firstHint.to }]);
+    const boardState = app.getBoardRenderState();
+
+    expect(boardState.shakePixels).toBeGreaterThanOrEqual(CAMERA_SHAKE_MIN);
+    expect(boardState.shakePixels).toBeLessThanOrEqual(CAMERA_SHAKE_MAX);
+    expect(boardState.visualCues.length).toBeGreaterThan(0);
+    expect(boardState.visualCues.every((cue) => cue.value >= 0 && cue.value <= 1)).toBe(true);
+  });
+
   it('starts on Title and emits levelStarted when Play is tapped', () => {
     const app = new MagusMatchGameApp(777);
 
@@ -91,7 +149,9 @@ describe('MagusMatchGameApp', () => {
     app.update(100, []);
     expect(app.getRunStateForDebug().lives).toBe(0);
     expect(app.getHudState().phase).toBe('GAME_OVER');
-    expect(app.drainEvents().filter((event) => event.type === 'runEnded')).toHaveLength(1);
+    const events = app.drainEvents();
+    expect(events.filter((event) => event.type === 'runEnded')).toHaveLength(1);
+    expect(soundEvents(events).map((event) => event.soundId)).toContain(AssetIds.sounds.runEnd);
   });
 
   it('keeps the debug seed when Try Again is tapped after Game Over', () => {
@@ -138,4 +198,8 @@ describe('MagusMatchGameApp', () => {
 
 function tap(app: MagusMatchGameApp, rect: { x: number; y: number; width: number; height: number }): void {
   app.update(0, [{ type: 'tap', x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }]);
+}
+
+function soundEvents(events: readonly GameEvent[]): Extract<GameEvent, { type: 'soundRequested' }>[] {
+  return events.filter((event): event is Extract<GameEvent, { type: 'soundRequested' }> => event.type === 'soundRequested');
 }

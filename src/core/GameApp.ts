@@ -1,4 +1,4 @@
-import type { GameEvent } from './GameEvents';
+import type { GameEvent, SoundEventCategory } from './GameEvents';
 import type { GameInputCommand } from './GameInput';
 import {
   BOARD_SIZE,
@@ -24,7 +24,7 @@ import {
   getVisibleJourneyHintCells,
   processJourneySwap,
 } from '../generator/JourneyRules';
-import type { ActiveTrialMonster, TrialRuntimeState } from '../generator/TrialRules';
+import type { ActiveTrialMonster, SpellSchoolId, TrialDamageEvent, TrialRuntimeState } from '../generator/TrialRules';
 import {
   createTrialRuntime,
   getTrialMageWorldPosition,
@@ -32,7 +32,7 @@ import {
   processTrialSwap,
   updateTrialRuntime,
 } from '../generator/TrialRules';
-import type { BoardRenderState } from '../render-2d/BoardRenderState';
+import type { BoardRenderState, BoardVisualCueKind, BoardVisualCueState } from '../render-2d/BoardRenderState';
 import type { HudRenderState } from '../render-2d/HudRenderState';
 import type { ScreenRenderState } from '../render-2d/ScreenRenderState';
 import type { LeaderboardEntry } from '../run/Leaderboard';
@@ -46,6 +46,8 @@ import {
   selectLevelTypeForRun,
 } from '../run/RunProgression';
 import { scoreJourneyClear, scoreSwapStats, scoreTrialClear } from '../run/Scoring';
+import type { SwapScoringStats } from '../run/Scoring';
+import { CAMERA_SHAKE_MAX, CAMERA_SHAKE_MIN } from '../data/tuning';
 import { HeroStageTemplateIds } from '../world-3d/HeroStageTemplates';
 import type { HeroWorldState } from '../world-3d/HeroWorldState';
 import type { TransformState } from '../world-3d/TransformState';
@@ -68,6 +70,11 @@ export interface MagusMatchGameAppOptions {
   debugLevelType?: LevelType;
 }
 
+interface RuntimeBoardVisualCue extends Omit<BoardVisualCueState, 'value'> {
+  remainingSec: number;
+  durationSec: number;
+}
+
 export class MagusMatchGameApp implements GameApp {
   private events: GameEvent[] = [];
   private rng = new SeededRng();
@@ -86,6 +93,9 @@ export class MagusMatchGameApp implements GameApp {
   private levelValidSwapCount = 0;
   private finalScore = 0;
   private readonly debugSeed?: number;
+  private visualCues: RuntimeBoardVisualCue[] = [];
+  private shakeTimerSec = 0;
+  private shakeAmplitudePixels = 0;
 
   constructor(seed?: number, private readonly options: MagusMatchGameAppOptions = {}) {
     this.debugSeed = seed;
@@ -94,6 +104,7 @@ export class MagusMatchGameApp implements GameApp {
 
   update(dtSec: number, commands: readonly GameInputCommand[]): void {
     const clampedDtSec = Math.max(0, dtSec);
+    this.updateBoardJuice(clampedDtSec);
 
     for (const command of commands) {
       if (command.type === 'restart') {
@@ -158,7 +169,8 @@ export class MagusMatchGameApp implements GameApp {
           : [],
       selectedCell: null,
       queuedSwap: null,
-      shakePixels: 0,
+      shakePixels: this.getShakePixels(),
+      visualCues: this.getBoardVisualCueState(),
     };
   }
 
@@ -227,6 +239,9 @@ export class MagusMatchGameApp implements GameApp {
     this.pendingLevelResult = null;
     this.pendingClearScore = 0;
     this.finalScore = 0;
+    this.visualCues = [];
+    this.shakeTimerSec = 0;
+    this.shakeAmplitudePixels = 0;
     this.phase = 'TITLE';
     this.events = [];
   }
@@ -300,6 +315,9 @@ export class MagusMatchGameApp implements GameApp {
     this.pendingClearScore = 0;
     this.levelMatchCount = 0;
     this.levelValidSwapCount = 0;
+    this.visualCues = [];
+    this.shakeTimerSec = 0;
+    this.shakeAmplitudePixels = 0;
   }
 
   private startPreparedLevel(): void {
@@ -363,6 +381,10 @@ export class MagusMatchGameApp implements GameApp {
     this.transitionTimerSec = 0;
     this.phase = result === 'win' ? 'WIN' : 'LOSE';
     this.pendingClearScore = result === 'win' ? this.getLevelClearScore() : 0;
+    if (result === 'win') {
+      this.requestSound(AssetIds.sounds.victorySting, { category: 'level', volume: 0.7 });
+      this.requestSound(AssetIds.sounds.cageYankWhoosh, { category: 'level', volume: 0.55 });
+    }
     this.events.push({
       type: 'levelEnded',
       levelNumber: this.run.levelNumber,
@@ -392,6 +414,7 @@ export class MagusMatchGameApp implements GameApp {
       this.phase = 'GAME_OVER';
       this.pendingLevelResult = null;
       this.transitionTimerSec = 0;
+      this.requestSound(AssetIds.sounds.runEnd, { category: 'run', volume: 0.72 });
       this.events.push({
         type: 'runEnded',
         finalScore: this.run.score,
@@ -431,10 +454,13 @@ export class MagusMatchGameApp implements GameApp {
       return;
     }
 
+    const previousMageCell = this.journeyRuntime.mageCell;
     this.board = result.board;
     this.journeyRuntime = result.runtime;
     this.levelMatchCount += result.scoringStats.matchCount;
     this.levelValidSwapCount += result.scoringStats.validSwapCount;
+    this.emitMatchAudioAndJuice(result.scoringStats, to);
+    this.emitJourneyAudioAndJuice(result, previousMageCell, to);
     const scoreDelta = result.scoreDelta + scoreSwapStats(result.scoringStats);
     if (scoreDelta > 0) {
       this.run = { ...this.run, score: this.run.score + scoreDelta };
@@ -462,6 +488,8 @@ export class MagusMatchGameApp implements GameApp {
     this.trialRuntime = result.runtime;
     this.levelMatchCount += result.scoringStats.matchCount;
     this.levelValidSwapCount += result.scoringStats.validSwapCount;
+    this.emitMatchAudioAndJuice(result.scoringStats, to);
+    this.emitTrialAudioAndJuice(result.damageEvents, to);
     const scoreDelta = result.scoreDelta + scoreSwapStats(result.scoringStats);
 
     if (scoreDelta > 0) {
@@ -470,9 +498,9 @@ export class MagusMatchGameApp implements GameApp {
     }
 
     if (result.damageEvents.some((event) => event.defeated)) {
-      this.events.push({ type: 'soundRequested', soundId: AssetIds.sounds.monsterDefeat });
+      this.requestSound(AssetIds.sounds.monsterDefeat, { category: 'enemy', volume: 0.62 });
     } else if (result.damageEvents.length > 0) {
-      this.events.push({ type: 'soundRequested', soundId: AssetIds.sounds.monsterDamage });
+      this.requestSound(AssetIds.sounds.monsterDamage, { category: 'enemy', volume: 0.5 });
     }
 
     if (result.runtime.result === 'won') {
@@ -492,6 +520,159 @@ export class MagusMatchGameApp implements GameApp {
     }
 
     return 0;
+  }
+
+  private requestSound(
+    soundId: string,
+    options: {
+      intensity?: number;
+      volume?: number;
+      playbackRate?: number;
+      category?: SoundEventCategory;
+    } = {},
+  ): void {
+    const event: Extract<GameEvent, { type: 'soundRequested' }> = {
+      type: 'soundRequested',
+      soundId,
+    };
+    if (options.intensity != null) {
+      event.intensity = options.intensity;
+    }
+    if (options.volume != null) {
+      event.volume = options.volume;
+    }
+    if (options.playbackRate != null) {
+      event.playbackRate = options.playbackRate;
+    }
+    if (options.category != null) {
+      event.category = options.category;
+    }
+
+    this.events.push(event);
+  }
+
+  private emitMatchAudioAndJuice(stats: SwapScoringStats, anchor: CellCoord): void {
+    if (stats.matchCount <= 0) {
+      return;
+    }
+
+    this.requestSound(AssetIds.sounds.tileMatch, { category: 'match', volume: 0.55 });
+    for (let index = 0; index < stats.comboCount; index += 1) {
+      this.requestSound(AssetIds.sounds.comboPitchStep, {
+        category: 'match',
+        volume: 0.48,
+        playbackRate: 1 + Math.min(6, index + 1) * 0.08,
+      });
+    }
+
+    if (stats.powerUpsCreated > 0) {
+      this.requestSound(AssetIds.sounds.powerupCreate, {
+        category: 'match',
+        volume: 0.58,
+        intensity: Math.min(1.5, stats.powerUpsCreated),
+      });
+      this.addBoardCue('powerPulse', anchor, 0.45);
+    }
+
+    this.addBoardCue('matchFlash', anchor, 0.3);
+    this.triggerBoardShake(stats.matchCount + stats.powerUpsCreated);
+  }
+
+  private emitJourneyAudioAndJuice(
+    result: ReturnType<typeof processJourneySwap>,
+    previousMageCell: CellCoord,
+    anchor: CellCoord,
+  ): void {
+    for (const coord of result.clearedStandardCells.slice(0, 8)) {
+      this.addBoardCue('matchFlash', coord, 0.28);
+    }
+
+    if (result.convertedPathCells.length > 0) {
+      this.requestSound(AssetIds.sounds.pathConvert, {
+        category: 'match',
+        volume: 0.56,
+        intensity: Math.min(1.4, 0.75 + result.convertedPathCells.length / 8),
+      });
+      for (const coord of result.convertedPathCells.slice(0, 12)) {
+        this.addBoardCue('pathGlow', coord, 0.55);
+      }
+    }
+
+    if (!coordsEqual(previousMageCell, result.runtime.mageCell)) {
+      this.requestSound(AssetIds.sounds.mageWalk, { category: 'level', volume: 0.42 });
+      this.addBoardCue('pathGlow', result.runtime.mageCell, 0.42);
+    }
+
+    if (result.convertedPathCells.length === 0 && result.clearedStandardCells.length === 0) {
+      this.addBoardCue('matchFlash', anchor, 0.22);
+    }
+  }
+
+  private emitTrialAudioAndJuice(
+    damageEvents: readonly TrialDamageEvent[],
+    anchor: CellCoord,
+  ): void {
+    for (const event of damageEvents.slice(0, 8)) {
+      const sounds = soundIdsForSpellSchool(event.schoolId);
+      this.requestSound(sounds.whoosh, { category: 'spell', volume: 0.42 });
+      this.requestSound(sounds.impact, { category: 'spell', volume: 0.48 });
+      this.addBoardCue('damagePopup', anchor, 0.45, `-${Math.round(event.damage)}`);
+    }
+  }
+
+  private addBoardCue(
+    kind: BoardVisualCueKind,
+    coord: CellCoord,
+    durationSec: number,
+    text?: string,
+  ): void {
+    this.visualCues.push({
+      kind,
+      coord,
+      text,
+      durationSec,
+      remainingSec: durationSec,
+    });
+  }
+
+  private triggerBoardShake(weight: number): void {
+    this.shakeTimerSec = Math.max(this.shakeTimerSec, 0.16);
+    this.shakeAmplitudePixels = Math.min(
+      CAMERA_SHAKE_MAX,
+      Math.max(CAMERA_SHAKE_MIN, CAMERA_SHAKE_MIN + weight * 1.4),
+    );
+  }
+
+  private updateBoardJuice(dtSec: number): void {
+    if (dtSec <= 0) {
+      return;
+    }
+
+    this.shakeTimerSec = Math.max(0, this.shakeTimerSec - dtSec);
+    if (this.shakeTimerSec <= 0) {
+      this.shakeAmplitudePixels = 0;
+    }
+
+    this.visualCues = this.visualCues
+      .map((cue) => ({ ...cue, remainingSec: cue.remainingSec - dtSec }))
+      .filter((cue) => cue.remainingSec > 0);
+  }
+
+  private getShakePixels(): number {
+    if (this.shakeTimerSec <= 0) {
+      return 0;
+    }
+
+    return Math.min(CAMERA_SHAKE_MAX, Math.max(CAMERA_SHAKE_MIN, this.shakeAmplitudePixels));
+  }
+
+  private getBoardVisualCueState(): BoardVisualCueState[] {
+    return this.visualCues.map((cue) => ({
+      kind: cue.kind,
+      coord: cue.coord,
+      text: cue.text,
+      value: Math.max(0, Math.min(1, cue.remainingSec / cue.durationSec)),
+    }));
   }
 
   private getObjectiveText(): string {
@@ -642,6 +823,23 @@ function assetIdForTileType(type: TileType): string {
     case 'LIGHTBALL':
       return AssetIds.powerUps.lightball;
   }
+}
+
+function soundIdsForSpellSchool(schoolId: SpellSchoolId): { whoosh: string; impact: string } {
+  switch (schoolId) {
+    case 'fire':
+      return { whoosh: AssetIds.sounds.fireWhoosh, impact: AssetIds.sounds.fireImpact };
+    case 'ice':
+      return { whoosh: AssetIds.sounds.iceWhoosh, impact: AssetIds.sounds.iceImpact };
+    case 'lightning':
+      return { whoosh: AssetIds.sounds.lightningWhoosh, impact: AssetIds.sounds.lightningImpact };
+    case 'earth':
+      return { whoosh: AssetIds.sounds.earthWhoosh, impact: AssetIds.sounds.earthImpact };
+  }
+}
+
+function coordsEqual(first: CellCoord | null, second: CellCoord): boolean {
+  return first != null && first.col === second.col && first.row === second.row;
 }
 
 export function phaseToCinematicState(phase: GamePhase): HeroWorldState['cinematicState'] {

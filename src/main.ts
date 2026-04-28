@@ -6,16 +6,29 @@ import {
   parseDebugLevelType,
   parseDebugSeed,
 } from './platform-browser/BrowserInputAdapter';
+import { loadBrowserImages } from './platform-browser/BrowserImageLoader';
 import { LocalLeaderboardStore } from './platform-browser/LocalLeaderboardStore';
 import { Canvas2DRenderer } from './render-2d/Canvas2DRenderer';
 import { renderFrame } from './render-2d/RenderFrame';
 import { ThreeHeroStage } from './render-three/ThreeHeroStage';
 import type { GameEvent } from './core/GameEvents';
+import type { HudRenderState } from './render-2d/HudRenderState';
+import type { ScreenRenderState } from './render-2d/ScreenRenderState';
 import {
   createLeaderboardEntry,
   insertLeaderboardEntry,
   type LeaderboardEntry,
 } from './run/Leaderboard';
+
+const ENABLE_BROWSER_AUDIO = false;
+
+type SoundRequestEvent = Extract<GameEvent, { type: 'soundRequested' }>;
+interface BrowserAudio {
+  setMuted(muted: boolean): void;
+  preload(): Promise<void>;
+  resume(): Promise<void>;
+  play(event: SoundRequestEvent): Promise<boolean>;
+}
 
 const root = document.querySelector<HTMLDivElement>('#app');
 
@@ -57,11 +70,27 @@ if (ctx == null) {
 
 const renderer = new Canvas2DRenderer(ctx, {}, LOGICAL_WIDTH, LOGICAL_HEIGHT);
 const heroStage = new ThreeHeroStage(heroStageElement);
+let audio: BrowserAudio | null = null;
 const leaderboardStore = new LocalLeaderboardStore();
 let leaderboardRows: readonly LeaderboardEntry[] = leaderboardStore.load();
 let highlightedRank: number | null = null;
 
 const input = new BrowserInputAdapter(gameShell);
+
+void loadBrowserImages().then((images) => {
+  renderer.setImages(images);
+});
+
+if (ENABLE_BROWSER_AUDIO) {
+  void import('./platform-browser/BrowserAudioAdapter').then(({ BrowserAudioAdapter }) => {
+    audio = new BrowserAudioAdapter();
+    return audio.preload();
+  });
+
+  gameShell.addEventListener('pointerdown', () => {
+    void audio?.resume();
+  });
+}
 
 function resizeLogicalStage(): void {
   const rect = gameShell.getBoundingClientRect();
@@ -70,8 +99,7 @@ function resizeLogicalStage(): void {
   heroStage.resize(1080, 500);
 }
 
-function renderHud(): void {
-  const hud = app.getHudState();
+function renderHud(hud = getBrowserHudState()): void {
   debugPanel.textContent = `${hud.phase} | ${hud.debugText ?? ''}`;
 }
 
@@ -81,14 +109,17 @@ function tick(timeMs: number): void {
   const dtSec = lastTimeMs === 0 ? 0 : Math.min((timeMs - lastTimeMs) / 1000, 1 / 30);
   lastTimeMs = timeMs;
   app.update(dtSec, input.drainCommands());
+  const hudState = getBrowserHudState();
+  const screenState = getBrowserScreenState();
+  audio?.setMuted(hudState.muted);
   handleEvents(app.drainEvents());
-  renderHud();
+  renderHud(hudState);
   renderFrame(
     renderer,
     app.getBoardRenderState(),
-    app.getHudState(),
+    hudState,
     timeMs / 1000,
-    app.getScreenState(leaderboardRows, highlightedRank),
+    screenState,
   );
   heroStage.render(app.getHeroWorldState(), dtSec);
   requestAnimationFrame(tick);
@@ -99,9 +130,9 @@ renderHud();
 renderFrame(
   renderer,
   app.getBoardRenderState(),
-  app.getHudState(),
+  getBrowserHudState(),
   0,
-  app.getScreenState(leaderboardRows, highlightedRank),
+  getBrowserScreenState(),
 );
 heroStage.render(app.getHeroWorldState(), 0);
 window.addEventListener('resize', resizeLogicalStage);
@@ -110,6 +141,13 @@ requestAnimationFrame(tick);
 
 function handleEvents(events: readonly GameEvent[]): void {
   for (const event of events) {
+    if (event.type === 'soundRequested') {
+      if (ENABLE_BROWSER_AUDIO && audio != null) {
+        void audio.play(event);
+      }
+      continue;
+    }
+
     if (event.type === 'levelStarted') {
       highlightedRank = null;
       continue;
@@ -128,6 +166,16 @@ function handleEvents(events: readonly GameEvent[]): void {
       leaderboardStore.save(leaderboardRows);
     }
   }
+}
+
+function getBrowserHudState(): HudRenderState {
+  const hud = app.getHudState();
+  return ENABLE_BROWSER_AUDIO ? hud : { ...hud, muted: true };
+}
+
+function getBrowserScreenState(): ScreenRenderState {
+  const screen = app.getScreenState(leaderboardRows, highlightedRank);
+  return ENABLE_BROWSER_AUDIO ? screen : { ...screen, muted: true };
 }
 
 function mustQuery(parent: ParentNode, selector: string): HTMLElement {

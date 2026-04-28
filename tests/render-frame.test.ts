@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { BOARD_RECT } from '../src/core/Layout';
+import type { DrawImageRef, GameRenderer, TextStyle } from '../src/render-2d/GameRenderer';
 import type { BoardRenderState } from '../src/render-2d/BoardRenderState';
-import { buildBoardCellVisuals } from '../src/render-2d/RenderFrame';
+import { buildBoardCellVisuals, renderFrame } from '../src/render-2d/RenderFrame';
 
 describe('buildBoardCellVisuals', () => {
   it('builds stable cell bounds and overlay flags from render state', () => {
@@ -31,6 +32,7 @@ describe('buildBoardCellVisuals', () => {
       selectedCell: null,
       queuedSwap: null,
       shakePixels: 0,
+      visualCues: [],
     };
 
     const visuals = buildBoardCellVisuals(state, 0.25);
@@ -85,8 +87,124 @@ describe('buildBoardCellVisuals', () => {
       selectedCell: null,
       queuedSwap: null,
       shakePixels: 0,
+      visualCues: [],
     };
 
     expect(buildBoardCellVisuals(state, 0)).toEqual([]);
   });
+
+  it('draws image assets when available', () => {
+    const renderer = new FakeRenderer(new Set(['tile.fire']));
+
+    renderFrame(renderer, oneTileState('tile.fire'), hudState(), 0);
+
+    expect(renderer.calls).toContain('image:tile.fire');
+    expect(renderer.calls).not.toContain('text:F');
+  });
+
+  it('falls back to shapes and glyphs when image assets are unavailable', () => {
+    const renderer = new FakeRenderer(new Set());
+
+    renderFrame(renderer, oneTileState('tile.fire'), hudState(), 0);
+
+    expect(renderer.calls).not.toContain('image:tile.fire');
+    expect(renderer.calls).toContain('rect:#eb5757');
+    expect(renderer.calls).toContain('text:F');
+  });
+
+  it('applies transient visual cues to cells and damage popups', () => {
+    const renderer = new FakeRenderer(new Set());
+    const state = oneTileState('tile.fire');
+    state.visualCues = [
+      { kind: 'matchFlash', coord: { col: 0, row: 0 }, value: 0.8 },
+      { kind: 'damagePopup', coord: { col: 0, row: 0 }, value: 1, text: '-10' },
+    ];
+
+    const visuals = buildBoardCellVisuals(state, 0);
+    renderFrame(renderer, state, hudState(), 0);
+
+    expect(visuals[0].flash).toBeCloseTo(0.4);
+    expect(renderer.calls).toContain('text:-10');
+  });
 });
+
+function oneTileState(assetId: string): BoardRenderState {
+  return {
+    logicalWidth: 1080,
+    logicalHeight: 1920,
+    boardCells: [
+      {
+        coord: { col: 0, row: 0 },
+        assetId,
+        tileType: 'FIRE',
+        isPath: false,
+        alpha: 1,
+      },
+    ],
+    pathCells: [],
+    mageCell: null,
+    goalCell: null,
+    hintedCells: [],
+    selectedCell: null,
+    queuedSwap: null,
+    shakePixels: 0,
+    visualCues: [],
+  };
+}
+
+function hudState() {
+  return {
+    phase: 'IDLE' as const,
+    levelText: 'Level 1',
+    livesText: 'Lives 3',
+    scoreText: '0',
+    objectiveText: 'Moves 20',
+    muted: false,
+  };
+}
+
+class FakeRenderer implements GameRenderer {
+  readonly calls: string[] = [];
+
+  constructor(private readonly availableImages: ReadonlySet<string>) {}
+
+  clear(): void {
+    this.calls.push('clear');
+  }
+
+  pushTranslate(): void {
+    this.calls.push('pushTranslate');
+  }
+
+  pushScale(): void {
+    this.calls.push('pushScale');
+  }
+
+  pushRotate(): void {
+    this.calls.push('pushRotate');
+  }
+
+  pop(): void {
+    this.calls.push('pop');
+  }
+
+  drawRect(color: string): void {
+    this.calls.push(`rect:${color}`);
+  }
+
+  drawEllipse(color: string): void {
+    this.calls.push(`ellipse:${color}`);
+  }
+
+  hasImage(image: DrawImageRef): boolean {
+    return this.availableImages.has(image.id);
+  }
+
+  drawImage(image: DrawImageRef): void {
+    this.calls.push(`image:${image.id}`);
+  }
+
+  drawText(text: string, _x: number, _y: number, _width: number, _height: number, _style: TextStyle): void {
+    this.calls.push(`text:${text}`);
+  }
+}

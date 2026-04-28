@@ -3,10 +3,14 @@ import type { DrawImageRef, GameRenderer, TextStyle } from './GameRenderer';
 export class Canvas2DRenderer implements GameRenderer {
   constructor(
     private readonly ctx: CanvasRenderingContext2D,
-    private readonly images: Record<string, HTMLImageElement>,
+    private images: Record<string, HTMLImageElement>,
     private readonly width: number,
     private readonly height: number,
   ) {}
+
+  setImages(images: Record<string, HTMLImageElement>): void {
+    this.images = images;
+  }
 
   clear(): void {
     this.ctx.clearRect(0, 0, this.width, this.height);
@@ -45,6 +49,10 @@ export class Canvas2DRenderer implements GameRenderer {
     this.ctx.beginPath();
     this.ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, Math.PI * 2);
     this.ctx.fill();
+  }
+
+  hasImage(image: DrawImageRef): boolean {
+    return this.images[image.id] != null;
   }
 
   drawImage(image: DrawImageRef, x: number, y: number, width: number, height: number): void {

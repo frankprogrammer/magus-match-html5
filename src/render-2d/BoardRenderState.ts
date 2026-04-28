@@ -9,6 +9,15 @@ export interface BoardCellVisualState {
   alpha: number;
 }
 
+export type BoardVisualCueKind = 'matchFlash' | 'pathGlow' | 'powerPulse' | 'damagePopup';
+
+export interface BoardVisualCueState {
+  kind: BoardVisualCueKind;
+  coord: CellCoord;
+  value: number;
+  text?: string;
+}
+
 export interface BoardRenderState {
   logicalWidth: number;
   logicalHeight: number;
@@ -20,4 +29,5 @@ export interface BoardRenderState {
   selectedCell: CellCoord | null;
   queuedSwap: { from: CellCoord; to: CellCoord } | null;
   shakePixels: number;
+  visualCues: readonly BoardVisualCueState[];
 }

@@ -27,4 +27,12 @@ describe('MagusMatchGameApp', () => {
     expect(app.drainEvents()).toEqual([]);
     expect(app.drainEvents()).toEqual([]);
   });
+
+  it('creates deterministic renderable board cells on reset', () => {
+    const first = new MagusMatchGameApp(444);
+    const second = new MagusMatchGameApp(444);
+
+    expect(first.getBoardRenderState().boardCells).toHaveLength(64);
+    expect(first.getBoardRenderState().boardCells).toEqual(second.getBoardRenderState().boardCells);
+  });
 });

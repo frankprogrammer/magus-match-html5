@@ -1,7 +1,13 @@
 import type { GameEvent } from './GameEvents';
 import type { GameInputCommand } from './GameInput';
+import { LOGICAL_HEIGHT, LOGICAL_WIDTH } from './Layout';
 import { createRandomSeed, SeededRng } from './Rng';
 import type { RunState } from './Types';
+import type { Board } from '../board/Board';
+import { createEmptyBoard, getAllPlayableCoords } from '../board/Board';
+import { createPlayableStandardBoard } from '../board/BoardSolver';
+import type { TileType } from '../board/TileTypes';
+import { AssetIds } from '../assets/AssetIds';
 import type { BoardRenderState } from '../render-2d/BoardRenderState';
 import type { HudRenderState } from '../render-2d/HudRenderState';
 import type { HeroWorldState } from '../world-3d/HeroWorldState';
@@ -20,6 +26,7 @@ export class MagusMatchGameApp implements GameApp {
   private rng = new SeededRng();
   private elapsedSec = 0;
   private run: RunState = createInitialRunState(createRandomSeed());
+  private board: Board = createEmptyBoard();
   private phase: 'TITLE' = 'TITLE';
 
   constructor(seed?: number) {
@@ -38,9 +45,23 @@ export class MagusMatchGameApp implements GameApp {
 
   getBoardRenderState(): BoardRenderState {
     return {
-      logicalWidth: 1080,
-      logicalHeight: 1920,
-      boardCells: [],
+      logicalWidth: LOGICAL_WIDTH,
+      logicalHeight: LOGICAL_HEIGHT,
+      boardCells: getAllPlayableCoords(this.board)
+        .map((coord) => {
+          const tile = this.board[coord.row][coord.col].tile;
+          if (tile == null) {
+            return null;
+          }
+
+          return {
+            coord,
+            assetId: assetIdForTileType(tile.type),
+            isPath: this.board[coord.row][coord.col].isPath,
+            alpha: 1,
+          };
+        })
+        .filter((cell) => cell != null),
       selectedCell: null,
       queuedSwap: null,
       shakePixels: 0,
@@ -83,6 +104,7 @@ export class MagusMatchGameApp implements GameApp {
   reset(seed = createRandomSeed()): void {
     this.rng = new SeededRng(seed);
     this.run = createInitialRunState(seed);
+    this.board = createPlayableStandardBoard(this.rng);
     this.elapsedSec = 0;
     this.phase = 'TITLE';
     this.events = [];
@@ -99,6 +121,10 @@ export class MagusMatchGameApp implements GameApp {
   getElapsedSecForDebug(): number {
     return this.elapsedSec;
   }
+
+  getBoardForDebug(): Board {
+    return this.board;
+  }
 }
 
 export function createInitialRunState(seed: number): RunState {
@@ -110,4 +136,27 @@ export function createInitialRunState(seed: number): RunState {
     score: 0,
     levelsCleared: 0,
   };
+}
+
+function assetIdForTileType(type: TileType): string {
+  switch (type) {
+    case 'FIRE':
+      return AssetIds.tiles.fire;
+    case 'ICE':
+      return AssetIds.tiles.ice;
+    case 'LIGHTNING':
+      return AssetIds.tiles.lightning;
+    case 'EARTH':
+      return AssetIds.tiles.earth;
+    case 'LAND':
+      return AssetIds.tiles.land;
+    case 'ROCKET_H':
+      return AssetIds.powerUps.rocketH;
+    case 'ROCKET_V':
+      return AssetIds.powerUps.rocketV;
+    case 'TNT':
+      return AssetIds.powerUps.tnt;
+    case 'LIGHTBALL':
+      return AssetIds.powerUps.lightball;
+  }
 }

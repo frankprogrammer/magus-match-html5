@@ -1,13 +1,27 @@
 import * as THREE from 'three';
+import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
+import { AssetIds } from '../assets/AssetIds';
+import { getAssetManifestEntry } from '../assets/AssetManifest';
 import { HeroStageTemplateIds } from '../world-3d/HeroStageTemplates';
+import { applyFallbackMaterialToUnmaterialedMeshes, normalizeModelToActorBounds } from './ThreeModelUtils';
+
+const MAGE_TARGET_HEIGHT = 1.45;
 
 export class ThreeObjectFactory {
+  private mageTemplate: THREE.Group | null = null;
+  private mageTemplateVersion = 0;
+  private mageLoadStarted = false;
+
+  constructor() {
+    this.startMageModelLoad();
+  }
+
   create(templateId: string): THREE.Object3D {
     switch (templateId) {
       case HeroStageTemplateIds.backdropForest:
         return createBackdrop();
       case HeroStageTemplateIds.mage:
-        return createMage();
+        return this.createMage();
       case HeroStageTemplateIds.princeCage:
         return createPrinceCage();
       case HeroStageTemplateIds.goalFlag:
@@ -23,6 +37,14 @@ export class ThreeObjectFactory {
     }
   }
 
+  getTemplateVersion(templateId: string): number {
+    if (templateId === HeroStageTemplateIds.mage) {
+      return this.mageTemplateVersion;
+    }
+
+    return 0;
+  }
+
   dispose(object: THREE.Object3D): void {
     object.traverse((child) => {
       if (child instanceof THREE.Mesh) {
@@ -35,6 +57,48 @@ export class ThreeObjectFactory {
       }
     });
   }
+
+  disposeCachedResources(): void {
+    if (this.mageTemplate != null) {
+      this.dispose(this.mageTemplate);
+      this.mageTemplate = null;
+    }
+  }
+
+  private createMage(): THREE.Object3D {
+    this.startMageModelLoad();
+    if (this.mageTemplate != null) {
+      return normalizeModelToActorBounds(this.mageTemplate, MAGE_TARGET_HEIGHT);
+    }
+
+    return createPlaceholderMage();
+  }
+
+  private startMageModelLoad(): void {
+    if (this.mageLoadStarted || typeof window === 'undefined') {
+      return;
+    }
+
+    const entry = getAssetManifestEntry(AssetIds.rigs.mage);
+    if (entry?.sourceFormat !== 'fbx') {
+      return;
+    }
+
+    this.mageLoadStarted = true;
+    const loader = new FBXLoader();
+    loader.load(
+      entry.browserUrl,
+      (loaded) => {
+        applyFallbackMaterialToUnmaterialedMeshes(loaded);
+        this.mageTemplate = normalizeModelToActorBounds(loaded, MAGE_TARGET_HEIGHT);
+        this.mageTemplateVersion += 1;
+      },
+      undefined,
+      (error) => {
+        console.warn(`Failed to load mage FBX from ${entry.browserUrl}`, error);
+      },
+    );
+  }
 }
 
 function createBackdrop(): THREE.Object3D {
@@ -44,7 +108,7 @@ function createBackdrop(): THREE.Object3D {
   return mesh;
 }
 
-function createMage(): THREE.Object3D {
+function createPlaceholderMage(): THREE.Object3D {
   const group = new THREE.Group();
   group.add(mesh(new THREE.CylinderGeometry(0.42, 0.52, 1.1, 18), '#4b2e83', 0, 0.4, 0));
   group.add(mesh(new THREE.SphereGeometry(0.34, 18, 12), '#f5e9c9', 0, 1.12, 0));

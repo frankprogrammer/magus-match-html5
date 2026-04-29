@@ -49,6 +49,7 @@ export class ThreeHeroStage {
       this.factory.dispose(object);
     }
     this.objectCache.clear();
+    this.factory.disposeCachedResources();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }
@@ -77,7 +78,12 @@ export class ThreeHeroStage {
 
   private getOrCreateObject(objectState: WorldObjectState): THREE.Object3D {
     const existing = this.objectCache.get(objectState.objectId);
-    if (existing != null && this.objectCache.getTemplateId(objectState.objectId) === objectState.templateId) {
+    const templateVersion = this.factory.getTemplateVersion(objectState.templateId);
+    if (
+      existing != null &&
+      this.objectCache.getTemplateId(objectState.objectId) === objectState.templateId &&
+      this.objectCache.getTemplateVersion(objectState.objectId) === templateVersion
+    ) {
       return existing;
     }
 
@@ -88,7 +94,7 @@ export class ThreeHeroStage {
     }
 
     const object = this.factory.create(objectState.templateId);
-    this.objectCache.set(objectState.objectId, objectState.templateId, object);
+    this.objectCache.set(objectState.objectId, objectState.templateId, templateVersion, object);
     this.scene.add(object);
     return object;
   }

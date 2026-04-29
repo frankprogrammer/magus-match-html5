@@ -3,7 +3,7 @@ import type { ArtPromptId } from './ArtPrompts';
 import { SoundManifest, type SoundManifestEntry } from '../audio/SoundManifest';
 
 export type AssetKind = 'texture' | 'model' | 'template' | 'audio' | 'ui' | 'rig' | 'material';
-export type SourceFormat = 'png' | 'jpg' | 'webp' | 'mp3' | 'ogg' | 'wav' | 'glb' | 'gltf' | 'json';
+export type SourceFormat = 'png' | 'jpg' | 'webp' | 'mp3' | 'ogg' | 'wav' | 'glb' | 'gltf' | 'fbx' | 'json';
 export type Axis = '+X' | '-X' | '+Y' | '-Y' | '+Z' | '-Z';
 export type Pivot = 'center' | 'bottomCenter' | 'custom';
 export type CollisionShape = 'none' | 'box' | 'sphere' | 'capsule' | 'mesh' | 'custom';
@@ -28,6 +28,8 @@ const TILE_NOTES =
   'Runtime 256x256 transparent PNG, centered subject, 24-36px padding, readable at 100x100.';
 const BACKDROP_NOTES = 'Runtime 2160x1000 PNG/WebP for 2x coverage of the 1080x500 hero stage.';
 const RIG_NOTES = 'Transparent PNG source parts now; later exported as a 2048x2048 atlas plus skeletal JSON.';
+const TEMP_FBX_MAGE_NOTES =
+  'Temporary browser hero-stage FBX model. Auto-normalized in Three.js to bottom-center pivot and 1.45 world-unit height.';
 
 export const AssetManifest: Record<string, AssetManifestEntry> = {
   [AssetIds.tiles.fire]: texture(
@@ -126,9 +128,12 @@ export const AssetManifest: Record<string, AssetManifestEntry> = {
   ),
   [AssetIds.rigs.mage]: rig(
     AssetIds.rigs.mage,
-    '/assets/rigs/mage/mage-parts-source.png',
-    'Assets/Rigs/Mage/mage-rig.json',
+    '/assets/rigs/cube.fbx',
+    'Assets/Rigs/Mage/cube.fbx',
     'prompt.rig.mage',
+    'fbx',
+    'temporary FBX stand-in, auto-normalized to 1.45 world units',
+    TEMP_FBX_MAGE_NOTES,
   ),
   [AssetIds.rigs.prince]: rig(
     AssetIds.rigs.prince,
@@ -258,21 +263,24 @@ function rig(
   browserUrl: string,
   futureMhsPath: string,
   artPromptId: ArtPromptId,
+  sourceFormat: SourceFormat = 'png',
+  runtimeSize = 'source parts max 1024px, final atlas 2048x2048',
+  notes = RIG_NOTES,
 ): AssetManifestEntry {
   return {
     id,
     kind: 'rig',
     browserUrl,
     futureMhsPath,
-    sourceFormat: 'png',
-    runtimeSize: 'source parts max 1024px, final atlas 2048x2048',
+    sourceFormat,
+    runtimeSize,
     unitScale: 1,
     forwardAxis: '+Z',
     upAxis: '+Y',
     pivot: 'bottomCenter',
     collision: 'capsule',
     artPromptId,
-    notes: RIG_NOTES,
+    notes,
   };
 }
 

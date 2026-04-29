@@ -46,4 +46,13 @@ describe('AssetManifest', () => {
     expect(AssetManifest[AssetIds.tiles.fire].runtimeSize).toBe('256x256');
     expect(AssetManifest[AssetIds.backdrops.forest].runtimeSize).toBe('2160x1000');
   });
+
+  it('maps the temporary mage rig to the dropped FBX player model', () => {
+    expect(AssetManifest[AssetIds.rigs.mage]).toMatchObject({
+      browserUrl: '/assets/rigs/cube.fbx',
+      sourceFormat: 'fbx',
+      pivot: 'bottomCenter',
+      upAxis: '+Y',
+    });
+  });
 });

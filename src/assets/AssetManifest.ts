@@ -30,6 +30,7 @@ const BACKDROP_NOTES = 'Runtime 2160x1000 PNG/WebP for 2x coverage of the 1080x5
 const RIG_NOTES = 'Transparent PNG source parts now; later exported as a 2048x2048 atlas plus skeletal JSON.';
 const TEMP_FBX_MAGE_NOTES =
   'Temporary browser hero-stage FBX model. Auto-normalized in Three.js to bottom-center pivot and 1.45 world-unit height.';
+const UI_BANNER_NOTES = 'Runtime 1080x150 PNG for the fixed middle HUD band; drawn full-width behind HUD text.';
 
 export const AssetManifest: Record<string, AssetManifestEntry> = {
   [AssetIds.tiles.fire]: texture(
@@ -195,6 +196,13 @@ export const AssetManifest: Record<string, AssetManifestEntry> = {
     'prompt.props.abductor',
     'Edge-of-frame cage-yank hint prop.',
   ),
+  [AssetIds.ui.hudBanner]: ui(
+    AssetIds.ui.hudBanner,
+    '/assets/ui/ui-banner.png',
+    'Assets/Textures/UI/ui-banner.png',
+    UI_BANNER_NOTES,
+    '1080x150',
+  ),
   ...Object.fromEntries(
     Object.values(SoundManifest).map((entry) => [entry.id, audio(entry)]),
   ),
@@ -280,6 +288,27 @@ function rig(
     pivot: 'bottomCenter',
     collision: 'capsule',
     artPromptId,
+    notes,
+  };
+}
+
+function ui(
+  id: string,
+  browserUrl: string,
+  futureMhsPath: string,
+  notes: string,
+  runtimeSize: string,
+): AssetManifestEntry {
+  return {
+    id,
+    kind: 'ui',
+    browserUrl,
+    futureMhsPath,
+    sourceFormat: 'png',
+    runtimeSize,
+    unitScale: 1,
+    pivot: 'center',
+    collision: 'none',
     notes,
   };
 }

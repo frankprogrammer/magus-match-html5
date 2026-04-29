@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { AssetIds } from '../src/assets/AssetIds';
 import { BOARD_RECT } from '../src/core/Layout';
 import type { DrawImageRef, GameRenderer, TextStyle } from '../src/render-2d/GameRenderer';
 import type { BoardRenderState } from '../src/render-2d/BoardRenderState';
@@ -104,6 +105,14 @@ describe('buildBoardCellVisuals', () => {
     expect(renderer.calls).not.toContain('text:F');
   });
 
+  it('draws the HUD banner image across the middle UI band when available', () => {
+    const renderer = new FakeRenderer(new Set([AssetIds.ui.hudBanner]));
+
+    renderFrame(renderer, oneTileState('tile.fire'), hudState(), 0);
+
+    expect(renderer.calls).toContain(`image:${AssetIds.ui.hudBanner}`);
+  });
+
   it('falls back to shapes and glyphs when image assets are unavailable', () => {
     const renderer = new FakeRenderer(new Set());
 
@@ -112,6 +121,26 @@ describe('buildBoardCellVisuals', () => {
     expect(renderer.calls).not.toContain('image:tile.fire');
     expect(renderer.calls).toContain('rect:#eb5757');
     expect(renderer.calls).toContain('text:F');
+  });
+
+  it('clips the tile layer to the board rect and draws the frame above it', () => {
+    const renderer = new FakeRenderer(new Set());
+
+    renderFrame(renderer, oneTileState('tile.fire'), hudState(), 0);
+
+    const clipIndex = renderer.calls.indexOf(
+      `clip:${BOARD_RECT.x},${BOARD_RECT.y},${BOARD_RECT.width},${BOARD_RECT.height}`,
+    );
+    const tileIndex = renderer.calls.indexOf('rect:#eb5757');
+    const clippedLayerPopIndex = renderer.calls.indexOf('pop', tileIndex);
+    const frameIndex = renderer.calls.indexOf(
+      `rect:#c8a24b:${BOARD_RECT.x - 8},${BOARD_RECT.y - 8},${BOARD_RECT.width + 16},8`,
+    );
+
+    expect(clipIndex).toBeGreaterThan(-1);
+    expect(tileIndex).toBeGreaterThan(clipIndex);
+    expect(clippedLayerPopIndex).toBeGreaterThan(tileIndex);
+    expect(frameIndex).toBeGreaterThan(clippedLayerPopIndex);
   });
 
   it('applies transient visual cues to cells and damage popups', () => {
@@ -191,12 +220,17 @@ class FakeRenderer implements GameRenderer {
     this.calls.push('pushAlpha');
   }
 
+  pushClipRect(x: number, y: number, width: number, height: number): void {
+    this.calls.push(`clip:${x},${y},${width},${height}`);
+  }
+
   pop(): void {
     this.calls.push('pop');
   }
 
-  drawRect(color: string): void {
+  drawRect(color: string, x: number, y: number, width: number, height: number): void {
     this.calls.push(`rect:${color}`);
+    this.calls.push(`rect:${color}:${x},${y},${width},${height}`);
   }
 
   drawEllipse(color: string): void {

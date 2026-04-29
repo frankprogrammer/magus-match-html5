@@ -32,6 +32,9 @@ export const AssetIds = {
     abductorHand: 'prop.abductorHand',
     abductorRope: 'prop.abductorRope',
   },
+  ui: {
+    hudBanner: 'ui.hudBanner',
+  },
   sounds: {
     tileMatch: 'sound.tileMatch',
     comboPitchStep: 'sound.comboPitchStep',

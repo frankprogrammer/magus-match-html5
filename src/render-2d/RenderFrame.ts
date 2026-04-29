@@ -1,3 +1,4 @@
+import { AssetIds } from '../assets/AssetIds';
 import { BOARD_RECT, HERO_STAGE_HEIGHT, HUD_HEIGHT, LOGICAL_HEIGHT, LOGICAL_WIDTH } from '../core/Layout';
 import type { CellCoord } from '../core/Layout';
 import type { TileType } from '../board/TileTypes';
@@ -104,6 +105,10 @@ export function buildBoardCellVisuals(boardState: BoardRenderState, elapsedSec: 
 function drawCanvasBands(renderer: GameRenderer): void {
   renderer.drawRect('#241832', 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
   renderer.drawRect('#f5e9c9', 0, HERO_STAGE_HEIGHT, LOGICAL_WIDTH, HUD_HEIGHT);
+  const hudBanner = { id: AssetIds.ui.hudBanner };
+  if (renderer.hasImage(hudBanner)) {
+    renderer.drawImage(hudBanner, 0, HERO_STAGE_HEIGHT, LOGICAL_WIDTH, HUD_HEIGHT);
+  }
   renderer.drawRect('#1f1830', 0, HERO_STAGE_HEIGHT + HUD_HEIGHT, LOGICAL_WIDTH, LOGICAL_HEIGHT - HERO_STAGE_HEIGHT - HUD_HEIGHT);
 }
 
@@ -144,7 +149,6 @@ function drawHud(renderer: GameRenderer, hudState: HudRenderState): void {
 function drawBoard(renderer: GameRenderer, boardState: BoardRenderState, elapsedSec: number): void {
   const shake = boardState.shakePixels;
   renderer.pushTranslate(shake, 0);
-  renderer.drawRect('#c8a24b', BOARD_RECT.x - 8, BOARD_RECT.y - 8, BOARD_RECT.width + 16, BOARD_RECT.height + 16);
   renderer.drawRect('#302340', BOARD_RECT.x, BOARD_RECT.y, BOARD_RECT.width, BOARD_RECT.height);
 
   const visuals = buildBoardCellVisuals(boardState, elapsedSec).sort(
@@ -154,12 +158,23 @@ function drawBoard(renderer: GameRenderer, boardState: BoardRenderState, elapsed
       first.coord.col - second.coord.col,
   );
 
+  renderer.pushClipRect(BOARD_RECT.x, BOARD_RECT.y, BOARD_RECT.width, BOARD_RECT.height);
   for (const visual of visuals) {
     drawCell(renderer, visual);
   }
+  renderer.pop();
 
+  drawBoardFrame(renderer);
   drawDamagePopups(renderer, boardState);
   renderer.pop();
+}
+
+function drawBoardFrame(renderer: GameRenderer): void {
+  const border = 8;
+  renderer.drawRect('#c8a24b', BOARD_RECT.x - border, BOARD_RECT.y - border, BOARD_RECT.width + border * 2, border);
+  renderer.drawRect('#c8a24b', BOARD_RECT.x - border, BOARD_RECT.y + BOARD_RECT.height, BOARD_RECT.width + border * 2, border);
+  renderer.drawRect('#c8a24b', BOARD_RECT.x - border, BOARD_RECT.y, border, BOARD_RECT.height);
+  renderer.drawRect('#c8a24b', BOARD_RECT.x + BOARD_RECT.width, BOARD_RECT.y, border, BOARD_RECT.height);
 }
 
 function drawCell(renderer: GameRenderer, visual: BoardCellVisual): void {

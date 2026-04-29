@@ -9,6 +9,7 @@ describe('AssetManifest', () => {
       ...Object.values(AssetIds.powerUps),
       ...Object.values(AssetIds.backdrops),
       ...Object.values(AssetIds.rigs),
+      ...Object.values(AssetIds.ui),
       ...Object.values(AssetIds.sounds),
       AssetIds.props.princeCage,
       AssetIds.props.goalFlag,
@@ -34,6 +35,8 @@ describe('AssetManifest', () => {
       if (entry.kind === 'audio') {
         expect(entry.browserUrl).toMatch(/^\/assets\/audio\//);
         expect(entry.notes).toContain('SoundComponent');
+      } else if (entry.kind === 'ui') {
+        expect(entry.browserUrl).toMatch(/^\/assets\/ui\//);
       } else {
         expect(entry.artPromptId).toBeDefined();
       }
@@ -45,6 +48,8 @@ describe('AssetManifest', () => {
     expect(AssetManifest[AssetIds.powerUps.rocketH].browserUrl).toBe('/assets/powerups/power-rocket-h.png');
     expect(AssetManifest[AssetIds.tiles.fire].runtimeSize).toBe('256x256');
     expect(AssetManifest[AssetIds.backdrops.forest].runtimeSize).toBe('2160x1000');
+    expect(AssetManifest[AssetIds.ui.hudBanner].browserUrl).toBe('/assets/ui/ui-banner.png');
+    expect(AssetManifest[AssetIds.ui.hudBanner].runtimeSize).toBe('1080x150');
   });
 
   it('maps the temporary mage rig to the dropped FBX player model', () => {

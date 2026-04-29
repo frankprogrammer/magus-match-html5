@@ -40,6 +40,13 @@ export class Canvas2DRenderer implements GameRenderer {
     this.ctx.globalAlpha *= Math.max(0, Math.min(1, alpha));
   }
 
+  pushClipRect(x: number, y: number, width: number, height: number): void {
+    this.ctx.save();
+    this.ctx.beginPath();
+    this.ctx.rect(x, y, width, height);
+    this.ctx.clip();
+  }
+
   pop(): void {
     this.ctx.restore();
   }

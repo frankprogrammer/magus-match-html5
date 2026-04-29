@@ -7,6 +7,9 @@ import type { BoardRenderState } from './BoardRenderState';
 import type { GameRenderer } from './GameRenderer';
 import type { ScreenRenderState } from './ScreenRenderState';
 
+const HUD_VISUAL_OVERLAP_PX = 10;
+const HUD_VISUAL_Y = HERO_STAGE_HEIGHT - HUD_VISUAL_OVERLAP_PX;
+
 export interface BoardCellVisual {
   tileId: string;
   coord: CellCoord;
@@ -103,17 +106,15 @@ export function buildBoardCellVisuals(boardState: BoardRenderState, elapsedSec: 
 }
 
 function drawCanvasBands(renderer: GameRenderer): void {
-  renderer.drawRect('#241832', 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
-  renderer.drawRect('#1f1830', 0, HERO_STAGE_HEIGHT, LOGICAL_WIDTH, HUD_HEIGHT);
   const hudBanner = { id: AssetIds.ui.hudBanner };
   if (renderer.hasImage(hudBanner)) {
-    renderer.drawImage(hudBanner, 0, HERO_STAGE_HEIGHT, LOGICAL_WIDTH, HUD_HEIGHT);
+    renderer.drawImage(hudBanner, 0, HUD_VISUAL_Y, LOGICAL_WIDTH, HUD_HEIGHT);
   }
   renderer.drawRect('#1f1830', 0, HERO_STAGE_HEIGHT + HUD_HEIGHT, LOGICAL_WIDTH, LOGICAL_HEIGHT - HERO_STAGE_HEIGHT - HUD_HEIGHT);
 }
 
 function drawHud(renderer: GameRenderer, hudState: HudRenderState): void {
-  const y = HERO_STAGE_HEIGHT;
+  const y = HUD_VISUAL_Y;
   renderer.drawText(hudState.levelText, 32, y, 180, HUD_HEIGHT, {
     fontSize: 34,
     fontWeight: 'bold',

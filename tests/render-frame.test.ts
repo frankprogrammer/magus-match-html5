@@ -110,8 +110,10 @@ describe('buildBoardCellVisuals', () => {
 
     renderFrame(renderer, oneTileState('tile.fire'), hudState(), 0);
 
-    expect(renderer.calls).toContain('rect:#1f1830:0,500,1080,150');
-    expect(renderer.calls).toContain(`image:${AssetIds.ui.hudBanner}`);
+    expect(renderer.calls).not.toContain('rect:#241832:0,0,1080,1920');
+    expect(renderer.calls).not.toContain('rect:#1f1830:0,490,1080,150');
+    expect(renderer.calls).toContain(`image:${AssetIds.ui.hudBanner}:0,490,1080,150`);
+    expect(renderer.calls).toContain('text:Level 1:32,490,180,150');
   });
 
   it('falls back to shapes and glyphs when image assets are unavailable', () => {
@@ -242,11 +244,13 @@ class FakeRenderer implements GameRenderer {
     return this.availableImages.has(image.id);
   }
 
-  drawImage(image: DrawImageRef): void {
+  drawImage(image: DrawImageRef, x: number, y: number, width: number, height: number): void {
     this.calls.push(`image:${image.id}`);
+    this.calls.push(`image:${image.id}:${x},${y},${width},${height}`);
   }
 
-  drawText(text: string, _x: number, _y: number, _width: number, _height: number, _style: TextStyle): void {
+  drawText(text: string, x: number, y: number, width: number, height: number, _style: TextStyle): void {
     this.calls.push(`text:${text}`);
+    this.calls.push(`text:${text}:${x},${y},${width},${height}`);
   }
 }

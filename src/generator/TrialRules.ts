@@ -45,7 +45,7 @@ export interface ActiveTrialMonster {
   laneId: number;
   hp: number;
   maxHp: number;
-  y: number;
+  x: number;
   spawnTimeMs: number;
   walkSpeed: number;
   scoreValue: number;
@@ -138,7 +138,7 @@ export function updateTrialRuntime(
     projectiles,
     monsters: runtime.monsters.map((monster) => ({
       ...monster,
-      y: monster.y - monster.walkSpeed * Math.max(0, dtSec),
+      x: monster.x - monster.walkSpeed * Math.max(0, dtSec),
     })),
   };
   const spawnedRuntime = spawnDueMonsters(movedRuntime, level);
@@ -286,11 +286,10 @@ export function selectNearestAliveMonster(
   }
 
   return monsters.sort((first, second) => {
-    const firstDistance = Math.abs(first.y - level.trial.mageLineY);
-    const secondDistance = Math.abs(second.y - level.trial.mageLineY);
+    const firstDistance = Math.abs(first.x - level.trial.mageX);
+    const secondDistance = Math.abs(second.x - level.trial.mageX);
     return (
       firstDistance - secondDistance ||
-      first.laneId - second.laneId ||
       first.monsterId.localeCompare(second.monsterId)
     );
   })[0];
@@ -315,16 +314,16 @@ export function getTrialMonsterWorldPosition(
   monster: ActiveTrialMonster,
 ): Vec3Data {
   return {
-    x: getLaneX(level, monster.laneId),
-    y: monster.y,
+    x: monster.x,
+    y: getLaneY(level, monster.laneId),
     z: zForMonsterKind(monster.kind),
   };
 }
 
 export function getTrialMageWorldPosition(level: GeneratedTrialLevel): Vec3Data {
   return {
-    x: 0,
-    y: level.trial.mageLineY,
+    x: level.trial.mageX,
+    y: level.trial.laneY,
     z: 0.55,
   };
 }
@@ -564,10 +563,14 @@ function getTapPowerUpActivation(board: Board, origin: CellCoord): { targetType?
 }
 
 function spawnDueMonsters(runtime: TrialRuntimeState, level: GeneratedTrialLevel): TrialRuntimeState {
+  if (runtime.monsters.some((monster) => monster.hp > 0)) {
+    return runtime;
+  }
+
   const monsters = [...runtime.monsters];
   let nextSpawnIndex = runtime.nextSpawnIndex;
 
-  while (
+  if (
     nextSpawnIndex < level.trial.waveManifest.length &&
     level.trial.waveManifest[nextSpawnIndex].spawnTimeMs <= runtime.elapsedMs
   ) {
@@ -592,7 +595,7 @@ function createActiveMonster(
     laneId: manifestEntry.laneId,
     hp: manifestEntry.maxHp,
     maxHp: manifestEntry.maxHp,
-    y: laneForId(level, manifestEntry.laneId).spawnY,
+    x: laneForId(level, manifestEntry.laneId).spawnX,
     spawnTimeMs: manifestEntry.spawnTimeMs,
     walkSpeed: manifestEntry.walkSpeed,
     scoreValue: manifestEntry.scoreValue,
@@ -613,7 +616,7 @@ function expireProjectiles(runtime: TrialRuntimeState, dtSec: number): TrialRunt
 }
 
 function getTrialResult(runtime: TrialRuntimeState, level: GeneratedTrialLevel): LevelResult {
-  if (runtime.monsters.some((monster) => monster.y <= level.trial.failLineY)) {
+  if (runtime.monsters.some((monster) => monster.x <= level.trial.contactX)) {
     return 'lost';
   }
 
@@ -641,8 +644,8 @@ function spellSchoolForTileType(tileType: StandardTileType): SpellSchoolId {
   }
 }
 
-function getLaneX(level: GeneratedTrialLevel, laneId: number): number {
-  return laneForId(level, laneId).x;
+function getLaneY(level: GeneratedTrialLevel, laneId: number): number {
+  return laneForId(level, laneId).y;
 }
 
 function laneForId(level: GeneratedTrialLevel, laneId: number) {

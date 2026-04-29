@@ -284,7 +284,7 @@ function monster(overrides: Partial<TrialMonsterManifestEntry> = {}): TrialMonst
   return {
     monsterId: 'monster',
     kind: 'kobold',
-    laneId: 2,
+    laneId: 0,
     spawnTimeMs: 0,
     maxHp: 20,
     walkSpeed: 0.2,

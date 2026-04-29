@@ -1,8 +1,8 @@
-import * as THREE from 'three';
-import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
-import { AssetIds } from '../assets/AssetIds';
-import { getAssetManifestEntry } from '../assets/AssetManifest';
-import { HeroStageTemplateIds } from '../world-3d/HeroStageTemplates';
+import * as THREE from "three";
+import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
+import { AssetIds } from "../assets/AssetIds";
+import { getAssetManifestEntry } from "../assets/AssetManifest";
+import { HeroStageTemplateIds } from "../world-3d/HeroStageTemplates";
 import {
   addBoneProxyRig,
   applyFallbackMaterialToUnmaterialedMeshes,
@@ -10,9 +10,9 @@ import {
   createMageLoopClip,
   hasRenderableGeometry,
   normalizeModelToActorBounds,
-} from './ThreeModelUtils';
+} from "./ThreeModelUtils";
 
-const MAGE_TARGET_HEIGHT = 0.145;
+const MAGE_TARGET_HEIGHT = 1.45;
 const MAGE_LOOP_START_FRAME = 0;
 const MAGE_LOOP_END_FRAME = 60;
 export const MAGE_MODEL_Y_ROTATION_RAD = -Math.PI / 2;
@@ -88,12 +88,12 @@ export class ThreeObjectFactory {
   }
 
   private startMageModelLoad(): void {
-    if (this.mageLoadStarted || typeof window === 'undefined') {
+    if (this.mageLoadStarted || typeof window === "undefined") {
       return;
     }
 
     const entry = getAssetManifestEntry(AssetIds.rigs.mage);
-    if (entry?.sourceFormat !== 'fbx') {
+    if (entry?.sourceFormat !== "fbx") {
       return;
     }
 
@@ -120,9 +120,17 @@ export class ThreeObjectFactory {
 
         applyFallbackMaterialToUnmaterialedMeshes(loaded);
         applyVisibleMageMaterialToMeshes(loaded);
-        this.mageTemplate = normalizeModelToActorBounds(loaded, MAGE_TARGET_HEIGHT);
-        const mageLoopClip = createMageLoopClip(loaded.animations, MAGE_LOOP_START_FRAME, MAGE_LOOP_END_FRAME);
-        this.mageTemplate.animations = mageLoopClip != null ? [mageLoopClip] : [];
+        this.mageTemplate = normalizeModelToActorBounds(
+          loaded,
+          MAGE_TARGET_HEIGHT,
+        );
+        const mageLoopClip = createMageLoopClip(
+          loaded.animations,
+          MAGE_LOOP_START_FRAME,
+          MAGE_LOOP_END_FRAME,
+        );
+        this.mageTemplate.animations =
+          mageLoopClip != null ? [mageLoopClip] : [];
         this.mageTemplateVersion += 1;
       },
       undefined,
@@ -148,11 +156,17 @@ export function applyMageModelFacingCorrection(object: THREE.Object3D): void {
 function createBackdrop(): THREE.Object3D {
   const group = new THREE.Group();
   const geometry = new THREE.PlaneGeometry(1, 1);
-  const material = new THREE.MeshBasicMaterial({ color: '#2d2345', depthWrite: false });
+  const material = new THREE.MeshBasicMaterial({
+    color: "#2d2345",
+    depthWrite: false,
+  });
   const plane = new THREE.Mesh(geometry, material);
-  plane.name = 'castle-backdrop-plane';
+  plane.name = "castle-backdrop-plane";
   plane.renderOrder = -100;
-  applyBackdropCoverSize(plane, HERO_BACKDROP_VIEW_WIDTH / HERO_BACKDROP_VIEW_HEIGHT);
+  applyBackdropCoverSize(
+    plane,
+    HERO_BACKDROP_VIEW_WIDTH / HERO_BACKDROP_VIEW_HEIGHT,
+  );
   group.add(plane);
   startCastleBackdropTextureLoad(plane);
   return group;
@@ -164,10 +178,13 @@ export interface BackdropCoverSize {
   centerY: number;
 }
 
-export function backdropCoverSizeForImageAspect(imageAspect: number): BackdropCoverSize {
-  const safeImageAspect = Number.isFinite(imageAspect) && imageAspect > 0
-    ? imageAspect
-    : HERO_BACKDROP_VIEW_WIDTH / HERO_BACKDROP_VIEW_HEIGHT;
+export function backdropCoverSizeForImageAspect(
+  imageAspect: number,
+): BackdropCoverSize {
+  const safeImageAspect =
+    Number.isFinite(imageAspect) && imageAspect > 0
+      ? imageAspect
+      : HERO_BACKDROP_VIEW_WIDTH / HERO_BACKDROP_VIEW_HEIGHT;
   const viewAspect = HERO_BACKDROP_VIEW_WIDTH / HERO_BACKDROP_VIEW_HEIGHT;
   if (safeImageAspect > viewAspect) {
     return {
@@ -185,14 +202,17 @@ export function backdropCoverSizeForImageAspect(imageAspect: number): BackdropCo
   };
 }
 
-function applyBackdropCoverSize(plane: THREE.Object3D, imageAspect: number): void {
+function applyBackdropCoverSize(
+  plane: THREE.Object3D,
+  imageAspect: number,
+): void {
   const size = backdropCoverSizeForImageAspect(imageAspect);
   plane.scale.set(size.width, size.height, 1);
   plane.position.y = size.centerY;
 }
 
 function startCastleBackdropTextureLoad(plane: THREE.Mesh): void {
-  if (typeof window === 'undefined') {
+  if (typeof window === "undefined") {
     return;
   }
 
@@ -205,10 +225,13 @@ function startCastleBackdropTextureLoad(plane: THREE.Mesh): void {
     entry.browserUrl,
     (texture) => {
       texture.colorSpace = THREE.SRGBColorSpace;
-      const image = texture.image as { width?: number; height?: number } | undefined;
-      const imageAspect = image?.width != null && image?.height != null && image.height > 0
-        ? image.width / image.height
-        : HERO_BACKDROP_VIEW_WIDTH / HERO_BACKDROP_VIEW_HEIGHT;
+      const image = texture.image as
+        | { width?: number; height?: number }
+        | undefined;
+      const imageAspect =
+        image?.width != null && image?.height != null && image.height > 0
+          ? image.width / image.height
+          : HERO_BACKDROP_VIEW_WIDTH / HERO_BACKDROP_VIEW_HEIGHT;
       applyBackdropCoverSize(plane, imageAspect);
       disposeMaterial(plane.material);
       plane.material = new THREE.MeshBasicMaterial({
@@ -218,17 +241,33 @@ function startCastleBackdropTextureLoad(plane: THREE.Mesh): void {
     },
     undefined,
     (error) => {
-      console.warn(`Failed to load castle backdrop texture from ${entry.browserUrl}`, error);
+      console.warn(
+        `Failed to load castle backdrop texture from ${entry.browserUrl}`,
+        error,
+      );
     },
   );
 }
 
 function createPlaceholderMage(): THREE.Object3D {
   const group = new THREE.Group();
-  group.add(mesh(new THREE.CylinderGeometry(0.42, 0.52, 1.1, 18), '#4b2e83', 0, 0.4, 0));
-  group.add(mesh(new THREE.SphereGeometry(0.34, 18, 12), '#f5e9c9', 0, 1.12, 0));
-  group.add(mesh(new THREE.CylinderGeometry(0.045, 0.045, 1.35, 10), '#c8a24b', 0.48, 0.45, 0.04, Math.PI / 10));
-  group.add(mesh(new THREE.ConeGeometry(0.26, 0.34, 4), '#c8a24b', 0, 1.42, 0));
+  group.add(
+    mesh(new THREE.CylinderGeometry(0.42, 0.52, 1.1, 18), "#4b2e83", 0, 0.4, 0),
+  );
+  group.add(
+    mesh(new THREE.SphereGeometry(0.34, 18, 12), "#f5e9c9", 0, 1.12, 0),
+  );
+  group.add(
+    mesh(
+      new THREE.CylinderGeometry(0.045, 0.045, 1.35, 10),
+      "#c8a24b",
+      0.48,
+      0.45,
+      0.04,
+      Math.PI / 10,
+    ),
+  );
+  group.add(mesh(new THREE.ConeGeometry(0.26, 0.34, 4), "#c8a24b", 0, 1.42, 0));
   return group;
 }
 
@@ -236,35 +275,69 @@ function createPrinceCage(): THREE.Object3D {
   const group = new THREE.Group();
   const cageGeometry = new THREE.BoxGeometry(1, 1.25, 0.7);
   const edges = new THREE.EdgesGeometry(cageGeometry);
-  const cage = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: '#c8a24b' }));
+  const cage = new THREE.LineSegments(
+    edges,
+    new THREE.LineBasicMaterial({ color: "#c8a24b" }),
+  );
   cage.position.y = 0.45;
   group.add(cage);
-  group.add(mesh(new THREE.SphereGeometry(0.22, 16, 10), '#f5e9c9', 0, 0.5, 0));
-  group.add(mesh(new THREE.BoxGeometry(0.55, 0.45, 0.25), '#8b6fcb', 0, 0.02, 0));
+  group.add(mesh(new THREE.SphereGeometry(0.22, 16, 10), "#f5e9c9", 0, 0.5, 0));
+  group.add(
+    mesh(new THREE.BoxGeometry(0.55, 0.45, 0.25), "#8b6fcb", 0, 0.02, 0),
+  );
   return group;
 }
 
 function createGoalFlag(): THREE.Object3D {
   const group = new THREE.Group();
-  group.add(mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.0, 8), '#f5e9c9', 0, 0.38, 0));
-  const flag = mesh(new THREE.PlaneGeometry(0.55, 0.36), '#c8a24b', 0.26, 0.74, 0.02);
+  group.add(
+    mesh(
+      new THREE.CylinderGeometry(0.035, 0.035, 1.0, 8),
+      "#f5e9c9",
+      0,
+      0.38,
+      0,
+    ),
+  );
+  const flag = mesh(
+    new THREE.PlaneGeometry(0.55, 0.36),
+    "#c8a24b",
+    0.26,
+    0.74,
+    0.02,
+  );
   group.add(flag);
   return group;
 }
 
 function createPathMarker(): THREE.Object3D {
-  return mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.05, 24), '#f5e9c9', 0, 0, 0);
+  return mesh(
+    new THREE.CylinderGeometry(0.45, 0.45, 0.05, 24),
+    "#f5e9c9",
+    0,
+    0,
+    0,
+  );
 }
 
 function createMonsterPlaceholder(): THREE.Object3D {
   const group = new THREE.Group();
-  group.add(mesh(new THREE.CylinderGeometry(0.4, 0.48, 0.8, 14), '#27ae60', 0, 0.32, 0));
-  group.add(mesh(new THREE.SphereGeometry(0.3, 14, 10), '#8b6f47', 0, 0.86, 0));
+  group.add(
+    mesh(new THREE.CylinderGeometry(0.4, 0.48, 0.8, 14), "#27ae60", 0, 0.32, 0),
+  );
+  group.add(mesh(new THREE.SphereGeometry(0.3, 14, 10), "#8b6f47", 0, 0.86, 0));
   return group;
 }
 
 function createProjectilePlaceholder(): THREE.Object3D {
-  return mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.0, 8), '#f2c94c', 0, 0, 0, Math.PI / 2);
+  return mesh(
+    new THREE.CylinderGeometry(0.05, 0.05, 1.0, 8),
+    "#f2c94c",
+    0,
+    0,
+    0,
+    Math.PI / 2,
+  );
 }
 
 function createFallback(templateId: string): THREE.Object3D {
@@ -303,7 +376,7 @@ function disposeMaterial(material: THREE.Material | THREE.Material[]): void {
 }
 
 function disposeSingleMaterial(material: THREE.Material): void {
-  if ('map' in material && material.map instanceof THREE.Texture) {
+  if ("map" in material && material.map instanceof THREE.Texture) {
     material.map.dispose();
   }
   material.dispose();
@@ -314,5 +387,5 @@ function hashColor(value: string): string {
   for (let i = 0; i < value.length; i += 1) {
     hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
   }
-  return `#${(hash & 0xffffff).toString(16).padStart(6, '0')}`;
+  return `#${(hash & 0xffffff).toString(16).padStart(6, "0")}`;
 }

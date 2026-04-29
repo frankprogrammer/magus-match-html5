@@ -7,6 +7,8 @@ import { generateTrialLevel } from '../src/generator/TrialGenerator';
 import {
   createTrialRuntime,
   damageMultiplierForMatch,
+  getTrialMageWorldPosition,
+  getTrialMonsterWorldPosition,
   processTrialPowerUpActivation,
   processTrialSwap,
   processTrialRocketActivation,
@@ -15,28 +17,56 @@ import {
 } from '../src/generator/TrialRules';
 
 describe('TrialRules', () => {
-  it('moves monsters by walk speed and fails exactly at the fail line', () => {
+  it('moves monsters left by walk speed and fails exactly at the contact line', () => {
     const level = testTrialLevel([monster({ walkSpeed: 0.5 })]);
     const runtime = createTrialRuntime(level);
     const activeMonster = runtime.monsters[0];
     const nearFailRuntime = {
       ...runtime,
-      monsters: [{ ...activeMonster, y: level.trial.failLineY + activeMonster.walkSpeed }],
+      monsters: [{ ...activeMonster, x: level.trial.contactX + activeMonster.walkSpeed }],
     };
 
     const updated = updateTrialRuntime(nearFailRuntime, level, 1);
 
-    expect(updated.monsters[0].y).toBeCloseTo(level.trial.failLineY);
+    expect(updated.monsters[0].x).toBeCloseTo(level.trial.contactX);
     expect(updated.result).toBe('lost');
   });
 
-  it('selects the nearest alive monster with deterministic lane tie-breaks', () => {
+  it('spawns only one active monster at a time', () => {
+    const level = testTrialLevel([
+      monster({ monsterId: 'first', spawnTimeMs: 0 }),
+      monster({ monsterId: 'second', spawnTimeMs: 0 }),
+    ]);
+    const runtime = createTrialRuntime(level);
+
+    expect(runtime.monsters.map((activeMonster) => activeMonster.monsterId)).toEqual(['first']);
+    expect(runtime.nextSpawnIndex).toBe(1);
+  });
+
+  it('spawns the next due monster after the active monster is defeated', () => {
+    const level = testTrialLevel([
+      monster({ monsterId: 'first', spawnTimeMs: 0 }),
+      monster({ monsterId: 'second', spawnTimeMs: 0 }),
+    ]);
+    const runtime = {
+      ...createTrialRuntime(level),
+      monsters: [],
+      defeatedMonsterIds: ['first'],
+    };
+
+    const updated = updateTrialRuntime(runtime, level, 0);
+
+    expect(updated.monsters.map((activeMonster) => activeMonster.monsterId)).toEqual(['second']);
+    expect(updated.nextSpawnIndex).toBe(2);
+  });
+
+  it('selects the nearest alive monster with deterministic id tie-breaks', () => {
     const level = testTrialLevel([monster({ monsterId: 'far' }), monster({ monsterId: 'near' })]);
     const runtime = {
       ...createTrialRuntime(level),
       monsters: [
-        { ...createTrialRuntime(level).monsters[0], monsterId: 'far', laneId: 4, y: 0.5 },
-        { ...createTrialRuntime(level).monsters[0], monsterId: 'near', laneId: 1, y: -1.2 },
+        { ...createTrialRuntime(level).monsters[0], monsterId: 'far', x: 1.5 },
+        { ...createTrialRuntime(level).monsters[0], monsterId: 'near', x: -2.8 },
       ],
     };
 
@@ -45,11 +75,23 @@ describe('TrialRules', () => {
     const tiedRuntime = {
       ...runtime,
       monsters: [
-        { ...runtime.monsters[0], monsterId: 'right', laneId: 3, y: -1.2 },
-        { ...runtime.monsters[1], monsterId: 'left', laneId: 1, y: -1.2 },
+        { ...runtime.monsters[0], monsterId: 'b', x: -2.8 },
+        { ...runtime.monsters[1], monsterId: 'a', x: -2.8 },
       ],
     };
-    expect(selectNearestAliveMonster(tiedRuntime, level)?.monsterId).toBe('left');
+    expect(selectNearestAliveMonster(tiedRuntime, level)?.monsterId).toBe('a');
+  });
+
+  it('places the mage on the left and the active monster on the right in world space', () => {
+    const level = testTrialLevel([monster()]);
+    const runtime = createTrialRuntime(level);
+    const magePosition = getTrialMageWorldPosition(level);
+    const monsterPosition = getTrialMonsterWorldPosition(level, runtime.monsters[0]);
+
+    expect(magePosition.x).toBe(level.trial.mageX);
+    expect(magePosition.y).toBe(level.trial.laneY);
+    expect(monsterPosition.x).toBeGreaterThan(magePosition.x);
+    expect(monsterPosition.y).toBe(level.trial.laneY);
   });
 
   it('scales match damage by match shape', () => {
@@ -99,9 +141,9 @@ describe('TrialRules', () => {
     const board = createBoardFromTileTypes([['ROCKET_H', 'EARTH']]);
     const level = testTrialLevel(
       [
-        monster({ monsterId: 'a', maxHp: 5 }),
-        monster({ monsterId: 'b', maxHp: 5 }),
-        monster({ monsterId: 'c', maxHp: 5 }),
+        monster({ monsterId: 'a', maxHp: 100 }),
+        monster({ monsterId: 'b', maxHp: 100 }),
+        monster({ monsterId: 'c', maxHp: 100 }),
       ],
       board,
     );
@@ -129,9 +171,9 @@ describe('TrialRules', () => {
     const board = createBoardFromTileTypes([['ROCKET_V'], ['FIRE'], ['ICE'], ['EARTH']]);
     const level = testTrialLevel(
       [
-        monster({ monsterId: 'a', maxHp: 5 }),
-        monster({ monsterId: 'b', maxHp: 5 }),
-        monster({ monsterId: 'c', maxHp: 5 }),
+        monster({ monsterId: 'a', maxHp: 100 }),
+        monster({ monsterId: 'b', maxHp: 100 }),
+        monster({ monsterId: 'c', maxHp: 100 }),
       ],
       board,
     );
@@ -183,11 +225,11 @@ describe('TrialRules', () => {
     ]);
     const level = testTrialLevel(
       [
-        monster({ monsterId: 'a', maxHp: 5 }),
-        monster({ monsterId: 'b', maxHp: 5 }),
-        monster({ monsterId: 'c', maxHp: 5 }),
-        monster({ monsterId: 'd', maxHp: 5 }),
-        monster({ monsterId: 'e', maxHp: 5 }),
+        monster({ monsterId: 'a', maxHp: 100 }),
+        monster({ monsterId: 'b', maxHp: 100 }),
+        monster({ monsterId: 'c', maxHp: 100 }),
+        monster({ monsterId: 'd', maxHp: 100 }),
+        monster({ monsterId: 'e', maxHp: 100 }),
       ],
       board,
     );
@@ -321,7 +363,7 @@ function monster(overrides: Partial<TrialMonsterManifestEntry> = {}): TrialMonst
   return {
     monsterId: 'monster',
     kind: 'kobold',
-    laneId: 2,
+    laneId: 0,
     spawnTimeMs: 0,
     maxHp: 20,
     walkSpeed: 0.2,

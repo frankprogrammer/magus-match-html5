@@ -31,7 +31,7 @@ const CASTLE_BACKDROP_NOTES =
   'Hero-stage cover backdrop. Drawn as a Three.js texture plane that fills the orthographic 1080x500 stage and crops overflow.';
 const RIG_NOTES = 'Transparent PNG source parts now; later exported as a 2048x2048 atlas plus skeletal JSON.';
 const TEMP_FBX_MAGE_NOTES =
-  'Temporary browser hero-stage FBX model. Auto-normalized in Three.js to bottom-center pivot and 0.145 world-unit height. Loops animation frames 0-60.';
+  'Temporary browser hero-stage FBX model. Auto-normalized in Three.js to bottom-center pivot and 1.45 world-unit height. Loops animation frames 0-60.';
 const UI_BANNER_NOTES = 'Runtime 1080x150 PNG for the fixed middle HUD band; drawn full-width behind HUD text.';
 
 export const AssetManifest: Record<string, AssetManifestEntry> = {
@@ -150,7 +150,7 @@ export const AssetManifest: Record<string, AssetManifestEntry> = {
     'Assets/Rigs/Mage/knight1.fbx',
     'prompt.rig.mage',
     'fbx',
-    'temporary FBX stand-in, auto-normalized to 0.145 world units',
+    'temporary FBX stand-in, auto-normalized to 1.45 world units',
     TEMP_FBX_MAGE_NOTES,
   ),
   [AssetIds.rigs.prince]: rig(

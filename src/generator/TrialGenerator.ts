@@ -8,8 +8,8 @@ export type TrialMonsterKind = 'kobold' | 'tallKobold' | 'miniBoss';
 
 export interface TrialLane {
   laneId: number;
-  x: number;
-  spawnY: number;
+  y: number;
+  spawnX: number;
 }
 
 export interface TrialMonsterManifestEntry {
@@ -29,8 +29,9 @@ export interface GeneratedTrialLevel {
   initialBoard: Board;
   trial: {
     lanes: readonly TrialLane[];
-    mageLineY: number;
-    failLineY: number;
+    mageX: number;
+    contactX: number;
+    laneY: number;
     baseDamage: number;
     waveManifest: readonly TrialMonsterManifestEntry[];
   };
@@ -41,16 +42,13 @@ export interface GenerateTrialLevelOptions {
   seed: number;
 }
 
-const TRIAL_LANES: readonly TrialLane[] = [
-  { laneId: 0, x: -4.1, spawnY: 1.72 },
-  { laneId: 1, x: -2.05, spawnY: 1.72 },
-  { laneId: 2, x: 0, spawnY: 1.72 },
-  { laneId: 3, x: 2.05, spawnY: 1.72 },
-  { laneId: 4, x: 4.1, spawnY: 1.72 },
-];
+export const TRIAL_MAGE_X = -4.35;
+export const TRIAL_CONTACT_X = -3.95;
+export const TRIAL_LANE_Y = -0.85;
 
-export const TRIAL_MAGE_LINE_Y = -1.62;
-export const TRIAL_FAIL_LINE_Y = -1.42;
+const TRIAL_LANES: readonly TrialLane[] = [
+  { laneId: 0, y: TRIAL_LANE_Y, spawnX: 4.65 },
+];
 
 export function generateTrialLevel(options: GenerateTrialLevelOptions): GeneratedTrialLevel {
   const rng = new SeededRng(options.seed);
@@ -68,8 +66,9 @@ export function generateTrialLevel(options: GenerateTrialLevelOptions): Generate
     initialBoard,
     trial: {
       lanes: TRIAL_LANES,
-      mageLineY: TRIAL_MAGE_LINE_Y,
-      failLineY: TRIAL_FAIL_LINE_Y,
+      mageX: TRIAL_MAGE_X,
+      contactX: TRIAL_CONTACT_X,
+      laneY: TRIAL_LANE_Y,
       baseDamage: config.baseDamage,
       waveManifest: manifest,
     },
@@ -116,7 +115,7 @@ export function createWaveManifest(
     return {
       monsterId: `trial-${difficulty}-${index}`,
       kind,
-      laneId: rng.nextInt(0, TRIAL_LANES.length),
+      laneId: TRIAL_LANES[0].laneId,
       spawnTimeMs: waveIndex * config.waveGapMs + localIndex * config.spawnIntervalMs,
       maxHp: hpForKind(kind, config),
       walkSpeed: config.walkSpeed,
@@ -133,11 +132,9 @@ export function isTrialManifestClearable(
     return true;
   }
 
-  const lastSpawnMs = Math.max(...manifest.map((monster) => monster.spawnTimeMs));
   const slowestWalkSpeed = Math.min(...manifest.map((monster) => monster.walkSpeed));
-  const availableSec =
-    lastSpawnMs / 1000 +
-    (TRIAL_LANES[0].spawnY - TRIAL_FAIL_LINE_Y) / slowestWalkSpeed;
+  const travelSec = (TRIAL_LANES[0].spawnX - TRIAL_CONTACT_X) / slowestWalkSpeed;
+  const availableSec = manifest.length * travelSec;
   const expectedAverageSkillDamage = availableSec * 1.5 * baseDamage * 0.2;
   const totalHp = manifest.reduce((sum, monster) => sum + monster.maxHp, 0);
 

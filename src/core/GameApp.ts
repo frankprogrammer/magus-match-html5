@@ -930,8 +930,8 @@ export class MagusMatchGameApp implements GameApp {
           animationId: phaseToMageAnimation(this.phase),
         }),
       createWorldObject('trial-fail-line', HeroStageTemplateIds.pathMarker, {
-        position: { x: 0, y: this.currentLevel.trial.failLineY, z: -0.03 },
-        scale: { x: 4.7, y: 0.04, z: 0.18 },
+        position: { x: this.currentLevel.trial.contactX, y: this.currentLevel.trial.laneY, z: -0.03 },
+        scale: { x: 0.06, y: 1.25, z: 0.18 },
         renderOrder: 1,
         replication: 'localCosmetic',
         tintHex: '#eb5757',

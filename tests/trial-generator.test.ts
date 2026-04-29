@@ -34,12 +34,18 @@ describe('TrialGenerator', () => {
     },
   );
 
-  it('uses deterministic spawn timing and five lanes', () => {
+  it('uses deterministic spawn timing and one right-to-left lane', () => {
     const level = generateTrialLevel({ difficulty: 1, seed: 777 });
 
-    expect(level.trial.lanes).toHaveLength(5);
+    expect(level.trial.lanes).toHaveLength(1);
+    expect(level.trial.lanes[0]).toMatchObject({
+      laneId: 0,
+      y: level.trial.laneY,
+    });
+    expect(level.trial.lanes[0].spawnX).toBeGreaterThan(level.trial.contactX);
+    expect(level.trial.mageX).toBeLessThan(level.trial.lanes[0].spawnX);
     expect(level.trial.waveManifest.map((monster) => monster.spawnTimeMs)).toEqual([0, 1200, 2400]);
-    expect(level.trial.waveManifest.every((monster) => monster.laneId >= 0 && monster.laneId < 5)).toBe(true);
+    expect(level.trial.waveManifest.every((monster) => monster.laneId === 0)).toBe(true);
   });
 
   it('adds no Trial empty cells at difficulty 1', () => {

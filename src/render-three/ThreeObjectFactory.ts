@@ -3,14 +3,27 @@ import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import { AssetIds } from '../assets/AssetIds';
 import { getAssetManifestEntry } from '../assets/AssetManifest';
 import { HeroStageTemplateIds } from '../world-3d/HeroStageTemplates';
-import { applyFallbackMaterialToUnmaterialedMeshes, normalizeModelToActorBounds } from './ThreeModelUtils';
+import {
+  addBoneProxyRig,
+  applyFallbackMaterialToUnmaterialedMeshes,
+  applyVisibleMageMaterialToMeshes,
+  createMageLoopClip,
+  hasRenderableGeometry,
+  normalizeModelToActorBounds,
+} from './ThreeModelUtils';
 
-const MAGE_TARGET_HEIGHT = 1.45;
+const MAGE_TARGET_HEIGHT = 0.145;
+const MAGE_LOOP_START_FRAME = 0;
+const MAGE_LOOP_END_FRAME = 60;
+export const MAGE_MODEL_Y_ROTATION_RAD = -Math.PI / 2;
+export const HERO_BACKDROP_VIEW_WIDTH = 10.8;
+export const HERO_BACKDROP_VIEW_HEIGHT = 5;
 
 export class ThreeObjectFactory {
   private mageTemplate: THREE.Group | null = null;
   private mageTemplateVersion = 0;
   private mageLoadStarted = false;
+  private mageBoneOnlyWarningShown = false;
 
   constructor() {
     this.startMageModelLoad();
@@ -68,7 +81,7 @@ export class ThreeObjectFactory {
   private createMage(): THREE.Object3D {
     this.startMageModelLoad();
     if (this.mageTemplate != null) {
-      return normalizeModelToActorBounds(this.mageTemplate, MAGE_TARGET_HEIGHT);
+      return cloneLoadedMageTemplate(this.mageTemplate);
     }
 
     return createPlaceholderMage();
@@ -89,8 +102,27 @@ export class ThreeObjectFactory {
     loader.load(
       entry.browserUrl,
       (loaded) => {
+        if (!hasRenderableGeometry(loaded)) {
+          const proxyAdded = addBoneProxyRig(loaded);
+          if (!this.mageBoneOnlyWarningShown) {
+            console.warn(
+              proxyAdded
+                ? `Mage FBX at ${entry.browserUrl} has animation bones but no renderable meshes; using temporary bone proxy visuals.`
+                : `Mage FBX at ${entry.browserUrl} has no renderable meshes and no usable bones; keeping placeholder mage.`,
+            );
+            this.mageBoneOnlyWarningShown = true;
+          }
+
+          if (!proxyAdded) {
+            return;
+          }
+        }
+
         applyFallbackMaterialToUnmaterialedMeshes(loaded);
+        applyVisibleMageMaterialToMeshes(loaded);
         this.mageTemplate = normalizeModelToActorBounds(loaded, MAGE_TARGET_HEIGHT);
+        const mageLoopClip = createMageLoopClip(loaded.animations, MAGE_LOOP_START_FRAME, MAGE_LOOP_END_FRAME);
+        this.mageTemplate.animations = mageLoopClip != null ? [mageLoopClip] : [];
         this.mageTemplateVersion += 1;
       },
       undefined,
@@ -101,11 +133,94 @@ export class ThreeObjectFactory {
   }
 }
 
+function cloneLoadedMageTemplate(template: THREE.Group): THREE.Object3D {
+  const clone = normalizeModelToActorBounds(template, MAGE_TARGET_HEIGHT);
+  applyMageModelFacingCorrection(clone);
+  clone.animations = template.animations;
+  return clone;
+}
+
+export function applyMageModelFacingCorrection(object: THREE.Object3D): void {
+  const modelRoot = object.children[0] ?? object;
+  modelRoot.rotation.y = MAGE_MODEL_Y_ROTATION_RAD;
+}
+
 function createBackdrop(): THREE.Object3D {
+  const group = new THREE.Group();
   const geometry = new THREE.PlaneGeometry(1, 1);
-  const material = new THREE.MeshBasicMaterial({ color: '#2d2345' });
-  const mesh = new THREE.Mesh(geometry, material);
-  return mesh;
+  const material = new THREE.MeshBasicMaterial({ color: '#2d2345', depthWrite: false });
+  const plane = new THREE.Mesh(geometry, material);
+  plane.name = 'castle-backdrop-plane';
+  plane.renderOrder = -100;
+  applyBackdropCoverSize(plane, HERO_BACKDROP_VIEW_WIDTH / HERO_BACKDROP_VIEW_HEIGHT);
+  group.add(plane);
+  startCastleBackdropTextureLoad(plane);
+  return group;
+}
+
+export interface BackdropCoverSize {
+  width: number;
+  height: number;
+  centerY: number;
+}
+
+export function backdropCoverSizeForImageAspect(imageAspect: number): BackdropCoverSize {
+  const safeImageAspect = Number.isFinite(imageAspect) && imageAspect > 0
+    ? imageAspect
+    : HERO_BACKDROP_VIEW_WIDTH / HERO_BACKDROP_VIEW_HEIGHT;
+  const viewAspect = HERO_BACKDROP_VIEW_WIDTH / HERO_BACKDROP_VIEW_HEIGHT;
+  if (safeImageAspect > viewAspect) {
+    return {
+      width: HERO_BACKDROP_VIEW_HEIGHT * safeImageAspect,
+      height: HERO_BACKDROP_VIEW_HEIGHT,
+      centerY: 0,
+    };
+  }
+
+  const height = HERO_BACKDROP_VIEW_WIDTH / safeImageAspect;
+  return {
+    width: HERO_BACKDROP_VIEW_WIDTH,
+    height,
+    centerY: HERO_BACKDROP_VIEW_HEIGHT / 2 - height / 2,
+  };
+}
+
+function applyBackdropCoverSize(plane: THREE.Object3D, imageAspect: number): void {
+  const size = backdropCoverSizeForImageAspect(imageAspect);
+  plane.scale.set(size.width, size.height, 1);
+  plane.position.y = size.centerY;
+}
+
+function startCastleBackdropTextureLoad(plane: THREE.Mesh): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const entry = getAssetManifestEntry(AssetIds.backdrops.castle);
+  if (entry == null) {
+    return;
+  }
+
+  new THREE.TextureLoader().load(
+    entry.browserUrl,
+    (texture) => {
+      texture.colorSpace = THREE.SRGBColorSpace;
+      const image = texture.image as { width?: number; height?: number } | undefined;
+      const imageAspect = image?.width != null && image?.height != null && image.height > 0
+        ? image.width / image.height
+        : HERO_BACKDROP_VIEW_WIDTH / HERO_BACKDROP_VIEW_HEIGHT;
+      applyBackdropCoverSize(plane, imageAspect);
+      disposeMaterial(plane.material);
+      plane.material = new THREE.MeshBasicMaterial({
+        map: texture,
+        depthWrite: false,
+      });
+    },
+    undefined,
+    (error) => {
+      console.warn(`Failed to load castle backdrop texture from ${entry.browserUrl}`, error);
+    },
+  );
 }
 
 function createPlaceholderMage(): THREE.Object3D {
@@ -179,11 +294,18 @@ function mesh(
 function disposeMaterial(material: THREE.Material | THREE.Material[]): void {
   if (Array.isArray(material)) {
     for (const item of material) {
-      item.dispose();
+      disposeSingleMaterial(item);
     }
     return;
   }
 
+  disposeSingleMaterial(material);
+}
+
+function disposeSingleMaterial(material: THREE.Material): void {
+  if ('map' in material && material.map instanceof THREE.Texture) {
+    material.map.dispose();
+  }
   material.dispose();
 }
 

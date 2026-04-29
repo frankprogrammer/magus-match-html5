@@ -17,6 +17,7 @@ export const AssetIds = {
     forest: 'backdrop.forest',
     crypt: 'backdrop.crypt',
     crystalCave: 'backdrop.crystalCave',
+    castle: 'backdrop.castle',
   },
   rigs: {
     mage: 'rig.mage',

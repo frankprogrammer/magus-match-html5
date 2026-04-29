@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { AssetIds } from '../src/assets/AssetIds';
 import { MagusMatchGameApp, phaseToCinematicState } from '../src/core/GameApp';
 import { HeroStageTemplateIds } from '../src/world-3d/HeroStageTemplates';
 
@@ -9,7 +10,7 @@ describe('HeroWorldState', () => {
     const objectsByTemplate = new Map(state.objects.map((object) => [object.templateId, object]));
 
     expect(state.levelType).toBe('JOURNEY');
-    expect(state.backdropId).toBe('backdrop.forest');
+    expect(state.backdropId).toBe(AssetIds.backdrops.castle);
     expect(objectsByTemplate.has(HeroStageTemplateIds.backdropForest)).toBe(true);
     expect(objectsByTemplate.has(HeroStageTemplateIds.mage)).toBe(true);
     expect(objectsByTemplate.has(HeroStageTemplateIds.princeCage)).toBe(true);
@@ -50,5 +51,17 @@ describe('HeroWorldState', () => {
     expect(state.levelType).toBe('TRIAL');
     expect(state.objects.some((object) => object.templateId === HeroStageTemplateIds.mage)).toBe(true);
     expect(state.objects.some((object) => object.templateId === HeroStageTemplateIds.monsterPlaceholder)).toBe(true);
+  });
+
+  it('uses the reduced mage world scale for temporary FBX proxy models', () => {
+    const journeyMage = new MagusMatchGameApp(123)
+      .getHeroWorldState()
+      .objects.find((object) => object.templateId === HeroStageTemplateIds.mage);
+    const trialMage = new MagusMatchGameApp(123, { debugLevelType: 'TRIAL' })
+      .getHeroWorldState()
+      .objects.find((object) => object.templateId === HeroStageTemplateIds.mage);
+
+    expect(journeyMage?.transform.scale).toEqual({ x: 0.042, y: 0.075, z: 0.042 });
+    expect(trialMage?.transform.scale).toEqual({ x: 0.04, y: 0.068, z: 0.04 });
   });
 });

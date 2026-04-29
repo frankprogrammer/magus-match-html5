@@ -2,17 +2,18 @@ import * as THREE from 'three';
 import type { HeroWorldState, ProjectileState } from '../world-3d/HeroWorldState';
 import { HeroStageTemplateIds } from '../world-3d/HeroStageTemplates';
 import type { WorldObjectState } from '../world-3d/WorldObjectState';
-import { ThreeCameraController } from './ThreeCameraController';
+import { orthographicBoundsForAspect, ThreeCameraController } from './ThreeCameraController';
 import { ThreeObjectFactory } from './ThreeObjectFactory';
 import { ThreeObjectCache } from './ThreePools';
 
 export class ThreeHeroStage {
   private readonly scene = new THREE.Scene();
-  private readonly camera = new THREE.PerspectiveCamera(35, 1080 / 500, 0.1, 100);
+  private readonly camera = createHeroStageCamera(1080 / 500);
   private readonly renderer: THREE.WebGLRenderer;
   private readonly factory = new ThreeObjectFactory();
   private readonly objectCache = new ThreeObjectCache();
   private readonly cameraController = new ThreeCameraController();
+  private readonly animationMixers = new Map<string, THREE.AnimationMixer>();
   private elapsedSec = 0;
 
   constructor(private readonly container: HTMLElement) {
@@ -33,13 +34,14 @@ export class ThreeHeroStage {
     this.elapsedSec += Math.max(0, dtSec);
     this.syncCamera(state);
     this.syncObjects([...state.objects, ...projectilesToObjects(state.activeProjectiles)]);
+    this.updateAnimationMixers(dtSec);
     this.renderer.render(this.scene, this.camera);
   }
 
   resize(width: number, height: number): void {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(width, height, false);
-    this.camera.aspect = width / height;
+    applyOrthographicAspect(this.camera, width / height);
     this.camera.updateProjectionMatrix();
   }
 
@@ -48,6 +50,7 @@ export class ThreeHeroStage {
       this.scene.remove(object);
       this.factory.dispose(object);
     }
+    this.animationMixers.clear();
     this.objectCache.clear();
     this.factory.disposeCachedResources();
     this.renderer.dispose();
@@ -55,7 +58,7 @@ export class ThreeHeroStage {
   }
 
   private syncCamera(state: HeroWorldState): void {
-    this.cameraController.apply(this.camera, state.camera, this.camera.aspect);
+    this.cameraController.apply(this.camera, state.camera, orthographicAspect(this.camera));
   }
 
   private syncObjects(objects: readonly WorldObjectState[]): void {
@@ -70,6 +73,7 @@ export class ThreeHeroStage {
     for (const [objectId, object] of [...this.objectCache.entries()]) {
       if (!seen.has(objectId)) {
         this.scene.remove(object);
+        this.animationMixers.delete(objectId);
         this.factory.dispose(object);
         this.objectCache.delete(objectId);
       }
@@ -89,15 +93,57 @@ export class ThreeHeroStage {
 
     if (existing != null) {
       this.scene.remove(existing);
+      this.animationMixers.delete(objectState.objectId);
       this.factory.dispose(existing);
       this.objectCache.delete(objectState.objectId);
     }
 
     const object = this.factory.create(objectState.templateId);
     this.objectCache.set(objectState.objectId, objectState.templateId, templateVersion, object);
+    this.attachLoopingAnimation(objectState.objectId, object);
     this.scene.add(object);
     return object;
   }
+
+  private attachLoopingAnimation(objectId: string, object: THREE.Object3D): void {
+    const clip = object.animations[0];
+    if (clip == null) {
+      return;
+    }
+
+    const mixer = new THREE.AnimationMixer(object);
+    const action = mixer.clipAction(clip);
+    action.reset();
+    action.setLoop(THREE.LoopRepeat, Infinity);
+    action.play();
+    this.animationMixers.set(objectId, mixer);
+  }
+
+  private updateAnimationMixers(dtSec: number): void {
+    const delta = Math.max(0, dtSec);
+    for (const mixer of this.animationMixers.values()) {
+      mixer.update(delta);
+    }
+  }
+}
+
+function createHeroStageCamera(aspect: number): THREE.OrthographicCamera {
+  const bounds = orthographicBoundsForAspect(aspect);
+  return new THREE.OrthographicCamera(bounds.left, bounds.right, bounds.top, bounds.bottom, 0.1, 100);
+}
+
+function applyOrthographicAspect(camera: THREE.OrthographicCamera, aspect: number): void {
+  const bounds = orthographicBoundsForAspect(aspect);
+  camera.left = bounds.left;
+  camera.right = bounds.right;
+  camera.top = bounds.top;
+  camera.bottom = bounds.bottom;
+}
+
+function orthographicAspect(camera: THREE.OrthographicCamera): number {
+  const width = camera.right - camera.left;
+  const height = camera.top - camera.bottom;
+  return height > 0 ? width / height : 1;
 }
 
 function applyWorldObjectState(object: THREE.Object3D, objectState: WorldObjectState, elapsedSec: number): void {

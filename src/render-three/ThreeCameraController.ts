@@ -1,10 +1,38 @@
 import * as THREE from 'three';
 import type { CameraState } from '../world-3d/HeroWorldState';
 
+export const HERO_STAGE_ORTHO_VIEW_HEIGHT = 5;
+
+export interface OrthographicBounds {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
+export function orthographicBoundsForAspect(aspect: number): OrthographicBounds {
+  const safeAspect = Number.isFinite(aspect) && aspect > 0 ? aspect : 1;
+  const halfHeight = HERO_STAGE_ORTHO_VIEW_HEIGHT / 2;
+  const halfWidth = halfHeight * safeAspect;
+  return {
+    left: -halfWidth,
+    right: halfWidth,
+    top: halfHeight,
+    bottom: -halfHeight,
+  };
+}
+
 export class ThreeCameraController {
-  apply(camera: THREE.PerspectiveCamera, state: CameraState, aspect: number): void {
-    camera.aspect = aspect;
-    camera.fov = state.fovDeg;
+  apply(
+    camera: THREE.OrthographicCamera,
+    state: CameraState,
+    aspect: number,
+  ): void {
+    const bounds = orthographicBoundsForAspect(aspect);
+    camera.left = bounds.left;
+    camera.right = bounds.right;
+    camera.top = bounds.top;
+    camera.bottom = bounds.bottom;
     camera.position.set(state.position.x, state.position.y, state.position.z);
 
     if (state.target != null) {

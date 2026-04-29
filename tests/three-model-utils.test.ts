@@ -1,6 +1,13 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { normalizeModelToActorBounds } from '../src/render-three/ThreeModelUtils';
+import {
+  addBoneProxyRig,
+  applyVisibleMageMaterialToMeshes,
+  createMageLoopClip,
+  hasRenderableGeometry,
+  inferFrameRateForInclusiveFrameRange,
+  normalizeModelToActorBounds,
+} from '../src/render-three/ThreeModelUtils';
 
 describe('normalizeModelToActorBounds', () => {
   it('centers X/Z, aligns bottom to y=0, and scales to target height', () => {
@@ -20,5 +27,74 @@ describe('normalizeModelToActorBounds', () => {
     expect(box.min.y).toBeCloseTo(0, 5);
     expect(center.x).toBeCloseTo(0, 5);
     expect(center.z).toBeCloseTo(0, 5);
+  });
+
+  it('detects renderable geometry instead of bone-only armatures', () => {
+    const boneOnly = new THREE.Group();
+    boneOnly.add(new THREE.Bone());
+
+    const meshObject = new THREE.Group();
+    meshObject.add(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial()));
+
+    expect(hasRenderableGeometry(boneOnly)).toBe(false);
+    expect(hasRenderableGeometry(meshObject)).toBe(true);
+  });
+
+  it('adds visible proxy geometry to matching bones in a bone-only rig', () => {
+    const root = new THREE.Group();
+    const hips = new THREE.Bone();
+    hips.name = 'hips';
+    const chest = new THREE.Bone();
+    chest.name = 'chest';
+    chest.position.y = 0.25;
+    const head = new THREE.Bone();
+    head.name = 'head';
+    head.position.y = 0.18;
+    hips.add(chest);
+    chest.add(head);
+    root.add(hips);
+
+    expect(hasRenderableGeometry(root)).toBe(false);
+    expect(addBoneProxyRig(root)).toBe(true);
+    expect(hasRenderableGeometry(root)).toBe(true);
+    expect(root.getObjectByName('proxy-sphere-head')).toBeInstanceOf(THREE.Mesh);
+  });
+
+  it('forces loaded mage meshes to opaque visible fallback materials', () => {
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshPhongMaterial({
+        color: '#000000',
+        transparent: true,
+        opacity: 0,
+        map: new THREE.Texture(),
+      }),
+    );
+    mesh.name = 'neck';
+    mesh.visible = false;
+
+    applyVisibleMageMaterialToMeshes(mesh);
+
+    const material = mesh.material as unknown as THREE.MeshStandardMaterial;
+    expect(mesh.visible).toBe(true);
+    expect(mesh.material).toBeInstanceOf(THREE.MeshStandardMaterial);
+    expect(material.transparent).toBe(false);
+    expect(material.opacity).toBe(1);
+    expect(material.map).toBeNull();
+  });
+
+  it('selects the first nonzero mage clip and infers the natural 0-60 frame timing', () => {
+    const staticClip = new THREE.AnimationClip('static', 0, [
+      new THREE.VectorKeyframeTrack('hips.position', [0], [0, 0, 0]),
+    ]);
+    const castClip = new THREE.AnimationClip('Armature|Armature|Cast Spell', 2.5, [
+      new THREE.VectorKeyframeTrack('hips.position', [0, 2.5], [0, 0, 0, 1, 0, 0]),
+    ]);
+
+    const loopClip = createMageLoopClip([staticClip, castClip], 0, 60);
+
+    expect(inferFrameRateForInclusiveFrameRange(2.5, 0, 60)).toBeCloseTo(24);
+    expect(loopClip?.name).toBe('mage-loop-frames-0-60');
+    expect(loopClip?.duration).toBeCloseTo(2.5);
   });
 });

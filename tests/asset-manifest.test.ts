@@ -48,13 +48,15 @@ describe('AssetManifest', () => {
     expect(AssetManifest[AssetIds.powerUps.rocketH].browserUrl).toBe('/assets/powerups/power-rocket-h.png');
     expect(AssetManifest[AssetIds.tiles.fire].runtimeSize).toBe('256x256');
     expect(AssetManifest[AssetIds.backdrops.forest].runtimeSize).toBe('2160x1000');
+    expect(AssetManifest[AssetIds.backdrops.castle].browserUrl).toBe('/assets/backdrops/backdrop-castle.png');
+    expect(AssetManifest[AssetIds.backdrops.castle].runtimeSize).toBe('cover 1080x500 hero stage');
     expect(AssetManifest[AssetIds.ui.hudBanner].browserUrl).toBe('/assets/ui/ui-banner.png');
     expect(AssetManifest[AssetIds.ui.hudBanner].runtimeSize).toBe('1080x150');
   });
 
   it('maps the temporary mage rig to the dropped FBX player model', () => {
     expect(AssetManifest[AssetIds.rigs.mage]).toMatchObject({
-      browserUrl: '/assets/rigs/cube.fbx',
+      browserUrl: '/assets/rigs/knight1.fbx',
       sourceFormat: 'fbx',
       pivot: 'bottomCenter',
       upAxis: '+Y',

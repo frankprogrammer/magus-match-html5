@@ -192,9 +192,9 @@ export class MagusMatchGameApp implements GameApp {
 
   getHeroWorldState(): HeroWorldState {
     const objects = this.getHeroWorldObjects();
-    return {
-      levelType: this.currentLevel?.type ?? 'JOURNEY',
-      backdropId: 'backdrop.forest',
+      return {
+        levelType: this.currentLevel?.type ?? 'JOURNEY',
+        backdropId: AssetIds.backdrops.castle,
       cinematicState: phaseToCinematicState(this.phase),
       objects,
       activeProjectiles: this.trialRuntime?.projectiles ?? [],
@@ -854,7 +854,7 @@ export class MagusMatchGameApp implements GameApp {
     const objects: WorldObjectState[] = [
       createWorldObject('stage-backdrop', HeroStageTemplateIds.backdropForest, {
         position: { x: 0, y: 0, z: -0.2 },
-        scale: { x: 12, y: 5, z: 1 },
+        scale: { x: 1, y: 1, z: 1 },
       }),
     ];
 
@@ -880,12 +880,12 @@ export class MagusMatchGameApp implements GameApp {
     }
 
     objects.push(
-      createWorldObject('actor-mage', HeroStageTemplateIds.mage, {
-        position: heroPositionForCell(this.journeyRuntime.mageCell, 0.35),
-        scale: { x: 0.42, y: 0.75, z: 0.42 },
-        renderOrder: 4,
-        animationId: phaseToMageAnimation(this.phase),
-      }),
+        createWorldObject('actor-mage', HeroStageTemplateIds.mage, {
+          position: heroPositionForCell(this.journeyRuntime.mageCell, 0.35),
+          scale: { x: 0.042, y: 0.075, z: 0.042 },
+          renderOrder: 4,
+          animationId: phaseToMageAnimation(this.phase),
+        }),
       createWorldObject('actor-prince-cage', HeroStageTemplateIds.princeCage, {
         position: heroPositionForCell(this.currentLevel.journey.goalCell, 0.55),
         scale: { x: 0.55, y: 0.75, z: 0.55 },
@@ -908,13 +908,13 @@ export class MagusMatchGameApp implements GameApp {
       return [];
     }
 
-    const objects: WorldObjectState[] = [
-      createWorldObject('actor-mage', HeroStageTemplateIds.mage, {
-        position: getTrialMageWorldPosition(this.currentLevel),
-        scale: { x: 0.4, y: 0.68, z: 0.4 },
-        renderOrder: 5,
-        animationId: phaseToMageAnimation(this.phase),
-      }),
+      const objects: WorldObjectState[] = [
+        createWorldObject('actor-mage', HeroStageTemplateIds.mage, {
+          position: getTrialMageWorldPosition(this.currentLevel),
+          scale: { x: 0.04, y: 0.068, z: 0.04 },
+          renderOrder: 5,
+          animationId: phaseToMageAnimation(this.phase),
+        }),
       createWorldObject('trial-fail-line', HeroStageTemplateIds.pathMarker, {
         position: { x: 0, y: this.currentLevel.trial.failLineY, z: -0.03 },
         scale: { x: 4.7, y: 0.04, z: 0.18 },

@@ -27,9 +27,11 @@ export interface AssetManifestEntry {
 const TILE_NOTES =
   'Runtime 256x256 transparent PNG, centered subject, 24-36px padding, readable at 100x100.';
 const BACKDROP_NOTES = 'Runtime 2160x1000 PNG/WebP for 2x coverage of the 1080x500 hero stage.';
+const CASTLE_BACKDROP_NOTES =
+  'Hero-stage cover backdrop. Drawn as a Three.js texture plane that fills the orthographic 1080x500 stage and crops overflow.';
 const RIG_NOTES = 'Transparent PNG source parts now; later exported as a 2048x2048 atlas plus skeletal JSON.';
 const TEMP_FBX_MAGE_NOTES =
-  'Temporary browser hero-stage FBX model. Auto-normalized in Three.js to bottom-center pivot and 1.45 world-unit height.';
+  'Temporary browser hero-stage FBX model. Auto-normalized in Three.js to bottom-center pivot and 0.145 world-unit height. Loops animation frames 0-60.';
 const UI_BANNER_NOTES = 'Runtime 1080x150 PNG for the fixed middle HUD band; drawn full-width behind HUD text.';
 
 export const AssetManifest: Record<string, AssetManifestEntry> = {
@@ -127,13 +129,21 @@ export const AssetManifest: Record<string, AssetManifestEntry> = {
     BACKDROP_NOTES,
     '2160x1000',
   ),
+  [AssetIds.backdrops.castle]: texture(
+    AssetIds.backdrops.castle,
+    '/assets/backdrops/backdrop-castle.png',
+    'Assets/Textures/Backdrops/backdrop-castle.png',
+    'prompt.backdrops.hero',
+    CASTLE_BACKDROP_NOTES,
+    'cover 1080x500 hero stage',
+  ),
   [AssetIds.rigs.mage]: rig(
     AssetIds.rigs.mage,
-    '/assets/rigs/cube.fbx',
-    'Assets/Rigs/Mage/cube.fbx',
+    '/assets/rigs/knight1.fbx',
+    'Assets/Rigs/Mage/knight1.fbx',
     'prompt.rig.mage',
     'fbx',
-    'temporary FBX stand-in, auto-normalized to 1.45 world units',
+    'temporary FBX stand-in, auto-normalized to 0.145 world units',
     TEMP_FBX_MAGE_NOTES,
   ),
   [AssetIds.rigs.prince]: rig(

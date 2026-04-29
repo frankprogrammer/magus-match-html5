@@ -25,6 +25,11 @@ export function createTileIdFactory(prefix = 'tile'): TileIdFactory {
   return () => `${prefix}-${nextId++}`;
 }
 
+export function createBoardScopedTileIdFactory(board: Board, prefix = 'tile'): TileIdFactory {
+  let nextId = nextTileIdSuffixForBoard(board, prefix);
+  return () => `${prefix}-${nextId++}`;
+}
+
 export function createTile(
   type: TileType,
   col: number,
@@ -248,4 +253,27 @@ function cloneBlocker(blocker: Blocker): Blocker {
     hp: blocker.hp,
     position: { ...blocker.position },
   };
+}
+
+function nextTileIdSuffixForBoard(board: Board, prefix: string): number {
+  const expectedPrefix = `${prefix}-`;
+  let maxSuffix = -1;
+
+  for (const row of board) {
+    for (const cell of row) {
+      const id = cell.tile?.id;
+      if (id == null || !id.startsWith(expectedPrefix)) {
+        continue;
+      }
+
+      const suffix = id.slice(expectedPrefix.length);
+      if (!/^\d+$/.test(suffix)) {
+        continue;
+      }
+
+      maxSuffix = Math.max(maxSuffix, Number(suffix));
+    }
+  }
+
+  return maxSuffix + 1;
 }

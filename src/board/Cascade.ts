@@ -11,8 +11,8 @@ import {
 import type { Board, TileIdFactory } from './Board';
 import {
   cloneBoard,
+  createBoardScopedTileIdFactory,
   createTile,
-  createTileIdFactory,
   fillEmptyCellsWithStandardTiles,
   sortCoords,
   uniqueCoords,
@@ -52,7 +52,7 @@ export function resolveCascades(
   const steps: CascadeStep[] = [];
   const animationSteps: BoardAnimationCascadeStep[] = [];
   const maxIterations = options.maxIterations ?? 50;
-  const nextTileId = options.nextTileId ?? createTileIdFactory('cascade-tile');
+  const nextTileId = options.nextTileId ?? createBoardScopedTileIdFactory(workingBoard, 'cascade-tile');
 
   for (let iteration = 0; iteration < maxIterations; iteration += 1) {
     const matches = detectMatches(workingBoard, {

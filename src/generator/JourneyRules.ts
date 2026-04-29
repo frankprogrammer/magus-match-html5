@@ -12,8 +12,8 @@ import {
   cloneBoard,
   coordKey,
   coordsEqual,
+  createBoardScopedTileIdFactory,
   createTile,
-  createTileIdFactory,
   fillEmptyCellsWithStandardTiles,
   getAllPlayableCoords,
   getCell,
@@ -197,7 +197,7 @@ export function resolveJourneyBoard(
   let powerUpsCreated = 0;
   const animationSteps: BoardAnimationCascadeStep[] = [];
   const maxIterations = options.maxIterations ?? 50;
-  const nextTileId = options.nextTileId ?? createTileIdFactory('journey-cascade-tile');
+  const nextTileId = options.nextTileId ?? createBoardScopedTileIdFactory(workingBoard, 'journey-cascade-tile');
 
   for (let iteration = 0; iteration < maxIterations; iteration += 1) {
     const matches = detectMatches(workingBoard, {
@@ -256,7 +256,7 @@ function resolveJourneyPowerUpActivation(
   lightballTargetType?: MatchableTileType,
 ): JourneyBoardResolution {
   const workingBoard = cloneBoard(board);
-  const nextTileId = createTileIdFactory('journey-powerup-cascade-tile');
+  const nextTileId = createBoardScopedTileIdFactory(workingBoard, 'journey-powerup-cascade-tile');
   const detonation = detonatePowerUp(workingBoard, origin, { lightballTargetType });
   const beforeClearBoard = cloneBoard(workingBoard);
   const detonationResult = applyJourneyDetonation(workingBoard, detonation);

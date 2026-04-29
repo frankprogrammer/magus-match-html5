@@ -8,7 +8,7 @@ import {
 import {
   cloneBoard,
   coordKey,
-  createTileIdFactory,
+  createBoardScopedTileIdFactory,
   fillEmptyCellsWithStandardTiles,
   getCell,
   swapTilesInPlace,
@@ -174,7 +174,7 @@ export function processTrialSwap(
   swapTilesInPlace(swappedBoard, from, to);
   const postSwapBoard = cloneBoard(swappedBoard);
 
-  const nextTileId = createTileIdFactory('trial-cascade-tile');
+  const nextTileId = createBoardScopedTileIdFactory(swappedBoard, 'trial-cascade-tile');
   const damageSources: TrialDamageSource[] = [];
   let cascadeResult: CascadeResult;
   let animationTrace: BoardAnimationTrace | undefined;
@@ -238,7 +238,7 @@ export function processTrialPowerUpActivation(
     return invalidTrialSwap(board, runtime);
   }
 
-  const nextTileId = createTileIdFactory('trial-powerup-cascade-tile');
+  const nextTileId = createBoardScopedTileIdFactory(board, 'trial-powerup-cascade-tile');
   const powerUpResolution = resolveTrialPowerUpBoard(board, rng, nextTileId, origin, {
     revisionId: 0,
     preSwapBoard: board,

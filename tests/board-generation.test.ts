@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createBoardFromTileTypes, createBoardScopedTileIdFactory } from '../src/board/Board';
 import { createPlayableStandardBoard } from '../src/board/BoardSolver';
 import { countValidMoves } from '../src/board/BoardRules';
 import { detectMatches } from '../src/board/MatchDetection';
@@ -19,6 +20,29 @@ describe('board generation', () => {
     const second = createPlayableStandardBoard(new SeededRng(777));
 
     expect(tileTypes(first)).toEqual(tileTypes(second));
+  });
+
+  it('creates board-scoped tile IDs after the highest existing suffix', () => {
+    const board = createBoardFromTileTypes([['FIRE', 'ICE', 'EARTH']]);
+    board[0][0].tile!.id = 'refill-0';
+    board[0][1].tile!.id = 'refill-4';
+    board[0][2].tile!.id = 'other-99';
+
+    const nextTileId = createBoardScopedTileIdFactory(board, 'refill');
+
+    expect(nextTileId()).toBe('refill-5');
+    expect(nextTileId()).toBe('refill-6');
+  });
+
+  it('ignores non-matching and non-numeric tile ID suffixes for board-scoped IDs', () => {
+    const board = createBoardFromTileTypes([['FIRE', 'ICE', 'EARTH']]);
+    board[0][0].tile!.id = 'refill-alpha';
+    board[0][1].tile!.id = 'refill-2-extra';
+    board[0][2].tile!.id = 'other-8';
+
+    const nextTileId = createBoardScopedTileIdFactory(board, 'refill');
+
+    expect(nextTileId()).toBe('refill-0');
   });
 });
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AssetIds } from '../src/assets/AssetIds';
-import type { BoardAnimationTrace } from '../src/board/BoardAnimationTrace';
+import type { Board } from '../src/board/Board';
+import type { BoardAnimationSnapshot, BoardAnimationTrace } from '../src/board/BoardAnimationTrace';
 import { getBoardAnimationTraceDurationMs } from '../src/board/BoardAnimationTiming';
 import { findValidMoves } from '../src/board/BoardRules';
 import { GAME_OVER_TRY_AGAIN_BUTTON_RECT, TITLE_PLAY_BUTTON_RECT } from '../src/core/Layout';
@@ -150,6 +151,37 @@ describe('MagusMatchGameApp', () => {
     expect(app.getBoardRenderState().animationTrace?.revisionId).toBeGreaterThan(firstTrace?.revisionId ?? 0);
   });
 
+  it('keeps Trial tile IDs unique across the reported two-swap cascade regression', () => {
+    const app = new MagusMatchGameApp(1643426079, { debugLevelType: 'TRIAL' });
+    tap(app, TITLE_PLAY_BUTTON_RECT);
+    app.drainEvents();
+
+    app.update(0, [{ type: 'swap', from: { col: 3, row: 3 }, to: { col: 4, row: 3 } }]);
+    expectBoardTileIdsUnique(app.getBoardForDebug());
+
+    app.update(0, [{ type: 'swap', from: { col: 3, row: 3 }, to: { col: 4, row: 3 } }]);
+    expectBoardTileIdsUnique(app.getBoardForDebug());
+    expectTraceTileIdsUnique(app.getBoardRenderState().animationTrace);
+  });
+
+  it('keeps Journey tile IDs unique across consecutive refills', () => {
+    const app = new MagusMatchGameApp(555);
+    const level = app.getCurrentLevelForDebug();
+    if (level?.type !== 'JOURNEY') {
+      throw new Error('Expected generated Journey level.');
+    }
+
+    tap(app, TITLE_PLAY_BUTTON_RECT);
+    app.drainEvents();
+    app.update(0, [{ type: 'swap', from: level.journey.firstHint.from, to: level.journey.firstHint.to }]);
+    expectBoardTileIdsUnique(app.getBoardForDebug());
+
+    const nextMove = findValidMoves(app.getBoardForDebug())[0];
+    app.update(0, [{ type: 'swap', from: nextMove.from, to: nextMove.to }]);
+    expectBoardTileIdsUnique(app.getBoardForDebug());
+    expectTraceTileIdsUnique(app.getBoardRenderState().animationTrace);
+  });
+
   it('starts on Title and emits levelStarted when Play is tapped', () => {
     const app = new MagusMatchGameApp(777);
 
@@ -261,6 +293,44 @@ function captureTraceForDebug(app: MagusMatchGameApp, trace: BoardAnimationTrace
 
 function beginLevelResultForDebug(app: MagusMatchGameApp, result: 'win' | 'loss'): void {
   (app as unknown as { beginLevelResult: (result: 'win' | 'loss') => void }).beginLevelResult(result);
+}
+
+function expectBoardTileIdsUnique(board: Board): void {
+  expectUniqueTileIds(board.flat().flatMap((cell) => (cell.tile == null ? [] : [cell.tile.id])));
+}
+
+function expectTraceTileIdsUnique(trace: BoardAnimationTrace | null | undefined): void {
+  expect(trace).toBeDefined();
+  if (trace == null) {
+    return;
+  }
+
+  const snapshots: BoardAnimationSnapshot[] = [
+    trace.preSwapSnapshot,
+    trace.postSwapSnapshot,
+    trace.finalSnapshot,
+    ...trace.cascadeSteps.flatMap((step) => [
+      step.beforeClearSnapshot,
+      step.beforeGravitySnapshot,
+      step.afterGravitySnapshot,
+      step.finalSnapshot,
+    ]),
+  ];
+
+  for (const snapshot of snapshots) {
+    expectUniqueTileIds(snapshot.cells.map((cell) => cell.tileId));
+  }
+
+  for (const step of trace.cascadeSteps) {
+    expectUniqueTileIds(step.clearedTiles.map((tile) => tile.tileId));
+    expectUniqueTileIds(step.fallingTiles.map((tile) => tile.tileId));
+    expectUniqueTileIds(step.refillTiles.map((tile) => tile.tileId));
+  }
+}
+
+function expectUniqueTileIds(ids: readonly string[]): void {
+  const duplicates = ids.filter((id, index) => ids.indexOf(id) !== index);
+  expect([...new Set(duplicates)]).toEqual([]);
 }
 
 function longCollapseTrace(revisionId: number): BoardAnimationTrace {

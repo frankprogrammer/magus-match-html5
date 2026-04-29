@@ -104,7 +104,7 @@ export function buildBoardCellVisuals(boardState: BoardRenderState, elapsedSec: 
 
 function drawCanvasBands(renderer: GameRenderer): void {
   renderer.drawRect('#241832', 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
-  renderer.drawRect('#f5e9c9', 0, HERO_STAGE_HEIGHT, LOGICAL_WIDTH, HUD_HEIGHT);
+  renderer.drawRect('#1f1830', 0, HERO_STAGE_HEIGHT, LOGICAL_WIDTH, HUD_HEIGHT);
   const hudBanner = { id: AssetIds.ui.hudBanner };
   if (renderer.hasImage(hudBanner)) {
     renderer.drawImage(hudBanner, 0, HERO_STAGE_HEIGHT, LOGICAL_WIDTH, HUD_HEIGHT);

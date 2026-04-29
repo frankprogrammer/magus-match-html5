@@ -110,6 +110,7 @@ describe('buildBoardCellVisuals', () => {
 
     renderFrame(renderer, oneTileState('tile.fire'), hudState(), 0);
 
+    expect(renderer.calls).toContain('rect:#1f1830:0,500,1080,150');
     expect(renderer.calls).toContain(`image:${AssetIds.ui.hudBanner}`);
   });
 

@@ -2,6 +2,7 @@ import { createPlayableStandardBoard } from '../board/BoardSolver';
 import type { Board } from '../board/Board';
 import { SeededRng } from '../core/Rng';
 import { getTrialDifficultyConfig } from './DifficultyTable';
+import { createTrialEmptyCellPattern, getFallbackTrialEmptyCellPatterns } from './TrialEmptyPatterns';
 
 export type TrialMonsterKind = 'kobold' | 'tallKobold' | 'miniBoss';
 
@@ -54,7 +55,7 @@ export const TRIAL_FAIL_LINE_Y = -1.42;
 export function generateTrialLevel(options: GenerateTrialLevelOptions): GeneratedTrialLevel {
   const rng = new SeededRng(options.seed);
   const config = getTrialDifficultyConfig(options.difficulty);
-  const initialBoard = createPlayableStandardBoard(rng);
+  const initialBoard = createTrialInitialBoard(rng, options.difficulty);
   const manifest = tuneManifestForClearability(
     createWaveManifest(rng, options.difficulty),
     config.baseDamage,
@@ -73,6 +74,26 @@ export function generateTrialLevel(options: GenerateTrialLevelOptions): Generate
       waveManifest: manifest,
     },
   };
+}
+
+export function createTrialInitialBoard(rng: SeededRng, difficulty: number): Board {
+  const preferredPattern = createTrialEmptyCellPattern(difficulty, rng);
+  const fallbackPatterns = getFallbackTrialEmptyCellPatterns(difficulty);
+  const patterns = uniquePatterns([preferredPattern, ...fallbackPatterns, []]);
+
+  for (const voidCells of patterns) {
+    try {
+      return createPlayableStandardBoard(rng, {
+        voidCells,
+        minValidMoves: 3,
+        maxAttempts: 120,
+      });
+    } catch {
+      // Try a less restrictive pattern below.
+    }
+  }
+
+  return createPlayableStandardBoard(rng, { minValidMoves: 3, maxAttempts: 120 });
 }
 
 export function createWaveManifest(
@@ -175,4 +196,27 @@ function shuffle<T>(items: readonly T[], rng: SeededRng): T[] {
   }
 
   return shuffled;
+}
+
+function uniquePatterns(patterns: readonly (readonly { col: number; row: number }[])[]): { col: number; row: number }[][] {
+  const seen = new Set<string>();
+  const unique: { col: number; row: number }[][] = [];
+  for (const pattern of patterns) {
+    const key = patternKey(pattern);
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    unique.push(pattern.map((coord) => ({ ...coord })));
+  }
+
+  return unique;
+}
+
+function patternKey(pattern: readonly { col: number; row: number }[]): string {
+  return [...pattern]
+    .sort((first, second) => first.row - second.row || first.col - second.col)
+    .map((coord) => `${coord.col},${coord.row}`)
+    .join('|');
 }

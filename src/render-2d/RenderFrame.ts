@@ -160,6 +160,9 @@ function drawBoard(renderer: GameRenderer, boardState: BoardRenderState, elapsed
   );
 
   renderer.pushClipRect(BOARD_RECT.x, BOARD_RECT.y, BOARD_RECT.width, BOARD_RECT.height);
+  for (const emptyCell of boardState.emptyCells ?? []) {
+    drawEmptyCell(renderer, emptyCell.coord, emptyCell.assetId);
+  }
   for (const visual of visuals) {
     drawCell(renderer, visual);
   }
@@ -168,6 +171,20 @@ function drawBoard(renderer: GameRenderer, boardState: BoardRenderState, elapsed
   drawBoardFrame(renderer);
   drawDamagePopups(renderer, boardState);
   renderer.pop();
+}
+
+function drawEmptyCell(renderer: GameRenderer, coord: CellCoord, assetId: string): void {
+  const x = BOARD_RECT.x + coord.col * BOARD_RECT.cellSize;
+  const y = BOARD_RECT.y + coord.row * BOARD_RECT.cellSize;
+  renderer.drawRect('#171225', x, y, BOARD_RECT.cellSize, BOARD_RECT.cellSize);
+
+  const imageRef = { id: assetId };
+  if (renderer.hasImage(imageRef)) {
+    renderer.drawImage(imageRef, x, y, BOARD_RECT.cellSize, BOARD_RECT.cellSize);
+    return;
+  }
+
+  renderer.drawRect('#0f0b18', x + 8, y + 8, BOARD_RECT.cellSize - 16, BOARD_RECT.cellSize - 16);
 }
 
 function drawBoardFrame(renderer: GameRenderer): void {

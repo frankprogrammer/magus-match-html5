@@ -14,7 +14,6 @@ import {
   coordsEqual,
   createBoardScopedTileIdFactory,
   createTile,
-  fillEmptyCellsWithStandardTiles,
   getAllPlayableCoords,
   getCell,
   swapTilesInPlace,
@@ -22,7 +21,7 @@ import {
 } from '../board/Board';
 import type { Board, TileIdFactory } from '../board/Board';
 import { validateSwap } from '../board/BoardRules';
-import { applyGravity } from '../board/Cascade';
+import { settleBoardWithVoidAwareRefill } from '../board/Cascade';
 import { detectMatches, type MatchGroup } from '../board/MatchDetection';
 import {
   detonatePowerUp,
@@ -226,9 +225,7 @@ export function resolveJourneyBoard(
     powerUpsCreated += matchedCells.powerUpsCreated;
     convertedPathCells.push(...matchedCells.convertedPathCells);
     clearedStandardCells.push(...matchedCells.clearedStandardCells);
-    applyGravity(workingBoard);
-    const afterGravityBoard = cloneBoard(workingBoard);
-    fillEmptyCellsWithStandardTiles(workingBoard, rng, nextTileId);
+    const refillResult = settleBoardWithVoidAwareRefill(workingBoard, rng, nextTileId);
     const finalBoard = cloneBoard(workingBoard);
 
     if (options.animation != null) {
@@ -237,9 +234,11 @@ export function resolveJourneyBoard(
           iteration,
           beforeClearBoard,
           beforeGravityBoard,
-          afterGravityBoard,
+          refillResult.afterGravityBoard,
           finalBoard,
           clearedCells,
+          new Map(),
+          refillResult.refillTiles,
         ),
       );
     }
@@ -261,19 +260,18 @@ function resolveJourneyPowerUpActivation(
   const beforeClearBoard = cloneBoard(workingBoard);
   const detonationResult = applyJourneyDetonation(workingBoard, detonation);
   const beforeGravityBoard = cloneBoard(workingBoard);
-  applyGravity(workingBoard);
-  const afterGravityBoard = cloneBoard(workingBoard);
-  fillEmptyCellsWithStandardTiles(workingBoard, rng, nextTileId);
+  const refillResult = settleBoardWithVoidAwareRefill(workingBoard, rng, nextTileId);
   const finalDetonationBoard = cloneBoard(workingBoard);
   const clearDelayByCoord = clearDelayMap(detonation);
   const initialStep = buildBoardAnimationCascadeStep(
     0,
     beforeClearBoard,
     beforeGravityBoard,
-    afterGravityBoard,
+    refillResult.afterGravityBoard,
     finalDetonationBoard,
     detonation.clearedCells,
     clearDelayByCoord,
+    refillResult.refillTiles,
   );
   const cascadeResolution = resolveJourneyBoard(workingBoard, rng, {
     nextTileId,

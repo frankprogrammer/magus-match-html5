@@ -45,6 +45,7 @@ describe('AssetManifest', () => {
 
   it('documents runtime size policy for board textures', () => {
     expect(AssetManifest[AssetIds.tiles.fire].browserUrl).toBe('/assets/tiles/tile-fire.png');
+    expect(AssetManifest[AssetIds.tiles.empty].browserUrl).toBe('/assets/tiles/empty.png');
     expect(AssetManifest[AssetIds.powerUps.rocketH].browserUrl).toBe('/assets/powerups/power-rocket-h.png');
     expect(AssetManifest[AssetIds.tiles.fire].runtimeSize).toBe('256x256');
     expect(AssetManifest[AssetIds.backdrops.forest].runtimeSize).toBe('2160x1000');

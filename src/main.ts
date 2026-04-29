@@ -3,6 +3,7 @@ import { MagusMatchGameApp } from './core/GameApp';
 import { LOGICAL_HEIGHT, LOGICAL_WIDTH } from './core/Layout';
 import {
   BrowserInputAdapter,
+  parseDebugLevelNumber,
   parseDebugLevelType,
   parseDebugSeed,
 } from './platform-browser/BrowserInputAdapter';
@@ -39,6 +40,7 @@ if (root == null) {
 
 const app = new MagusMatchGameApp(parseDebugSeed(window.location.search), {
   debugLevelType: parseDebugLevelType(window.location.search),
+  debugStartLevel: parseDebugLevelNumber(window.location.search),
 });
 
 root.innerHTML = `

@@ -71,6 +71,18 @@ describe('MagusMatchGameApp', () => {
     expect(app.getHeroWorldState().activeProjectiles.length).toBeGreaterThan(0);
   });
 
+  it('can start directly at a debug run level', () => {
+    const app = new MagusMatchGameApp(4088670725, { debugLevelType: 'TRIAL', debugStartLevel: 2 });
+
+    expect(app.getRunStateForDebug()).toMatchObject({
+      levelNumber: 2,
+      difficulty: 2,
+      levelsCleared: 1,
+    });
+    expect(app.getCurrentLevelForDebug()?.type).toBe('TRIAL');
+    expect(app.getBoardRenderState().emptyCells?.length).toBeGreaterThan(0);
+  });
+
   it('emits Journey match, path, and mage audio through events', () => {
     const app = new MagusMatchGameApp(555);
     const level = app.getCurrentLevelForDebug();

@@ -125,6 +125,7 @@ function sampleTraceCells(
     activeStep.endMs - activeStep.fallStartMs,
     activeStep.fallDelaysByTileId,
     retargetStarts,
+    trace.kind === 'levelIntro',
   );
 }
 
@@ -182,6 +183,7 @@ function sampleFallCells(
   stepDurationMs: number,
   fallDelaysByTileId: ReadonlyMap<string, number>,
   retargetStarts: ReadonlyMap<string, VisualSample>,
+  isLevelIntro: boolean,
 ): BoardCellVisualState[] {
   const movingIds = new Set([
     ...step.fallingTiles.map((movement) => movement.tileId),
@@ -192,11 +194,11 @@ function sampleFallCells(
     .map((cell) => snapshotCellToRenderCell(cell, { zIndex: 0 }));
 
   for (const movement of step.fallingTiles) {
-    cells.push(sampleMovingTile(movement, stepElapsedMs, stepDurationMs, fallDelaysByTileId, retargetStarts, 6));
+    cells.push(sampleMovingTile(movement, stepElapsedMs, stepDurationMs, fallDelaysByTileId, retargetStarts, 6, isLevelIntro));
   }
 
   for (const refill of step.refillTiles) {
-    cells.push(sampleMovingTile(refill, stepElapsedMs, stepDurationMs, fallDelaysByTileId, retargetStarts, 7));
+    cells.push(sampleMovingTile(refill, stepElapsedMs, stepDurationMs, fallDelaysByTileId, retargetStarts, 7, isLevelIntro));
   }
 
   return cells;
@@ -209,6 +211,7 @@ function sampleMovingTile(
   fallDelaysByTileId: ReadonlyMap<string, number>,
   retargetStarts: ReadonlyMap<string, VisualSample>,
   zIndex: number,
+  isLevelIntro: boolean,
 ): BoardCellVisualState {
   const distanceRows = Math.max(1, Math.abs(movement.to.row - movement.from.row));
   const delayMs = fallDelaysByTileId.get(movement.tileId) ?? 0;
@@ -220,7 +223,10 @@ function sampleMovingTile(
   const progress = clamp01((stepElapsedMs - delayMs) / fallMs);
   const eased = gravityFallEase(progress);
   const target = coordToRender(movement.to);
-  const start = startPositionForGravityMovement(movement, target, retargetStarts);
+  const isSlide = 'movementKind' in movement && movement.movementKind === 'slide';
+  const start = isSlide
+    ? startPositionForSlideMovement(movement, retargetStarts)
+    : startPositionForGravityMovement(movement, target, retargetStarts);
   const settleScale = landingScale(progress);
 
   return {
@@ -229,13 +235,20 @@ function sampleMovingTile(
     assetId: assetIdForTileType(movement.tileType),
     tileType: movement.tileType,
     isPath: movement.isPath,
-    alpha: movement.from.row < 0 && progress <= 0 ? 0 : 1,
-    renderX: target.renderX,
+    alpha: (isLevelIntro || movement.from.row < 0) && progress <= 0 ? 0 : 1,
+    renderX: isSlide ? lerp(start.renderX, target.renderX, eased) : target.renderX,
     renderY: lerp(start.renderY, target.renderY, eased),
     scale: settleScale,
     zIndex,
     isGhost: true,
   };
+}
+
+function startPositionForSlideMovement(
+  movement: BoardAnimationMovement | BoardAnimationRefill,
+  retargetStarts: ReadonlyMap<string, VisualSample>,
+): VisualSample {
+  return retargetStarts.get(movement.tileId) ?? coordToRender(movement.from);
 }
 
 function startPositionForGravityMovement(

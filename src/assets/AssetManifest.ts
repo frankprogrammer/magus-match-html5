@@ -77,6 +77,13 @@ export const AssetManifest: Record<string, AssetManifestEntry> = {
     'prompt.tiles.journey',
     TILE_NOTES,
   ),
+  [AssetIds.tiles.empty]: texture(
+    AssetIds.tiles.empty,
+    '/assets/tiles/empty.png',
+    'Assets/Textures/Tiles/empty.png',
+    'prompt.tiles.standard',
+    'Runtime empty-cell marker for non-playable Trial void spaces. Drawn as board art only; not matchable or refillable.',
+  ),
   [AssetIds.powerUps.rocketH]: texture(
     AssetIds.powerUps.rocketH,
     '/assets/powerups/power-rocket-h.png',

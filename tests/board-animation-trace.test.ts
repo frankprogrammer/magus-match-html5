@@ -103,6 +103,48 @@ describe('board animation traces', () => {
     expect(trace.finalSnapshot.cells).toHaveLength(4);
   });
 
+  it('creates void-aware level intro slide refills for cells below empty spaces', () => {
+    const board = createBoardFromTileTypes(
+      [
+        ['FIRE', 'ICE', 'EARTH'],
+        ['LIGHTNING', null, 'FIRE'],
+        ['ICE', 'EARTH', 'LIGHTNING'],
+      ],
+      { voidCells: [{ col: 1, row: 1 }] },
+    );
+
+    const trace = createLevelIntroBoardAnimationTrace(board, 14);
+    const blockedRefill = trace.cascadeSteps[0].refillTiles.find(
+      (refill) => refill.to.col === 1 && refill.to.row === 2,
+    );
+
+    expect(blockedRefill).toBeDefined();
+    expect(blockedRefill?.movementKind).toBe('slide');
+    expect(blockedRefill?.from.col).not.toBe(1);
+    expect(blockedRefill?.from.row).toBeGreaterThanOrEqual(0);
+    expect(blockedRefill?.from.row).toBeLessThanOrEqual(1);
+  });
+
+  it('keeps top-accessible intro refills vertical beside empty spaces', () => {
+    const board = createBoardFromTileTypes(
+      [
+        ['FIRE', 'ICE'],
+        [null, 'EARTH'],
+        ['LIGHTNING', 'FIRE'],
+      ],
+      { voidCells: [{ col: 0, row: 1 }] },
+    );
+
+    const trace = createLevelIntroBoardAnimationTrace(board, 15);
+    const adjacentRefill = trace.cascadeSteps[0].refillTiles.find(
+      (refill) => refill.to.col === 1 && refill.to.row === 2,
+    );
+
+    expect(adjacentRefill).toBeDefined();
+    expect(adjacentRefill?.movementKind).toBe('fall');
+    expect(adjacentRefill?.from.col).toBe(1);
+  });
+
   it('stacks full-column cascade refills above the board from bottom to top', () => {
     const beforeClearBoard = createBoardFromTileTypes([
       ['FIRE'],
@@ -164,6 +206,35 @@ describe('board animation traces', () => {
       { toRow: 1, fromRow: -2 },
       { toRow: 2, fromRow: -1 },
     ]);
+  });
+
+  it('marks cross-column gravity movement as an intentional slide', () => {
+    const beforeGravityBoard = createBoardFromTileTypes([
+      [null, 'FIRE'],
+      [null, null],
+      [null, null],
+    ]);
+    const afterGravityBoard = createBoardFromTileTypes([
+      [null, null],
+      [null, null],
+      ['FIRE', null],
+    ]);
+    afterGravityBoard[2][0].tile!.id = beforeGravityBoard[0][1].tile!.id;
+
+    const step = buildBoardAnimationCascadeStep(
+      0,
+      beforeGravityBoard,
+      beforeGravityBoard,
+      afterGravityBoard,
+      afterGravityBoard,
+      [],
+    );
+
+    expect(step.fallingTiles[0]).toMatchObject({
+      from: { col: 1, row: 0 },
+      to: { col: 0, row: 2 },
+      movementKind: 'slide',
+    });
   });
 });
 

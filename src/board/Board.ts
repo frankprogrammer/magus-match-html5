@@ -221,6 +221,19 @@ export function getAllPlayableCoords(board: Board): CellCoord[] {
   return coords;
 }
 
+export function getVoidCoords(board: Board): CellCoord[] {
+  const coords: CellCoord[] = [];
+  for (let row = 0; row < BOARD_SIZE; row += 1) {
+    for (let col = 0; col < BOARD_SIZE; col += 1) {
+      if (board[row][col].isVoid) {
+        coords.push({ col, row });
+      }
+    }
+  }
+
+  return coords;
+}
+
 export function coordsEqual(first: CellCoord, second: CellCoord): boolean {
   return first.col === second.col && first.row === second.row;
 }

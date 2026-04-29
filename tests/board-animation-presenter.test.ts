@@ -126,6 +126,19 @@ describe('BoardAnimationPresenter', () => {
     expect(moved?.renderY).not.toBe(BOARD_RECT.y + 4 * BOARD_RECT.cellSize);
   });
 
+  it('animates explicit slide movements horizontally while keeping normal falls column-locked', () => {
+    const presenter = new BoardAnimationPresenter();
+    const trace = slideMovementTrace();
+    const state = boardState(trace);
+
+    presenter.present(state, 0);
+    const sliding = presenter.present(state, 0.38);
+    const moved = sliding.boardCells.find((cell) => cell.tileId === 'sliding');
+
+    expect(moved?.renderX).toBeLessThan(BOARD_RECT.x + BOARD_RECT.cellSize);
+    expect(moved?.renderX).toBeGreaterThan(BOARD_RECT.x);
+  });
+
   it('renders level intro traces as an empty board before tiles fall in', () => {
     const presenter = new BoardAnimationPresenter();
     const board = createBoardFromTileTypes([['FIRE', 'ICE'], ['EARTH', 'LIGHTNING']]);
@@ -206,6 +219,52 @@ describe('BoardAnimationPresenter', () => {
 
 function movementTrace(revisionId: number, fromRow: number, toRow: number): BoardAnimationTrace {
   return movementTraceInColumn(revisionId, 0, fromRow, toRow);
+}
+
+function slideMovementTrace(): BoardAnimationTrace {
+  return {
+    kind: 'resolution',
+    revisionId: 25,
+    swappedCells: null,
+    preSwapSnapshot: {
+      cells: [snapshotCell('sliding', 'FIRE', 1, 0)],
+    },
+    postSwapSnapshot: {
+      cells: [snapshotCell('sliding', 'FIRE', 1, 0)],
+    },
+    cascadeSteps: [
+      {
+        stepIndex: 0,
+        beforeClearSnapshot: {
+          cells: [snapshotCell('sliding', 'FIRE', 1, 0)],
+        },
+        beforeGravitySnapshot: {
+          cells: [snapshotCell('sliding', 'FIRE', 1, 0)],
+        },
+        afterGravitySnapshot: {
+          cells: [snapshotCell('sliding', 'FIRE', 0, 2)],
+        },
+        finalSnapshot: {
+          cells: [snapshotCell('sliding', 'FIRE', 0, 2)],
+        },
+        clearedTiles: [],
+        fallingTiles: [
+          {
+            tileId: 'sliding',
+            tileType: 'FIRE',
+            from: { col: 1, row: 0 },
+            to: { col: 0, row: 2 },
+            isPath: false,
+            movementKind: 'slide',
+          },
+        ],
+        refillTiles: [],
+      },
+    ],
+    finalSnapshot: {
+      cells: [snapshotCell('sliding', 'FIRE', 0, 2)],
+    },
+  };
 }
 
 function movementTraceInColumn(revisionId: number, col: number, fromRow: number, toRow: number): BoardAnimationTrace {

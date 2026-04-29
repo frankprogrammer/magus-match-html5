@@ -9,12 +9,11 @@ import {
   cloneBoard,
   coordKey,
   createBoardScopedTileIdFactory,
-  fillEmptyCellsWithStandardTiles,
   getCell,
   swapTilesInPlace,
 } from '../board/Board';
 import { validateSwap } from '../board/BoardRules';
-import { applyGravity, resolveCascades, type CascadeResult } from '../board/Cascade';
+import { resolveCascades, settleBoardWithVoidAwareRefill, type CascadeResult } from '../board/Cascade';
 import type { MatchGroup } from '../board/MatchDetection';
 import {
   detonatePowerUp,
@@ -475,18 +474,17 @@ function resolveTrialPowerUpBoard(
   const beforeClearBoard = cloneBoard(workingBoard);
   clearDetonatedCells(workingBoard, detonation);
   const beforeGravityBoard = cloneBoard(workingBoard);
-  applyGravity(workingBoard);
-  const afterGravityBoard = cloneBoard(workingBoard);
-  fillEmptyCellsWithStandardTiles(workingBoard, rng, nextTileId);
+  const refillResult = settleBoardWithVoidAwareRefill(workingBoard, rng, nextTileId);
   const finalDetonationBoard = cloneBoard(workingBoard);
   const initialStep = buildBoardAnimationCascadeStep(
     0,
     beforeClearBoard,
     beforeGravityBoard,
-    afterGravityBoard,
+    refillResult.afterGravityBoard,
     finalDetonationBoard,
     detonation.clearedCells,
     clearDelayMap(detonation),
+    refillResult.refillTiles,
   );
   const cascadeResult = resolveCascades(workingBoard, rng, {
     preferredSpawnCell: origin,

@@ -116,6 +116,19 @@ describe('buildBoardCellVisuals', () => {
     expect(renderer.calls).toContain('text:Level 1:32,490,180,150');
   });
 
+  it('draws empty cell art for void board cells behind the tile layer', () => {
+    const renderer = new FakeRenderer(new Set([AssetIds.tiles.empty, 'tile.fire']));
+    const state = oneTileState('tile.fire');
+    state.emptyCells = [{ coord: { col: 2, row: 3 }, assetId: AssetIds.tiles.empty }];
+
+    renderFrame(renderer, state, hudState(), 0);
+
+    const emptyImageIndex = renderer.calls.indexOf(`image:${AssetIds.tiles.empty}`);
+    const tileImageIndex = renderer.calls.indexOf('image:tile.fire');
+    expect(emptyImageIndex).toBeGreaterThan(-1);
+    expect(tileImageIndex).toBeGreaterThan(emptyImageIndex);
+  });
+
   it('falls back to shapes and glyphs when image assets are unavailable', () => {
     const renderer = new FakeRenderer(new Set());
 

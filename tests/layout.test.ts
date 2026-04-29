@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { logicalPointToBoardCell } from '../src/core/Layout';
-import { clientToLogicalPoint, parseDebugSeed } from '../src/platform-browser/BrowserInputAdapter';
+import { clientToLogicalPoint, parseDebugLevelNumber, parseDebugSeed } from '../src/platform-browser/BrowserInputAdapter';
 
 describe('layout mapping', () => {
   it('maps centered portrait viewport client coordinates into logical coordinates', () => {
@@ -42,5 +42,13 @@ describe('layout mapping', () => {
     expect(parseDebugSeed('?seed=0')).toBeUndefined();
     expect(parseDebugSeed('?seed=not-a-number')).toBeUndefined();
     expect(parseDebugSeed('?other=123')).toBeUndefined();
+  });
+
+  it('parses debug level numbers from a URL search string', () => {
+    expect(parseDebugLevelNumber('?level=2')).toBe(2);
+    expect(parseDebugLevelNumber('?level=1.9')).toBe(1);
+    expect(parseDebugLevelNumber('?level=0')).toBeUndefined();
+    expect(parseDebugLevelNumber('?level=bad')).toBeUndefined();
+    expect(parseDebugLevelNumber('?seed=123')).toBeUndefined();
   });
 });

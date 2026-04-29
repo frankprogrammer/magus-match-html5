@@ -25,6 +25,7 @@ export interface BoardAnimationMovement {
   from: CellCoord;
   to: CellCoord;
   isPath: boolean;
+  movementKind?: 'fall' | 'slide';
 }
 
 export interface BoardAnimationRefill {
@@ -33,6 +34,7 @@ export interface BoardAnimationRefill {
   from: CellCoord;
   to: CellCoord;
   isPath: boolean;
+  movementKind?: 'fall' | 'slide';
 }
 
 export interface BoardAnimationCascadeStep {
@@ -106,15 +108,17 @@ export function createBoardAnimationTrace(
 export function createLevelIntroBoardAnimationTrace(board: Board, revisionId: number): BoardAnimationTrace {
   const emptySnapshot: BoardAnimationSnapshot = { cells: [] };
   const finalSnapshot = snapshotBoard(board);
-  const refillTiles: BoardAnimationRefill[] = finalSnapshot.cells
-    .map((cell) => ({
-      tileId: cell.tileId,
-      tileType: cell.tileType,
-      from: { col: cell.coord.col, row: cell.coord.row - BOARD_SIZE },
-      to: cell.coord,
-      isPath: cell.isPath,
-    }))
-    .sort((first, second) => first.to.col - second.to.col || second.to.row - first.to.row);
+  const refillTiles = hasVoidCells(board)
+    ? buildVoidAwareIntroRefillTiles(board, finalSnapshot.cells)
+    : finalSnapshot.cells
+        .map((cell) => ({
+          tileId: cell.tileId,
+          tileType: cell.tileType,
+          from: { col: cell.coord.col, row: cell.coord.row - BOARD_SIZE },
+          to: cell.coord,
+          isPath: cell.isPath,
+        }))
+        .sort((first, second) => first.to.col - second.to.col || second.to.row - first.to.row);
 
   return {
     kind: 'levelIntro',
@@ -146,6 +150,7 @@ export function buildBoardAnimationCascadeStep(
   finalBoard: Board,
   clearedCoords: readonly CellCoord[],
   clearedDelayMsByCoord: ReadonlyMap<string, number> = new Map(),
+  refillOverrides: readonly BoardAnimationRefill[] = [],
 ): BoardAnimationCascadeStep {
   const beforeClearSnapshot = snapshotBoard(beforeClearBoard);
   const beforeGravitySnapshot = snapshotBoard(beforeGravityBoard);
@@ -171,20 +176,22 @@ export function buildBoardAnimationCascadeStep(
         return null;
       }
 
-      return {
+      const movement: BoardAnimationMovement = {
         tileId: toCell.tileId,
         tileType: toCell.tileType,
         from: fromCell.coord,
         to: toCell.coord,
         isPath: toCell.isPath,
+        movementKind: fromCell.coord.col === toCell.coord.col ? 'fall' : 'slide',
       };
+      return movement;
     })
     .filter((movement): movement is BoardAnimationMovement => movement != null);
 
   const refillCells = finalSnapshot.cells
     .filter((cell) => !afterGravityIds.has(cell.tileId))
     .sort((first, second) => first.coord.col - second.coord.col || second.coord.row - first.coord.row);
-  const refillTiles = buildStackedRefillTiles(refillCells);
+  const refillTiles = buildStackedRefillTiles(refillCells, refillOverrides);
 
   return {
     stepIndex,
@@ -220,9 +227,23 @@ function snapshotCellsById(snapshot: BoardAnimationSnapshot): Map<string, BoardA
   return new Map(snapshot.cells.map((cell) => [cell.tileId, cell]));
 }
 
-function buildStackedRefillTiles(refillCells: readonly BoardAnimationSnapshotCell[]): BoardAnimationRefill[] {
+function buildStackedRefillTiles(
+  refillCells: readonly BoardAnimationSnapshotCell[],
+  refillOverrides: readonly BoardAnimationRefill[] = [],
+): BoardAnimationRefill[] {
+  const overridesById = new Map(refillOverrides.map((refill) => [refill.tileId, refill]));
   const refillIndexByColumn = new Map<number, number>();
   return refillCells.map((cell) => {
+    const override = overridesById.get(cell.tileId);
+    if (override != null) {
+      return {
+        ...override,
+        tileType: cell.tileType,
+        to: cell.coord,
+        isPath: cell.isPath,
+      };
+    }
+
     const columnIndex = refillIndexByColumn.get(cell.coord.col) ?? 0;
     refillIndexByColumn.set(cell.coord.col, columnIndex + 1);
     return {
@@ -233,6 +254,82 @@ function buildStackedRefillTiles(refillCells: readonly BoardAnimationSnapshotCel
       isPath: cell.isPath,
     };
   });
+}
+
+function buildVoidAwareIntroRefillTiles(
+  board: Board,
+  cells: readonly BoardAnimationSnapshotCell[],
+): BoardAnimationRefill[] {
+  const refillIndexByColumn = new Map<number, number>();
+  return [...cells]
+    .sort((first, second) => first.coord.col - second.coord.col || second.coord.row - first.coord.row)
+    .map((cell) => {
+      if (!isBlockedByVoidAbove(board, cell.coord)) {
+        const columnIndex = refillIndexByColumn.get(cell.coord.col) ?? 0;
+        refillIndexByColumn.set(cell.coord.col, columnIndex + 1);
+        return {
+          tileId: cell.tileId,
+          tileType: cell.tileType,
+          from: { col: cell.coord.col, row: -1 - columnIndex },
+          to: cell.coord,
+          isPath: cell.isPath,
+          movementKind: 'fall' as const,
+        };
+      }
+
+      const sourceCol = chooseAdjacentSourceColumn(board, cell.coord);
+      return {
+        tileId: cell.tileId,
+        tileType: cell.tileType,
+        from: { col: sourceCol, row: nearestPlayableSourceRow(board, sourceCol, cell.coord.row) },
+        to: cell.coord,
+        isPath: cell.isPath,
+        movementKind: 'slide' as const,
+      };
+    });
+}
+
+function hasVoidCells(board: Board): boolean {
+  return board.some((row) => row.some((cell) => cell.isVoid));
+}
+
+function isBlockedByVoidAbove(board: Board, coord: CellCoord): boolean {
+  for (let row = 0; row < coord.row; row += 1) {
+    if (board[row][coord.col].isVoid) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function chooseAdjacentSourceColumn(board: Board, target: CellCoord): number {
+  const left = target.col - 1;
+  const right = target.col + 1;
+  const candidates = (target.row + target.col) % 2 === 0 ? [left, right] : [right, left];
+  for (const col of candidates) {
+    if (col >= 0 && col < BOARD_SIZE && board.some((row) => !row[col].isVoid)) {
+      return col;
+    }
+  }
+
+  return Math.max(0, Math.min(BOARD_SIZE - 1, target.col === 0 ? 1 : target.col - 1));
+}
+
+function nearestPlayableSourceRow(board: Board, col: number, targetRow: number): number {
+  for (let row = targetRow - 1; row >= 0; row -= 1) {
+    if (!board[row][col].isVoid) {
+      return row;
+    }
+  }
+
+  for (let row = targetRow; row < BOARD_SIZE; row += 1) {
+    if (!board[row][col].isVoid) {
+      return row;
+    }
+  }
+
+  return -1;
 }
 
 function sortSnapshotCells<T extends BoardAnimationSnapshotCell>(cells: readonly T[]): T[] {

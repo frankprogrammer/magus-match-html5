@@ -25,10 +25,16 @@ export interface BoardVisualCueState {
   text?: string;
 }
 
+export interface BoardEmptyCellVisualState {
+  coord: CellCoord;
+  assetId: string;
+}
+
 export interface BoardRenderState {
   logicalWidth: number;
   logicalHeight: number;
   boardCells: readonly BoardCellVisualState[];
+  emptyCells?: readonly BoardEmptyCellVisualState[];
   pathCells: readonly CellCoord[];
   mageCell: CellCoord | null;
   goalCell: CellCoord | null;

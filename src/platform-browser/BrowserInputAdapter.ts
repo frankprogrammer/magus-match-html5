@@ -58,6 +58,22 @@ export function parseDebugLevelType(search: string): LevelType | undefined {
   return value === 'TRIAL' || value === 'JOURNEY' ? value : undefined;
 }
 
+export function parseDebugLevelNumber(search: string): number | undefined {
+  const params = new URLSearchParams(search);
+  const rawLevel = params.get('level');
+  if (rawLevel == null || rawLevel.trim() === '') {
+    return undefined;
+  }
+
+  const parsed = Number(rawLevel);
+  if (!Number.isFinite(parsed)) {
+    return undefined;
+  }
+
+  const level = Math.trunc(parsed);
+  return level >= 1 ? level : undefined;
+}
+
 export class BrowserInputAdapter {
   private commands: GameInputCommand[] = [];
   private dragStartCell: CellCoord | null = null;

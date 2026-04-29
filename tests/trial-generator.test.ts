@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { countValidMoves } from '../src/board/BoardRules';
+import { detectMatches } from '../src/board/MatchDetection';
 import { getTrialDifficultyConfig } from '../src/generator/DifficultyTable';
 import { generateTrialLevel } from '../src/generator/TrialGenerator';
+import { getTrialEmptyCellBudget } from '../src/generator/TrialEmptyPatterns';
 
 describe('TrialGenerator', () => {
   it('generates deterministic Trial levels from the same seed', () => {
@@ -38,4 +41,49 @@ describe('TrialGenerator', () => {
     expect(level.trial.waveManifest.map((monster) => monster.spawnTimeMs)).toEqual([0, 1200, 2400]);
     expect(level.trial.waveManifest.every((monster) => monster.laneId >= 0 && monster.laneId < 5)).toBe(true);
   });
+
+  it('adds no Trial empty cells at difficulty 1', () => {
+    const level = generateTrialLevel({ difficulty: 1, seed: 777 });
+
+    expect(countVoidCells(level)).toBe(0);
+    expect(detectMatches(level.initialBoard)).toHaveLength(0);
+    expect(countValidMoves(level.initialBoard)).toBeGreaterThanOrEqual(3);
+  });
+
+  it.each([
+    [2, 2],
+    [4, 4],
+    [8, 6],
+    [12, 8],
+  ])('generates deterministic symmetric empty cells for difficulty %s', (difficulty, maxCount) => {
+    const first = generateTrialLevel({ difficulty, seed: 2345 });
+    const second = generateTrialLevel({ difficulty, seed: 2345 });
+    const voidCells = getVoidCells(first);
+
+    expect(getTrialEmptyCellBudget(difficulty)).toBe(maxCount);
+    expect(voidCells).toEqual(getVoidCells(second));
+    expect(voidCells.length).toBeGreaterThan(0);
+    expect(voidCells.length).toBeLessThanOrEqual(8);
+    expect(voidCells.length).toBeLessThanOrEqual(maxCount);
+    expect(isHorizontallySymmetric(voidCells)).toBe(true);
+    expect(detectMatches(first.initialBoard)).toHaveLength(0);
+    expect(countValidMoves(first.initialBoard)).toBeGreaterThanOrEqual(3);
+  });
 });
+
+function countVoidCells(level: ReturnType<typeof generateTrialLevel>): number {
+  return getVoidCells(level).length;
+}
+
+function getVoidCells(level: ReturnType<typeof generateTrialLevel>) {
+  return level.initialBoard
+    .flatMap((row, rowIndex) =>
+      row.map((cell, colIndex) => (cell.isVoid ? { col: colIndex, row: rowIndex } : null)),
+    )
+    .filter((coord): coord is { col: number; row: number } => coord != null);
+}
+
+function isHorizontallySymmetric(coords: readonly { col: number; row: number }[]): boolean {
+  const keys = new Set(coords.map((coord) => `${coord.col},${coord.row}`));
+  return coords.every((coord) => keys.has(`${7 - coord.col},${coord.row}`));
+}

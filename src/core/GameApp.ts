@@ -14,7 +14,7 @@ import type { CellCoord } from './Layout';
 import { createRandomSeed, SeededRng } from './Rng';
 import type { GamePhase, LevelType, RunState } from './Types';
 import type { Board } from '../board/Board';
-import { cloneBoard, createEmptyBoard, getAllPlayableCoords } from '../board/Board';
+import { cloneBoard, createEmptyBoard, getAllPlayableCoords, getVoidCoords } from '../board/Board';
 import {
   createLevelIntroBoardAnimationTrace,
   stampBoardAnimationTrace,
@@ -77,6 +77,7 @@ export interface GameApp {
 
 export interface MagusMatchGameAppOptions {
   debugLevelType?: LevelType;
+  debugStartLevel?: number;
 }
 
 interface RuntimeBoardVisualCue extends Omit<BoardVisualCueState, 'value'> {
@@ -175,6 +176,10 @@ export class MagusMatchGameApp implements GameApp {
           };
         })
         .filter((cell) => cell != null),
+      emptyCells: getVoidCoords(this.board).map((coord) => ({
+        coord,
+        assetId: AssetIds.tiles.empty,
+      })),
       pathCells: getAllPlayableCoords(this.board).filter((coord) => this.board[coord.row][coord.col].isPath),
       mageCell: this.journeyRuntime?.mageCell ?? null,
       goalCell: this.currentLevel?.type === 'JOURNEY' ? this.currentLevel.journey.goalCell : null,
@@ -249,6 +254,15 @@ export class MagusMatchGameApp implements GameApp {
   reset(seed = createRandomSeed()): void {
     this.rng = new SeededRng(seed);
     this.run = createInitialRunState(seed);
+    if (this.options.debugStartLevel != null && this.options.debugStartLevel > 1) {
+      const debugLevel = Math.floor(this.options.debugStartLevel);
+      this.run = {
+        ...this.run,
+        levelNumber: debugLevel,
+        difficulty: debugLevel,
+        levelsCleared: debugLevel - 1,
+      };
+    }
     this.prepareCurrentLevel();
     this.elapsedSec = 0;
     this.transitionTimerSec = 0;

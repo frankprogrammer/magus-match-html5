@@ -6,6 +6,7 @@ export const AssetIds = {
     earth: 'tile.earth',
     land: 'tile.land',
     path: 'tile.path',
+    empty: 'tile.empty',
   },
   powerUps: {
     rocketH: 'power.rocketH',

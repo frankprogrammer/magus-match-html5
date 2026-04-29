@@ -155,7 +155,6 @@ export function buildBoardAnimationCascadeStep(
   const beforeGravityById = snapshotCellsById(beforeGravitySnapshot);
   const afterGravityById = snapshotCellsById(afterGravitySnapshot);
   const afterGravityIds = new Set(afterGravitySnapshot.cells.map((cell) => cell.tileId));
-  const finalById = snapshotCellsById(finalSnapshot);
 
   const clearedTiles = uniqueCoords(clearedCoords)
     .map((coord) => beforeClearByCoord.get(coordKey(coord)))
@@ -184,20 +183,8 @@ export function buildBoardAnimationCascadeStep(
 
   const refillCells = finalSnapshot.cells
     .filter((cell) => !afterGravityIds.has(cell.tileId))
-    .sort((first, second) => first.coord.col - second.coord.col || first.coord.row - second.coord.row);
-  const refillIndexByColumn = new Map<number, number>();
-  const refillTiles = refillCells.map((cell) => {
-    const columnIndex = refillIndexByColumn.get(cell.coord.col) ?? 0;
-    refillIndexByColumn.set(cell.coord.col, columnIndex + 1);
-    const finalCell = finalById.get(cell.tileId) ?? cell;
-    return {
-      tileId: finalCell.tileId,
-      tileType: finalCell.tileType,
-      from: { col: finalCell.coord.col, row: -1 - Math.min(1, columnIndex) },
-      to: finalCell.coord,
-      isPath: finalCell.isPath,
-    };
-  });
+    .sort((first, second) => first.coord.col - second.coord.col || second.coord.row - first.coord.row);
+  const refillTiles = buildStackedRefillTiles(refillCells);
 
   return {
     stepIndex,
@@ -231,6 +218,21 @@ function snapshotCellsByCoord(snapshot: BoardAnimationSnapshot): Map<string, Boa
 
 function snapshotCellsById(snapshot: BoardAnimationSnapshot): Map<string, BoardAnimationSnapshotCell> {
   return new Map(snapshot.cells.map((cell) => [cell.tileId, cell]));
+}
+
+function buildStackedRefillTiles(refillCells: readonly BoardAnimationSnapshotCell[]): BoardAnimationRefill[] {
+  const refillIndexByColumn = new Map<number, number>();
+  return refillCells.map((cell) => {
+    const columnIndex = refillIndexByColumn.get(cell.coord.col) ?? 0;
+    refillIndexByColumn.set(cell.coord.col, columnIndex + 1);
+    return {
+      tileId: cell.tileId,
+      tileType: cell.tileType,
+      from: { col: cell.coord.col, row: -1 - columnIndex },
+      to: cell.coord,
+      isPath: cell.isPath,
+    };
+  });
 }
 
 function sortSnapshotCells<T extends BoardAnimationSnapshotCell>(cells: readonly T[]): T[] {

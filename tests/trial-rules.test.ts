@@ -145,6 +145,36 @@ describe('TrialRules', () => {
     expect(result.animationTrace?.cascadeSteps[0].clearedTiles.some((tile) => (tile.clearDelayMs ?? 0) > 0)).toBe(true);
   });
 
+  it('stacks full-column Trial vertical rocket refills above the board', () => {
+    const board = createBoardFromTileTypes([
+      ['ROCKET_V', 'FIRE', 'ICE', 'EARTH', 'LIGHTNING', 'FIRE', 'ICE', 'EARTH'],
+      ['FIRE', 'ICE', 'EARTH', 'LIGHTNING', 'FIRE', 'ICE', 'EARTH', 'LIGHTNING'],
+      ['ICE', 'EARTH', 'LIGHTNING', 'FIRE', 'ICE', 'EARTH', 'LIGHTNING', 'FIRE'],
+      ['EARTH', 'LIGHTNING', 'FIRE', 'ICE', 'EARTH', 'LIGHTNING', 'FIRE', 'ICE'],
+      ['LIGHTNING', 'FIRE', 'ICE', 'EARTH', 'LIGHTNING', 'FIRE', 'ICE', 'EARTH'],
+      ['FIRE', 'ICE', 'EARTH', 'LIGHTNING', 'FIRE', 'ICE', 'EARTH', 'LIGHTNING'],
+      ['ICE', 'EARTH', 'LIGHTNING', 'FIRE', 'ICE', 'EARTH', 'LIGHTNING', 'FIRE'],
+      ['EARTH', 'LIGHTNING', 'FIRE', 'ICE', 'EARTH', 'LIGHTNING', 'FIRE', 'ICE'],
+    ]);
+    const level = testTrialLevel([monster({ monsterId: 'a', maxHp: 50 })], board);
+    const runtime = createTrialRuntime(level);
+
+    const result = processTrialPowerUpActivation(board, runtime, level, { col: 0, row: 0 }, new SeededRng(49));
+    const columnRefills = result.animationTrace?.cascadeSteps[0].refillTiles.filter((refill) => refill.to.col === 0) ?? [];
+
+    expect(result.valid).toBe(true);
+    expect(columnRefills.map((refill) => ({ toRow: refill.to.row, fromRow: refill.from.row }))).toEqual([
+      { toRow: 0, fromRow: -8 },
+      { toRow: 1, fromRow: -7 },
+      { toRow: 2, fromRow: -6 },
+      { toRow: 3, fromRow: -5 },
+      { toRow: 4, fromRow: -4 },
+      { toRow: 5, fromRow: -3 },
+      { toRow: 6, fromRow: -2 },
+      { toRow: 7, fromRow: -1 },
+    ]);
+  });
+
   it('taps a Trial TNT as a valid action with blast animation and damage', () => {
     const board = createBoardFromTileTypes([
       ['FIRE', 'ICE', 'EARTH'],

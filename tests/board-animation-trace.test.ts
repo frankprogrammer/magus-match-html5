@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createBoardFromTileTypes } from '../src/board/Board';
-import { createLevelIntroBoardAnimationTrace } from '../src/board/BoardAnimationTrace';
+import { buildBoardAnimationCascadeStep, createLevelIntroBoardAnimationTrace } from '../src/board/BoardAnimationTrace';
 import { resolveCascades } from '../src/board/Cascade';
 import { SeededRng } from '../src/core/Rng';
 import type { CellCoord } from '../src/core/Layout';
@@ -101,6 +101,69 @@ describe('board animation traces', () => {
       step.refillTiles.find((refill) => refill.to.row === 1)?.from.row ?? 0,
     );
     expect(trace.finalSnapshot.cells).toHaveLength(4);
+  });
+
+  it('stacks full-column cascade refills above the board from bottom to top', () => {
+    const beforeClearBoard = createBoardFromTileTypes([
+      ['FIRE'],
+      ['ICE'],
+      ['EARTH'],
+      ['LIGHTNING'],
+      ['FIRE'],
+      ['ICE'],
+      ['EARTH'],
+      ['LIGHTNING'],
+    ]);
+    const emptyBoard = createBoardFromTileTypes([]);
+    const finalBoard = createBoardFromTileTypes([
+      ['ICE'],
+      ['EARTH'],
+      ['LIGHTNING'],
+      ['FIRE'],
+      ['ICE'],
+      ['EARTH'],
+      ['LIGHTNING'],
+      ['FIRE'],
+    ]);
+
+    const step = buildBoardAnimationCascadeStep(
+      0,
+      beforeClearBoard,
+      emptyBoard,
+      emptyBoard,
+      finalBoard,
+      Array.from({ length: 8 }, (_, row) => ({ col: 0, row })),
+    );
+    const columnRefills = step.refillTiles.filter((refill) => refill.to.col === 0);
+
+    expect(columnRefills.map((refill) => ({ toRow: refill.to.row, fromRow: refill.from.row }))).toEqual([
+      { toRow: 0, fromRow: -8 },
+      { toRow: 1, fromRow: -7 },
+      { toRow: 2, fromRow: -6 },
+      { toRow: 3, fromRow: -5 },
+      { toRow: 4, fromRow: -4 },
+      { toRow: 5, fromRow: -3 },
+      { toRow: 6, fromRow: -2 },
+      { toRow: 7, fromRow: -1 },
+    ]);
+  });
+
+  it('stacks partial cascade refills above the board from the lowest destination first', () => {
+    const emptyBoard = createBoardFromTileTypes([]);
+    const finalBoard = createBoardFromTileTypes([
+      ['FIRE'],
+      ['ICE'],
+      ['EARTH'],
+    ]);
+
+    const step = buildBoardAnimationCascadeStep(0, emptyBoard, emptyBoard, emptyBoard, finalBoard, []);
+    const columnRefills = step.refillTiles.filter((refill) => refill.to.col === 0);
+
+    expect(columnRefills.map((refill) => ({ toRow: refill.to.row, fromRow: refill.from.row }))).toEqual([
+      { toRow: 0, fromRow: -3 },
+      { toRow: 1, fromRow: -2 },
+      { toRow: 2, fromRow: -1 },
+    ]);
   });
 });
 

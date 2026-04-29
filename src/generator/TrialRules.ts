@@ -1,7 +1,13 @@
 import type { Board } from '../board/Board';
-import type { BoardAnimationTrace } from '../board/BoardAnimationTrace';
+import {
+  buildBoardAnimationCascadeStep,
+  createBoardAnimationTrace,
+  type BoardAnimationTrace,
+  type BoardAnimationTraceOptions,
+} from '../board/BoardAnimationTrace';
 import {
   cloneBoard,
+  coordKey,
   createTileIdFactory,
   fillEmptyCellsWithStandardTiles,
   getCell,
@@ -10,7 +16,12 @@ import {
 import { validateSwap } from '../board/BoardRules';
 import { applyGravity, resolveCascades, type CascadeResult } from '../board/Cascade';
 import type { MatchGroup } from '../board/MatchDetection';
-import { detonatePowerUp, type PowerUpDetonation } from '../board/PowerUps';
+import {
+  detonatePowerUp,
+  isTapActivatablePowerUpTileType,
+  selectLightballTapTargetType,
+  type PowerUpDetonation,
+} from '../board/PowerUps';
 import {
   isMatchableTileType,
   isPowerUpTileType,
@@ -89,6 +100,12 @@ interface PowerUpActivation {
   targetType?: MatchableTileType;
 }
 
+interface TrialPowerUpBoardResolution {
+  cascadeResult: CascadeResult;
+  detonation: PowerUpDetonation;
+  animationTrace?: BoardAnimationTrace;
+}
+
 export function createTrialRuntime(level: GeneratedTrialLevel): TrialRuntimeState {
   return spawnDueMonsters(
     {
@@ -160,25 +177,25 @@ export function processTrialSwap(
   const nextTileId = createTileIdFactory('trial-cascade-tile');
   const damageSources: TrialDamageSource[] = [];
   let cascadeResult: CascadeResult;
+  let animationTrace: BoardAnimationTrace | undefined;
 
   if (powerUpActivation != null) {
-    const detonation = detonatePowerUp(swappedBoard, powerUpActivation.originAfterSwap, {
-      lightballTargetType: powerUpActivation.targetType,
-    });
-    clearDetonatedCells(swappedBoard, detonation);
-    damageSources.push(powerUpDamageSource(level, detonation, powerUpActivation.targetType));
-    applyGravity(swappedBoard);
-    fillEmptyCellsWithStandardTiles(swappedBoard, rng, nextTileId);
-    cascadeResult = resolveCascades(swappedBoard, rng, {
-      preferredSpawnCell: to,
+    const powerUpResolution = resolveTrialPowerUpBoard(
+      swappedBoard,
+      rng,
       nextTileId,
-      animation: {
+      powerUpActivation.originAfterSwap,
+      {
         revisionId: 0,
         preSwapBoard,
         postSwapBoard,
         swappedCells: { from, to },
       },
-    });
+      powerUpActivation.targetType,
+    );
+    damageSources.push(powerUpDamageSource(level, powerUpResolution.detonation, powerUpActivation.targetType));
+    cascadeResult = powerUpResolution.cascadeResult;
+    animationTrace = powerUpResolution.animationTrace;
   } else {
     cascadeResult = resolveCascades(swappedBoard, rng, {
       preferredSpawnCell: to,
@@ -190,6 +207,7 @@ export function processTrialSwap(
         swappedCells: { from, to },
       },
     });
+    animationTrace = cascadeResult.animationTrace;
   }
 
   damageSources.push(...cascadeDamageSources(level, cascadeResult));
@@ -204,8 +222,59 @@ export function processTrialSwap(
     scoreDelta: damageApplication.scoreDelta,
     damageEvents: damageApplication.damageEvents,
     scoringStats: createSwapScoringStats(matchCount, powerUpsCreated),
-    animationTrace: cascadeResult.animationTrace,
+    animationTrace,
   };
+}
+
+export function processTrialPowerUpActivation(
+  board: Board,
+  runtime: TrialRuntimeState,
+  level: GeneratedTrialLevel,
+  origin: CellCoord,
+  rng: SeededRng,
+): TrialSwapResult {
+  const tapActivation = getTapPowerUpActivation(board, origin);
+  if (runtime.result !== 'playing' || tapActivation == null) {
+    return invalidTrialSwap(board, runtime);
+  }
+
+  const nextTileId = createTileIdFactory('trial-powerup-cascade-tile');
+  const powerUpResolution = resolveTrialPowerUpBoard(board, rng, nextTileId, origin, {
+    revisionId: 0,
+    preSwapBoard: board,
+    postSwapBoard: board,
+    swappedCells: null,
+  }, tapActivation.targetType);
+  const damageSources = [
+    powerUpDamageSource(level, powerUpResolution.detonation, tapActivation.targetType),
+    ...cascadeDamageSources(level, powerUpResolution.cascadeResult),
+  ];
+  const damageApplication = applyDamageSources(runtime, level, damageSources);
+  const matchCount = 1 + powerUpResolution.cascadeResult.steps.reduce((sum, step) => sum + step.matches.length, 0);
+  const powerUpsCreated = powerUpResolution.cascadeResult.steps.reduce(
+    (sum, step) => sum + step.spawnedPowerUps.length,
+    0,
+  );
+
+  return {
+    valid: true,
+    board: powerUpResolution.cascadeResult.board,
+    runtime: damageApplication.runtime,
+    scoreDelta: damageApplication.scoreDelta,
+    damageEvents: damageApplication.damageEvents,
+    scoringStats: createSwapScoringStats(matchCount, powerUpsCreated),
+    animationTrace: powerUpResolution.animationTrace,
+  };
+}
+
+export function processTrialRocketActivation(
+  board: Board,
+  runtime: TrialRuntimeState,
+  level: GeneratedTrialLevel,
+  origin: CellCoord,
+  rng: SeededRng,
+): TrialSwapResult {
+  return processTrialPowerUpActivation(board, runtime, level, origin, rng);
 }
 
 export function selectNearestAliveMonster(
@@ -393,6 +462,55 @@ function createProjectile(
   };
 }
 
+function resolveTrialPowerUpBoard(
+  board: Board,
+  rng: SeededRng,
+  nextTileId: () => string,
+  origin: CellCoord,
+  animation: BoardAnimationTraceOptions,
+  lightballTargetType?: MatchableTileType,
+): TrialPowerUpBoardResolution {
+  const workingBoard = cloneBoard(board);
+  const detonation = detonatePowerUp(workingBoard, origin, { lightballTargetType });
+  const beforeClearBoard = cloneBoard(workingBoard);
+  clearDetonatedCells(workingBoard, detonation);
+  const beforeGravityBoard = cloneBoard(workingBoard);
+  applyGravity(workingBoard);
+  const afterGravityBoard = cloneBoard(workingBoard);
+  fillEmptyCellsWithStandardTiles(workingBoard, rng, nextTileId);
+  const finalDetonationBoard = cloneBoard(workingBoard);
+  const initialStep = buildBoardAnimationCascadeStep(
+    0,
+    beforeClearBoard,
+    beforeGravityBoard,
+    afterGravityBoard,
+    finalDetonationBoard,
+    detonation.clearedCells,
+    clearDelayMap(detonation),
+  );
+  const cascadeResult = resolveCascades(workingBoard, rng, {
+    preferredSpawnCell: origin,
+    nextTileId,
+    animation,
+  });
+
+  return {
+    cascadeResult,
+    detonation,
+    animationTrace: createBoardAnimationTrace(
+      animation,
+      [
+        initialStep,
+        ...(cascadeResult.animationTrace?.cascadeSteps.map((step, index) => ({
+          ...step,
+          stepIndex: index + 1,
+        })) ?? []),
+      ],
+      cascadeResult.board,
+    ),
+  };
+}
+
 function clearDetonatedCells(board: Board, detonation: PowerUpDetonation): void {
   for (const coord of detonation.clearedCells) {
     const cell = getCell(board, coord);
@@ -400,6 +518,10 @@ function clearDetonatedCells(board: Board, detonation: PowerUpDetonation): void 
       cell.tile = null;
     }
   }
+}
+
+function clearDelayMap(detonation: PowerUpDetonation): ReadonlyMap<string, number> {
+  return new Map(detonation.clearTimings.map((timing) => [coordKey(timing.coord), timing.clearDelayMs]));
 }
 
 function getPowerUpActivation(board: Board, from: CellCoord, to: CellCoord): PowerUpActivation | null {
@@ -427,6 +549,20 @@ function getPowerUpActivation(board: Board, from: CellCoord, to: CellCoord): Pow
 
 function matchableTargetType(type?: TileType): MatchableTileType | undefined {
   return type != null && isMatchableTileType(type) ? type : undefined;
+}
+
+function getTapPowerUpActivation(board: Board, origin: CellCoord): { targetType?: MatchableTileType } | null {
+  const type = getCell(board, origin)?.tile?.type;
+  if (!isTapActivatablePowerUpTileType(type)) {
+    return null;
+  }
+
+  if (type === 'LIGHTBALL') {
+    const targetType = selectLightballTapTargetType(board, origin);
+    return targetType == null ? null : { targetType };
+  }
+
+  return {};
 }
 
 function spawnDueMonsters(runtime: TrialRuntimeState, level: GeneratedTrialLevel): TrialRuntimeState {

@@ -8,7 +8,9 @@ import {
   advanceMageOneStep,
   createJourneyRuntime,
   getVisibleJourneyHintCells,
+  processJourneyPowerUpActivation,
   processJourneySwap,
+  processJourneyRocketActivation,
   resolveJourneyBoard,
 } from '../src/generator/JourneyRules';
 
@@ -108,6 +110,115 @@ describe('Journey rules', () => {
 
     expect(result.runtime.movesRemaining).toBe(0);
     expect(result.runtime.result).toBe('lost');
+  });
+
+  it('taps a Journey rocket as a valid move and converts LAND in the sweep', () => {
+    const level = testLevel({ moveBudget: 20, goalCell: { col: 7, row: 7 } });
+    const board = createBoardFromTileTypes([
+      ['ROCKET_H', 'FIRE', 'ICE', 'LAND'],
+      ['ICE', 'EARTH', 'FIRE', 'ICE'],
+    ]);
+    board[0][0].isPath = true;
+    const runtime = createJourneyRuntime(level);
+
+    const result = processJourneyRocketActivation(board, runtime, level, { col: 0, row: 0 }, new SeededRng(15));
+
+    expect(result.valid).toBe(true);
+    expect(result.runtime.movesRemaining).toBe(19);
+    expect(result.convertedPathCells).toContainEqual({ col: 3, row: 0 });
+    expect(result.clearedStandardCells.length).toBeGreaterThan(0);
+    expect(result.animationTrace?.cascadeSteps[0].clearedTiles.some((tile) => (tile.clearDelayMs ?? 0) > 0)).toBe(true);
+  });
+
+  it('taps a Journey TNT as a valid move and converts LAND in the blast', () => {
+    const level = testLevel({ moveBudget: 20, goalCell: { col: 7, row: 7 } });
+    const board = createBoardFromTileTypes([
+      ['FIRE', 'ICE', 'EARTH'],
+      ['LAND', 'TNT', 'LIGHTNING'],
+      ['ICE', 'EARTH', 'FIRE'],
+    ]);
+    board[0][0].isPath = true;
+    const runtime = createJourneyRuntime(level);
+
+    const result = processJourneyPowerUpActivation(board, runtime, level, { col: 1, row: 1 }, new SeededRng(16));
+
+    expect(result.valid).toBe(true);
+    expect(result.runtime.movesRemaining).toBe(19);
+    expect(result.convertedPathCells).toContainEqual({ col: 0, row: 1 });
+    expect(result.clearedStandardCells.length).toBeGreaterThan(0);
+    expect(result.animationTrace?.cascadeSteps[0].clearedTiles.find((tile) => tile.clearDelayMs === 0)?.coord).toEqual({
+      col: 1,
+      row: 1,
+    });
+    expect(result.animationTrace?.cascadeSteps[0].clearedTiles.some((tile) => (tile.clearDelayMs ?? 0) > 0)).toBe(true);
+  });
+
+  it('taps a Journey Lightball using the adjacent color with the highest board count', () => {
+    const level = testLevel({ moveBudget: 20, goalCell: { col: 7, row: 7 } });
+    const board = createBoardFromTileTypes([
+      [null, 'FIRE', null],
+      ['FIRE', 'LIGHTBALL', 'ICE'],
+      [null, 'ICE', null],
+      [null, 'ICE', null],
+    ]);
+    board[0][0].isPath = true;
+    const runtime = createJourneyRuntime(level);
+
+    const result = processJourneyPowerUpActivation(board, runtime, level, { col: 1, row: 1 }, new SeededRng(19));
+
+    expect(result.valid).toBe(true);
+    expect(result.runtime.movesRemaining).toBe(19);
+    expect(result.animationTrace?.cascadeSteps[0].clearedTiles.map((tile) => tile.coord)).toEqual([
+      { col: 1, row: 1 },
+      { col: 2, row: 1 },
+      { col: 1, row: 2 },
+      { col: 1, row: 3 },
+    ]);
+    expect(result.clearedStandardCells).toContainEqual({ col: 2, row: 1 });
+  });
+
+  it('ignores Journey Lightball taps without an adjacent standard color', () => {
+    const level = testLevel({ moveBudget: 20, goalCell: { col: 7, row: 7 } });
+    const board = createBoardFromTileTypes([
+      [null, 'TNT', null],
+      ['LAND', 'LIGHTBALL', 'ROCKET_H'],
+      [null, 'ROCKET_V', null],
+    ]);
+    board[0][0].isPath = true;
+    const runtime = createJourneyRuntime(level);
+
+    const result = processJourneyPowerUpActivation(board, runtime, level, { col: 1, row: 1 }, new SeededRng(20));
+
+    expect(result.valid).toBe(false);
+    expect(result.runtime.movesRemaining).toBe(20);
+    expect(result.board).toBe(board);
+  });
+
+  it('activates a swapped Journey TNT at its landing cell', () => {
+    const level = testLevel({ moveBudget: 20, goalCell: { col: 7, row: 7 } });
+    const board = createBoardFromTileTypes([['TNT', 'FIRE'], ['ICE', 'EARTH']]);
+    board[0][0].isPath = true;
+    const runtime = createJourneyRuntime(level);
+
+    const result = processJourneySwap(board, runtime, level, { col: 0, row: 0 }, { col: 1, row: 0 }, new SeededRng(17));
+
+    expect(result.valid).toBe(true);
+    expect(result.animationTrace?.cascadeSteps[0].clearedTiles.find((tile) => tile.clearDelayMs === 0)?.coord).toEqual({
+      col: 1,
+      row: 0,
+    });
+  });
+
+  it('ignores non-power-up Journey taps', () => {
+    const level = testLevel({ moveBudget: 20, goalCell: { col: 7, row: 7 } });
+    const board = createBoardFromTileTypes([['FIRE', 'ICE', 'EARTH']]);
+    board[0][0].isPath = true;
+    const runtime = createJourneyRuntime(level);
+
+    const result = processJourneyPowerUpActivation(board, runtime, level, { col: 0, row: 0 }, new SeededRng(18));
+
+    expect(result.valid).toBe(false);
+    expect(result.runtime.movesRemaining).toBe(20);
   });
 
   it('shows the first hint only after the delay when no move has been made', () => {

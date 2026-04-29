@@ -89,10 +89,13 @@ export class BrowserInputAdapter {
   private readonly onPointerUp = (event: PointerEvent): void => {
     const logicalPoint = this.eventToLogicalPoint(event);
     this.commands.push({ type: 'dragEnd', x: logicalPoint.x, y: logicalPoint.y });
-    this.commands.push({ type: 'tap', x: logicalPoint.x, y: logicalPoint.y });
+    const isTap = isTapGesture(this.dragStartPoint, logicalPoint);
+    if (isTap) {
+      this.commands.push({ type: 'tap', x: logicalPoint.x, y: logicalPoint.y });
+    }
 
     const endCell = logicalPointToBoardCell(logicalPoint);
-    if (this.dragStartCell != null && endCell != null && !isTapGesture(this.dragStartPoint, logicalPoint)) {
+    if (this.dragStartCell != null && endCell != null && !isTap) {
       const dCol = endCell.col - this.dragStartCell.col;
       const dRow = endCell.row - this.dragStartCell.row;
       if (Math.abs(dCol) + Math.abs(dRow) === 1) {

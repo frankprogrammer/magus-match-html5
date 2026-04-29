@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createBoardFromTileTypes } from '../src/board/Board';
+import { createLevelIntroBoardAnimationTrace } from '../src/board/BoardAnimationTrace';
 import { resolveCascades } from '../src/board/Cascade';
 import { SeededRng } from '../src/core/Rng';
 import type { CellCoord } from '../src/core/Layout';
@@ -77,6 +78,29 @@ describe('board animation traces', () => {
     expect(result.valid).toBe(true);
     expect(result.damageEvents.length).toBeGreaterThan(0);
     expect(result.animationTrace?.cascadeSteps.length).toBeGreaterThan(0);
+  });
+
+  it('creates an empty-to-refill level intro trace for initial boards', () => {
+    const board = createBoardFromTileTypes([
+      ['FIRE', 'ICE'],
+      ['EARTH', 'LIGHTNING'],
+    ]);
+
+    const trace = createLevelIntroBoardAnimationTrace(board, 12);
+    const step = trace.cascadeSteps[0];
+
+    expect(trace.kind).toBe('levelIntro');
+    expect(trace.revisionId).toBe(12);
+    expect(trace.preSwapSnapshot.cells).toEqual([]);
+    expect(trace.postSwapSnapshot.cells).toEqual([]);
+    expect(step.clearedTiles).toEqual([]);
+    expect(step.fallingTiles).toEqual([]);
+    expect(step.refillTiles).toHaveLength(4);
+    expect(step.refillTiles.every((refill) => refill.from.row < 0)).toBe(true);
+    expect(step.refillTiles.find((refill) => refill.to.row === 0)?.from.row).toBeLessThan(
+      step.refillTiles.find((refill) => refill.to.row === 1)?.from.row ?? 0,
+    );
+    expect(trace.finalSnapshot.cells).toHaveLength(4);
   });
 });
 

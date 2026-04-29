@@ -16,6 +16,7 @@ import {
   createTileIdFactory,
   fillEmptyCellsWithStandardTiles,
   getAllPlayableCoords,
+  getCell,
   swapTilesInPlace,
   uniqueCoords,
 } from '../board/Board';
@@ -23,7 +24,13 @@ import type { Board, TileIdFactory } from '../board/Board';
 import { validateSwap } from '../board/BoardRules';
 import { applyGravity } from '../board/Cascade';
 import { detectMatches, type MatchGroup } from '../board/MatchDetection';
-import { isStandardTileType } from '../board/TileTypes';
+import {
+  detonatePowerUp,
+  isTapActivatablePowerUpTileType,
+  selectLightballTapTargetType,
+  type PowerUpDetonation,
+} from '../board/PowerUps';
+import { isMatchableTileType, isStandardTileType, type MatchableTileType, type TileType } from '../board/TileTypes';
 import { FIRST_MATCH_HINT_DELAY_MS } from '../data/tuning';
 import { createSwapScoringStats, EMPTY_SWAP_SCORING_STATS, type SwapScoringStats } from '../run/Scoring';
 import type { GeneratedJourneyLevel } from './JourneyGenerator';
@@ -74,18 +81,70 @@ export function processJourneySwap(
     return invalidJourneySwap(board, runtime);
   }
 
+  const powerUpActivation = getTapActivatablePowerUpSwapActivation(board, from, to);
   const swappedBoard = cloneBoard(board);
   swapTilesInPlace(swappedBoard, from, to);
 
-  const resolution = resolveJourneyBoard(swappedBoard, rng, {
-    preferredSpawnCell: to,
-    animation: {
-      revisionId: 0,
-      preSwapBoard: board,
-      postSwapBoard: swappedBoard,
-      swappedCells: { from, to },
-    },
-  });
+  const animation = {
+    revisionId: 0,
+    preSwapBoard: board,
+    postSwapBoard: swappedBoard,
+    swappedCells: { from, to },
+  };
+  const resolution = powerUpActivation == null
+    ? resolveJourneyBoard(swappedBoard, rng, {
+        preferredSpawnCell: to,
+        animation,
+      })
+    : resolveJourneyPowerUpActivation(
+        swappedBoard,
+        rng,
+        powerUpActivation.originAfterSwap,
+        animation,
+        powerUpActivation.targetType,
+      );
+
+  return finishJourneyAction(runtime, level, resolution, powerUpActivation == null ? 0 : 1);
+}
+
+export function processJourneyPowerUpActivation(
+  board: Board,
+  runtime: JourneyRuntimeState,
+  level: GeneratedJourneyLevel,
+  origin: CellCoord,
+  rng: SeededRng,
+): JourneySwapResult {
+  const tapActivation = getTapPowerUpActivation(board, origin);
+  if (runtime.result !== 'playing' || tapActivation == null) {
+    return invalidJourneySwap(board, runtime);
+  }
+
+  const resolution = resolveJourneyPowerUpActivation(board, rng, origin, {
+    revisionId: 0,
+    preSwapBoard: board,
+    postSwapBoard: board,
+    swappedCells: null,
+  }, tapActivation.targetType);
+
+  return finishJourneyAction(runtime, level, resolution, 1);
+}
+
+export function processJourneyRocketActivation(
+  board: Board,
+  runtime: JourneyRuntimeState,
+  level: GeneratedJourneyLevel,
+  origin: CellCoord,
+  rng: SeededRng,
+): JourneySwapResult {
+  return processJourneyPowerUpActivation(board, runtime, level, origin, rng);
+}
+
+function finishJourneyAction(
+  runtime: JourneyRuntimeState,
+  level: GeneratedJourneyLevel,
+  resolution: JourneyBoardResolution,
+  minimumMatchCount: number,
+): JourneySwapResult {
   const nextMovesRemaining = Math.max(0, runtime.movesRemaining - 1);
   const nextMageCell =
     resolution.convertedPathCells.length > 0
@@ -105,7 +164,7 @@ export function processJourneySwap(
     scoreDelta: resolution.clearedStandardCells.length * 10,
     convertedPathCells: resolution.convertedPathCells,
     clearedStandardCells: resolution.clearedStandardCells,
-    scoringStats: createSwapScoringStats(resolution.matchCount, resolution.powerUpsCreated),
+    scoringStats: createSwapScoringStats(Math.max(minimumMatchCount, resolution.matchCount), resolution.powerUpsCreated),
     animationTrace: resolution.animationTrace,
   };
 }
@@ -189,6 +248,64 @@ export function resolveJourneyBoard(
   throw new Error(`Journey board did not settle after ${maxIterations} iterations.`);
 }
 
+function resolveJourneyPowerUpActivation(
+  board: Board,
+  rng: SeededRng,
+  origin: CellCoord,
+  animation: BoardAnimationTraceOptions,
+  lightballTargetType?: MatchableTileType,
+): JourneyBoardResolution {
+  const workingBoard = cloneBoard(board);
+  const nextTileId = createTileIdFactory('journey-powerup-cascade-tile');
+  const detonation = detonatePowerUp(workingBoard, origin, { lightballTargetType });
+  const beforeClearBoard = cloneBoard(workingBoard);
+  const detonationResult = applyJourneyDetonation(workingBoard, detonation);
+  const beforeGravityBoard = cloneBoard(workingBoard);
+  applyGravity(workingBoard);
+  const afterGravityBoard = cloneBoard(workingBoard);
+  fillEmptyCellsWithStandardTiles(workingBoard, rng, nextTileId);
+  const finalDetonationBoard = cloneBoard(workingBoard);
+  const clearDelayByCoord = clearDelayMap(detonation);
+  const initialStep = buildBoardAnimationCascadeStep(
+    0,
+    beforeClearBoard,
+    beforeGravityBoard,
+    afterGravityBoard,
+    finalDetonationBoard,
+    detonation.clearedCells,
+    clearDelayByCoord,
+  );
+  const cascadeResolution = resolveJourneyBoard(workingBoard, rng, {
+    nextTileId,
+    animation,
+  });
+
+  return {
+    board: cascadeResolution.board,
+    convertedPathCells: uniqueCoords([
+      ...detonationResult.convertedPathCells,
+      ...cascadeResolution.convertedPathCells,
+    ]),
+    clearedStandardCells: uniqueCoords([
+      ...detonationResult.clearedStandardCells,
+      ...cascadeResolution.clearedStandardCells,
+    ]),
+    matchCount: 1 + cascadeResolution.matchCount,
+    powerUpsCreated: cascadeResolution.powerUpsCreated,
+    animationTrace: createBoardAnimationTrace(
+      animation,
+      [
+        initialStep,
+        ...(cascadeResolution.animationTrace?.cascadeSteps.map((step, index) => ({
+          ...step,
+          stepIndex: index + 1,
+        })) ?? []),
+      ],
+      cascadeResolution.board,
+    ),
+  };
+}
+
 export function advanceMageOneStep(board: Board, mageCell: CellCoord, goalCell: CellCoord): CellCoord {
   const connectedPath = getConnectedPathCells(board, mageCell);
   const connectedKeys = new Set(connectedPath.map(coordKey));
@@ -263,6 +380,75 @@ function applyJourneyMatches(
     clearedStandardCells,
     powerUpsCreated,
   };
+}
+
+function applyJourneyDetonation(
+  board: Board,
+  detonation: PowerUpDetonation,
+): { convertedPathCells: CellCoord[]; clearedStandardCells: CellCoord[] } {
+  const convertedPathCells: CellCoord[] = [];
+  const clearedStandardCells: CellCoord[] = [];
+
+  for (const coord of detonation.clearedCells) {
+    const cell = getCell(board, coord);
+    if (cell?.tile == null) {
+      continue;
+    }
+
+    if (cell.tile.type === 'LAND') {
+      cell.isPath = true;
+      convertedPathCells.push(coord);
+    } else if (isStandardTileType(cell.tile.type)) {
+      clearedStandardCells.push(coord);
+    }
+
+    cell.tile = null;
+  }
+
+  return {
+    convertedPathCells,
+    clearedStandardCells,
+  };
+}
+
+function getTapActivatablePowerUpSwapActivation(
+  board: Board,
+  from: CellCoord,
+  to: CellCoord,
+): { originAfterSwap: CellCoord; targetType?: MatchableTileType } | null {
+  const fromType = getCell(board, from)?.tile?.type;
+  const toType = getCell(board, to)?.tile?.type;
+  if (isTapActivatablePowerUpTileType(fromType)) {
+    return { originAfterSwap: to, targetType: matchableTargetType(toType) };
+  }
+
+  if (isTapActivatablePowerUpTileType(toType)) {
+    return { originAfterSwap: from, targetType: matchableTargetType(fromType) };
+  }
+
+  return null;
+}
+
+function getTapPowerUpActivation(board: Board, origin: CellCoord): { targetType?: MatchableTileType } | null {
+  const type = getCell(board, origin)?.tile?.type;
+  if (!isTapActivatablePowerUpTileType(type)) {
+    return null;
+  }
+
+  if (type === 'LIGHTBALL') {
+    const targetType = selectLightballTapTargetType(board, origin);
+    return targetType == null ? null : { targetType };
+  }
+
+  return {};
+}
+
+function matchableTargetType(type?: TileType): MatchableTileType | undefined {
+  return type != null && isMatchableTileType(type) ? type : undefined;
+}
+
+function clearDelayMap(detonation: PowerUpDetonation): ReadonlyMap<string, number> {
+  return new Map(detonation.clearTimings.map((timing) => [coordKey(timing.coord), timing.clearDelayMs]));
 }
 
 function invalidJourneySwap(board: Board, runtime: JourneyRuntimeState): JourneySwapResult {

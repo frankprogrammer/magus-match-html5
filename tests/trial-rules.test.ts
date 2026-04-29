@@ -7,7 +7,9 @@ import { generateTrialLevel } from '../src/generator/TrialGenerator';
 import {
   createTrialRuntime,
   damageMultiplierForMatch,
+  processTrialPowerUpActivation,
   processTrialSwap,
+  processTrialRocketActivation,
   selectNearestAliveMonster,
   updateTrialRuntime,
 } from '../src/generator/TrialRules';
@@ -117,6 +119,139 @@ describe('TrialRules', () => {
     expect(result.valid).toBe(true);
     expect(result.damageEvents.length).toBeGreaterThanOrEqual(3);
     expect(result.damageEvents.slice(0, 3).every((event) => event.schoolId === 'earth')).toBe(true);
+    expect(result.animationTrace?.cascadeSteps[0].clearedTiles.find((tile) => tile.clearDelayMs === 0)?.coord).toEqual({
+      col: 1,
+      row: 0,
+    });
+  });
+
+  it('taps a Trial rocket as a valid action with sweep animation and damage', () => {
+    const board = createBoardFromTileTypes([['ROCKET_V'], ['FIRE'], ['ICE'], ['EARTH']]);
+    const level = testTrialLevel(
+      [
+        monster({ monsterId: 'a', maxHp: 5 }),
+        monster({ monsterId: 'b', maxHp: 5 }),
+        monster({ monsterId: 'c', maxHp: 5 }),
+      ],
+      board,
+    );
+    const runtime = createTrialRuntime(level);
+
+    const result = processTrialRocketActivation(board, runtime, level, { col: 0, row: 0 }, new SeededRng(43));
+
+    expect(result.valid).toBe(true);
+    expect(result.damageEvents.length).toBeGreaterThanOrEqual(3);
+    expect(result.scoringStats.validSwapCount).toBe(1);
+    expect(result.animationTrace?.cascadeSteps[0].clearedTiles.some((tile) => (tile.clearDelayMs ?? 0) > 0)).toBe(true);
+  });
+
+  it('taps a Trial TNT as a valid action with blast animation and damage', () => {
+    const board = createBoardFromTileTypes([
+      ['FIRE', 'ICE', 'EARTH'],
+      ['LIGHTNING', 'TNT', 'FIRE'],
+      ['ICE', 'EARTH', 'LIGHTNING'],
+    ]);
+    const level = testTrialLevel(
+      [
+        monster({ monsterId: 'a', maxHp: 5 }),
+        monster({ monsterId: 'b', maxHp: 5 }),
+        monster({ monsterId: 'c', maxHp: 5 }),
+        monster({ monsterId: 'd', maxHp: 5 }),
+        monster({ monsterId: 'e', maxHp: 5 }),
+      ],
+      board,
+    );
+    const runtime = createTrialRuntime(level);
+
+    const result = processTrialPowerUpActivation(board, runtime, level, { col: 1, row: 1 }, new SeededRng(44));
+
+    expect(result.valid).toBe(true);
+    expect(result.damageEvents.length).toBeGreaterThanOrEqual(5);
+    expect(result.scoringStats.validSwapCount).toBe(1);
+    expect(result.animationTrace?.cascadeSteps[0].clearedTiles.find((tile) => tile.clearDelayMs === 0)?.coord).toEqual({
+      col: 1,
+      row: 1,
+    });
+    expect(result.animationTrace?.cascadeSteps[0].clearedTiles.some((tile) => (tile.clearDelayMs ?? 0) > 0)).toBe(true);
+  });
+
+  it('taps a Trial Lightball using the adjacent color with the highest board count', () => {
+    const board = createBoardFromTileTypes([
+      [null, 'FIRE', null],
+      ['FIRE', 'LIGHTBALL', 'ICE'],
+      [null, 'ICE', null],
+      [null, 'ICE', null],
+    ]);
+    const level = testTrialLevel(
+      [
+        monster({ monsterId: 'a', maxHp: 50 }),
+        monster({ monsterId: 'b', maxHp: 50 }),
+      ],
+      board,
+    );
+    const runtime = createTrialRuntime(level);
+
+    const result = processTrialPowerUpActivation(board, runtime, level, { col: 1, row: 1 }, new SeededRng(47));
+
+    expect(result.valid).toBe(true);
+    expect(result.damageEvents.length).toBeGreaterThan(0);
+    expect(result.damageEvents.every((event) => event.schoolId === 'ice')).toBe(true);
+    expect(result.scoringStats.validSwapCount).toBe(1);
+    expect(result.animationTrace?.cascadeSteps[0].clearedTiles.map((tile) => tile.coord)).toEqual([
+      { col: 1, row: 1 },
+      { col: 2, row: 1 },
+      { col: 1, row: 2 },
+      { col: 1, row: 3 },
+    ]);
+  });
+
+  it('ignores Trial Lightball taps without an adjacent standard color', () => {
+    const board = createBoardFromTileTypes([
+      [null, 'TNT', null],
+      ['LAND', 'LIGHTBALL', 'ROCKET_H'],
+      [null, 'ROCKET_V', null],
+    ]);
+    const level = testTrialLevel([monster({ monsterId: 'a', maxHp: 50 })], board);
+    const runtime = createTrialRuntime(level);
+
+    const result = processTrialPowerUpActivation(board, runtime, level, { col: 1, row: 1 }, new SeededRng(48));
+
+    expect(result.valid).toBe(false);
+    expect(result.runtime).toBe(runtime);
+    expect(result.board).toBe(board);
+  });
+
+  it('activates a swapped Trial TNT at its landing cell', () => {
+    const board = createBoardFromTileTypes([['TNT', 'EARTH']]);
+    const level = testTrialLevel([monster({ monsterId: 'a', maxHp: 50 })], board);
+    const runtime = createTrialRuntime(level);
+
+    const result = processTrialSwap(
+      board,
+      runtime,
+      level,
+      { col: 0, row: 0 },
+      { col: 1, row: 0 },
+      new SeededRng(45),
+    );
+
+    expect(result.valid).toBe(true);
+    expect(result.damageEvents[0]?.schoolId).toBe('earth');
+    expect(result.animationTrace?.cascadeSteps[0].clearedTiles.find((tile) => tile.clearDelayMs === 0)?.coord).toEqual({
+      col: 1,
+      row: 0,
+    });
+  });
+
+  it('ignores non-power-up Trial taps', () => {
+    const board = createBoardFromTileTypes([['FIRE', 'ICE', 'EARTH']]);
+    const level = testTrialLevel([monster({ monsterId: 'a', maxHp: 50 })], board);
+    const runtime = createTrialRuntime(level);
+
+    const result = processTrialPowerUpActivation(board, runtime, level, { col: 0, row: 0 }, new SeededRng(46));
+
+    expect(result.valid).toBe(false);
+    expect(result.runtime).toBe(runtime);
   });
 
   it('wins when all manifested monsters are defeated', () => {

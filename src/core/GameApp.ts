@@ -6,6 +6,7 @@ import {
   HUD_MUTE_TOGGLE_RECT,
   LOGICAL_HEIGHT,
   LOGICAL_WIDTH,
+  logicalPointToBoardCell,
   TITLE_PLAY_BUTTON_RECT,
   pointInRect,
 } from './Layout';
@@ -14,7 +15,12 @@ import { createRandomSeed, SeededRng } from './Rng';
 import type { GamePhase, LevelType, RunState } from './Types';
 import type { Board } from '../board/Board';
 import { cloneBoard, createEmptyBoard, getAllPlayableCoords } from '../board/Board';
-import { stampBoardAnimationTrace, type BoardAnimationTrace } from '../board/BoardAnimationTrace';
+import {
+  createLevelIntroBoardAnimationTrace,
+  stampBoardAnimationTrace,
+  type BoardAnimationTrace,
+} from '../board/BoardAnimationTrace';
+import { getBoardAnimationTraceDurationMs } from '../board/BoardAnimationTiming';
 import type { TileType } from '../board/TileTypes';
 import { AssetIds } from '../assets/AssetIds';
 import type { GeneratedLevel } from '../generator/LevelGenerator';
@@ -23,6 +29,7 @@ import type { JourneyRuntimeState } from '../generator/JourneyRules';
 import {
   createJourneyRuntime,
   getVisibleJourneyHintCells,
+  processJourneyPowerUpActivation,
   processJourneySwap,
 } from '../generator/JourneyRules';
 import type { ActiveTrialMonster, SpellSchoolId, TrialDamageEvent, TrialRuntimeState } from '../generator/TrialRules';
@@ -30,6 +37,7 @@ import {
   createTrialRuntime,
   getTrialMageWorldPosition,
   getTrialMonsterWorldPosition,
+  processTrialPowerUpActivation,
   processTrialSwap,
   updateTrialRuntime,
 } from '../generator/TrialRules';
@@ -98,6 +106,8 @@ export class MagusMatchGameApp implements GameApp {
   private shakeTimerSec = 0;
   private shakeAmplitudePixels = 0;
   private latestBoardAnimationTrace: BoardAnimationTrace | null = null;
+  private latestBoardAnimationEndsAtSec = 0;
+  private animationClockSec = 0;
   private nextBoardAnimationRevision = 1;
 
   constructor(seed?: number, private readonly options: MagusMatchGameAppOptions = {}) {
@@ -107,6 +117,7 @@ export class MagusMatchGameApp implements GameApp {
 
   update(dtSec: number, commands: readonly GameInputCommand[]): void {
     const clampedDtSec = Math.max(0, dtSec);
+    this.animationClockSec += clampedDtSec;
     this.updateBoardJuice(clampedDtSec);
 
     for (const command of commands) {
@@ -137,7 +148,7 @@ export class MagusMatchGameApp implements GameApp {
 
     if (this.phase === 'WIN' || this.phase === 'LOSE') {
       this.transitionTimerSec += clampedDtSec;
-      if (this.transitionTimerSec >= LEVEL_TRANSITION_HOLD_SEC) {
+      if (this.transitionTimerSec >= LEVEL_TRANSITION_HOLD_SEC && this.hasLatestBoardAnimationFinished()) {
         this.advanceAfterLevelResult();
       }
     }
@@ -248,6 +259,8 @@ export class MagusMatchGameApp implements GameApp {
     this.shakeTimerSec = 0;
     this.shakeAmplitudePixels = 0;
     this.latestBoardAnimationTrace = null;
+    this.latestBoardAnimationEndsAtSec = 0;
+    this.animationClockSec = 0;
     this.nextBoardAnimationRevision = 1;
     this.phase = 'TITLE';
     this.events = [];
@@ -295,6 +308,10 @@ export class MagusMatchGameApp implements GameApp {
     };
   }
 
+  getLatestBoardAnimationEndsAtSecForDebug(): number {
+    return this.latestBoardAnimationEndsAtSec;
+  }
+
   private prepareCurrentLevel(): void {
     const levelType = selectLevelTypeForRun(
       this.run.seed,
@@ -326,6 +343,7 @@ export class MagusMatchGameApp implements GameApp {
     this.shakeTimerSec = 0;
     this.shakeAmplitudePixels = 0;
     this.latestBoardAnimationTrace = null;
+    this.latestBoardAnimationEndsAtSec = this.animationClockSec;
   }
 
   private startPreparedLevel(): void {
@@ -336,6 +354,7 @@ export class MagusMatchGameApp implements GameApp {
     this.phase = 'IDLE';
     this.elapsedSec = 0;
     this.transitionTimerSec = 0;
+    this.captureBoardAnimationTrace(createLevelIntroBoardAnimationTrace(this.board, 0));
     this.events.push({
       type: 'levelStarted',
       levelNumber: this.run.levelNumber,
@@ -373,6 +392,25 @@ export class MagusMatchGameApp implements GameApp {
     if (this.phase === 'GAME_OVER' && pointInRect(point, GAME_OVER_TRY_AGAIN_BUTTON_RECT)) {
       this.tryAgain();
       this.startPreparedLevel();
+      return;
+    }
+
+    if (this.phase !== 'IDLE') {
+      return;
+    }
+
+    const boardCell = logicalPointToBoardCell(point);
+    if (boardCell == null) {
+      return;
+    }
+
+    if (this.currentLevel?.type === 'TRIAL') {
+      this.handleTrialPowerUpTap(boardCell);
+      return;
+    }
+
+    if (this.currentLevel?.type === 'JOURNEY') {
+      this.handleJourneyPowerUpTap(boardCell);
     }
   }
 
@@ -483,6 +521,44 @@ export class MagusMatchGameApp implements GameApp {
     }
   }
 
+  private handleJourneyPowerUpTap(origin: CellCoord): void {
+    if (this.phase !== 'IDLE' || this.currentLevel?.type !== 'JOURNEY' || this.journeyRuntime == null) {
+      return;
+    }
+
+    const result = processJourneyPowerUpActivation(
+      this.board,
+      this.journeyRuntime,
+      this.currentLevel,
+      origin,
+      this.rng,
+    );
+
+    if (!result.valid) {
+      return;
+    }
+
+    const previousMageCell = this.journeyRuntime.mageCell;
+    this.board = result.board;
+    this.journeyRuntime = result.runtime;
+    this.levelMatchCount += result.scoringStats.matchCount;
+    this.levelValidSwapCount += result.scoringStats.validSwapCount;
+    this.captureBoardAnimationTrace(result.animationTrace);
+    this.emitMatchAudioAndJuice(result.scoringStats, origin);
+    this.emitJourneyAudioAndJuice(result, previousMageCell, origin);
+    const scoreDelta = result.scoreDelta + scoreSwapStats(result.scoringStats);
+    if (scoreDelta > 0) {
+      this.run = { ...this.run, score: this.run.score + scoreDelta };
+      this.events.push({ type: 'scoreChanged', score: this.run.score });
+    }
+
+    if (result.runtime.result === 'won') {
+      this.beginLevelResult('win');
+    } else if (result.runtime.result === 'lost') {
+      this.beginLevelResult('loss');
+    }
+  }
+
   private handleTrialSwap(from: CellCoord, to: CellCoord): void {
     if (this.currentLevel?.type !== 'TRIAL' || this.trialRuntime == null) {
       return;
@@ -500,6 +576,43 @@ export class MagusMatchGameApp implements GameApp {
     this.captureBoardAnimationTrace(result.animationTrace);
     this.emitMatchAudioAndJuice(result.scoringStats, to);
     this.emitTrialAudioAndJuice(result.damageEvents, to);
+    const scoreDelta = result.scoreDelta + scoreSwapStats(result.scoringStats);
+
+    if (scoreDelta > 0) {
+      this.run = { ...this.run, score: this.run.score + scoreDelta };
+      this.events.push({ type: 'scoreChanged', score: this.run.score });
+    }
+
+    if (result.damageEvents.some((event) => event.defeated)) {
+      this.requestSound(AssetIds.sounds.monsterDefeat, { category: 'enemy', volume: 0.62 });
+    } else if (result.damageEvents.length > 0) {
+      this.requestSound(AssetIds.sounds.monsterDamage, { category: 'enemy', volume: 0.5 });
+    }
+
+    if (result.runtime.result === 'won') {
+      this.beginLevelResult('win');
+    } else if (result.runtime.result === 'lost') {
+      this.beginLevelResult('loss');
+    }
+  }
+
+  private handleTrialPowerUpTap(origin: CellCoord): void {
+    if (this.currentLevel?.type !== 'TRIAL' || this.trialRuntime == null) {
+      return;
+    }
+
+    const result = processTrialPowerUpActivation(this.board, this.trialRuntime, this.currentLevel, origin, this.rng);
+    if (!result.valid) {
+      return;
+    }
+
+    this.board = result.board;
+    this.trialRuntime = result.runtime;
+    this.levelMatchCount += result.scoringStats.matchCount;
+    this.levelValidSwapCount += result.scoringStats.validSwapCount;
+    this.captureBoardAnimationTrace(result.animationTrace);
+    this.emitMatchAudioAndJuice(result.scoringStats, origin);
+    this.emitTrialAudioAndJuice(result.damageEvents, origin);
     const scoreDelta = result.scoreDelta + scoreSwapStats(result.scoringStats);
 
     if (scoreDelta > 0) {
@@ -539,7 +652,13 @@ export class MagusMatchGameApp implements GameApp {
     }
 
     this.latestBoardAnimationTrace = stampedTrace;
+    this.latestBoardAnimationEndsAtSec =
+      this.animationClockSec + getBoardAnimationTraceDurationMs(stampedTrace) / 1000;
     this.nextBoardAnimationRevision += 1;
+  }
+
+  private hasLatestBoardAnimationFinished(): boolean {
+    return this.animationClockSec >= this.latestBoardAnimationEndsAtSec;
   }
 
   private requestSound(

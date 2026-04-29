@@ -1,4 +1,5 @@
 import type { CellCoord } from '../core/Layout';
+import { BOARD_SIZE } from '../core/Layout';
 import type { Board } from './Board';
 import { coordKey, getAllPlayableCoords, uniqueCoords } from './Board';
 import type { TileType } from './TileTypes';
@@ -14,7 +15,9 @@ export interface BoardAnimationSnapshot {
   cells: readonly BoardAnimationSnapshotCell[];
 }
 
-export interface BoardAnimationClearedTile extends BoardAnimationSnapshotCell {}
+export interface BoardAnimationClearedTile extends BoardAnimationSnapshotCell {
+  clearDelayMs?: number;
+}
 
 export interface BoardAnimationMovement {
   tileId: string;
@@ -43,7 +46,10 @@ export interface BoardAnimationCascadeStep {
   refillTiles: readonly BoardAnimationRefill[];
 }
 
+export type BoardAnimationTraceKind = 'resolution' | 'levelIntro';
+
 export interface BoardAnimationTrace {
+  kind: BoardAnimationTraceKind;
   revisionId: number;
   swappedCells: { from: CellCoord; to: CellCoord } | null;
   preSwapSnapshot: BoardAnimationSnapshot;
@@ -53,6 +59,7 @@ export interface BoardAnimationTrace {
 }
 
 export interface BoardAnimationTraceOptions {
+  kind?: BoardAnimationTraceKind;
   revisionId: number;
   preSwapBoard: Board;
   postSwapBoard: Board;
@@ -86,12 +93,48 @@ export function createBoardAnimationTrace(
   finalBoard: Board,
 ): BoardAnimationTrace {
   return {
+    kind: options.kind ?? 'resolution',
     revisionId: options.revisionId,
     swappedCells: options.swappedCells ?? null,
     preSwapSnapshot: snapshotBoard(options.preSwapBoard),
     postSwapSnapshot: snapshotBoard(options.postSwapBoard),
     cascadeSteps,
     finalSnapshot: snapshotBoard(finalBoard),
+  };
+}
+
+export function createLevelIntroBoardAnimationTrace(board: Board, revisionId: number): BoardAnimationTrace {
+  const emptySnapshot: BoardAnimationSnapshot = { cells: [] };
+  const finalSnapshot = snapshotBoard(board);
+  const refillTiles: BoardAnimationRefill[] = finalSnapshot.cells
+    .map((cell) => ({
+      tileId: cell.tileId,
+      tileType: cell.tileType,
+      from: { col: cell.coord.col, row: cell.coord.row - BOARD_SIZE },
+      to: cell.coord,
+      isPath: cell.isPath,
+    }))
+    .sort((first, second) => first.to.col - second.to.col || second.to.row - first.to.row);
+
+  return {
+    kind: 'levelIntro',
+    revisionId,
+    swappedCells: null,
+    preSwapSnapshot: emptySnapshot,
+    postSwapSnapshot: emptySnapshot,
+    cascadeSteps: [
+      {
+        stepIndex: 0,
+        beforeClearSnapshot: emptySnapshot,
+        beforeGravitySnapshot: emptySnapshot,
+        afterGravitySnapshot: emptySnapshot,
+        finalSnapshot,
+        clearedTiles: [],
+        fallingTiles: [],
+        refillTiles,
+      },
+    ],
+    finalSnapshot,
   };
 }
 
@@ -102,6 +145,7 @@ export function buildBoardAnimationCascadeStep(
   afterGravityBoard: Board,
   finalBoard: Board,
   clearedCoords: readonly CellCoord[],
+  clearedDelayMsByCoord: ReadonlyMap<string, number> = new Map(),
 ): BoardAnimationCascadeStep {
   const beforeClearSnapshot = snapshotBoard(beforeClearBoard);
   const beforeGravitySnapshot = snapshotBoard(beforeGravityBoard);
@@ -115,7 +159,11 @@ export function buildBoardAnimationCascadeStep(
 
   const clearedTiles = uniqueCoords(clearedCoords)
     .map((coord) => beforeClearByCoord.get(coordKey(coord)))
-    .filter((cell): cell is BoardAnimationClearedTile => cell != null);
+    .filter((cell): cell is BoardAnimationSnapshotCell => cell != null)
+    .map((cell) => ({
+      ...cell,
+      clearDelayMs: clearedDelayMsByCoord.get(coordKey(cell.coord)),
+    }));
 
   const fallingTiles = [...afterGravityById.values()]
     .map((toCell) => {

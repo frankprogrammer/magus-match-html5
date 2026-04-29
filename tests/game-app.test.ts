@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { AssetIds } from '../src/assets/AssetIds';
+import type { BoardAnimationTrace } from '../src/board/BoardAnimationTrace';
+import { getBoardAnimationTraceDurationMs } from '../src/board/BoardAnimationTiming';
 import { findValidMoves } from '../src/board/BoardRules';
 import { GAME_OVER_TRY_AGAIN_BUTTON_RECT, TITLE_PLAY_BUTTON_RECT } from '../src/core/Layout';
 import { MagusMatchGameApp } from '../src/core/GameApp';
 import type { GameEvent } from '../src/core/GameEvents';
 import { CAMERA_SHAKE_MAX, CAMERA_SHAKE_MIN } from '../src/data/tuning';
+import { LEVEL_TRANSITION_HOLD_SEC } from '../src/run/RunProgression';
 import { BoardAnimationPresenter } from '../src/render-2d/BoardAnimationPresenter';
 
 describe('MagusMatchGameApp', () => {
@@ -154,9 +157,31 @@ describe('MagusMatchGameApp', () => {
     tap(app, TITLE_PLAY_BUTTON_RECT);
 
     expect(app.getHudState().phase).toBe('IDLE');
+    expect(app.getBoardRenderState().animationTrace?.kind).toBe('levelIntro');
+    expect(app.getBoardRenderState().animationTrace?.cascadeSteps[0].refillTiles.length).toBe(64);
     expect(app.drainEvents()).toEqual([
       { type: 'levelStarted', levelNumber: 1, levelType: 'JOURNEY', seed: 777 },
     ]);
+  });
+
+  it('waits for active board collapse before progressing after a win', () => {
+    const app = new MagusMatchGameApp(778, { debugLevelType: 'TRIAL' });
+    tap(app, TITLE_PLAY_BUTTON_RECT);
+    app.drainEvents();
+
+    const longTrace = longCollapseTrace(50);
+    captureTraceForDebug(app, longTrace);
+    beginLevelResultForDebug(app, 'win');
+    app.drainEvents();
+
+    app.update(LEVEL_TRANSITION_HOLD_SEC, []);
+    expect(app.getHudState().phase).toBe('WIN');
+    expect(app.drainEvents().filter((event) => event.type === 'levelStarted')).toHaveLength(0);
+
+    app.update(getBoardAnimationTraceDurationMs(longTrace) / 1000 - LEVEL_TRANSITION_HOLD_SEC + 0.001, []);
+    expect(app.getHudState().phase).toBe('IDLE');
+    expect(app.drainEvents().filter((event) => event.type === 'levelStarted')).toHaveLength(1);
+    expect(app.getBoardRenderState().animationTrace?.kind).toBe('levelIntro');
   });
 
   it('continues after one or two losses and enters Game Over after the third failed level', () => {
@@ -228,4 +253,43 @@ function tap(app: MagusMatchGameApp, rect: { x: number; y: number; width: number
 
 function soundEvents(events: readonly GameEvent[]): Extract<GameEvent, { type: 'soundRequested' }>[] {
   return events.filter((event): event is Extract<GameEvent, { type: 'soundRequested' }> => event.type === 'soundRequested');
+}
+
+function captureTraceForDebug(app: MagusMatchGameApp, trace: BoardAnimationTrace): void {
+  (app as unknown as { captureBoardAnimationTrace: (trace: BoardAnimationTrace) => void }).captureBoardAnimationTrace(trace);
+}
+
+function beginLevelResultForDebug(app: MagusMatchGameApp, result: 'win' | 'loss'): void {
+  (app as unknown as { beginLevelResult: (result: 'win' | 'loss') => void }).beginLevelResult(result);
+}
+
+function longCollapseTrace(revisionId: number): BoardAnimationTrace {
+  const clearCell = {
+    tileId: 'clear',
+    tileType: 'FIRE' as const,
+    coord: { col: 0, row: 0 },
+    isPath: false,
+    clearDelayMs: 1800,
+  };
+
+  return {
+    kind: 'resolution',
+    revisionId,
+    swappedCells: null,
+    preSwapSnapshot: { cells: [clearCell] },
+    postSwapSnapshot: { cells: [clearCell] },
+    cascadeSteps: [
+      {
+        stepIndex: 0,
+        beforeClearSnapshot: { cells: [clearCell] },
+        beforeGravitySnapshot: { cells: [] },
+        afterGravitySnapshot: { cells: [] },
+        finalSnapshot: { cells: [] },
+        clearedTiles: [clearCell],
+        fallingTiles: [],
+        refillTiles: [],
+      },
+    ],
+    finalSnapshot: { cells: [] },
+  };
 }

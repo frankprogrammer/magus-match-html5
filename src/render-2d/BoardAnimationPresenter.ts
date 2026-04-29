@@ -7,6 +7,11 @@ import type {
   BoardAnimationSnapshotCell,
   BoardAnimationTrace,
 } from '../board/BoardAnimationTrace';
+import {
+  getBoardAnimationStepTimings,
+  getBoardAnimationTraceDurationMs,
+  type BoardAnimationStepTiming,
+} from '../board/BoardAnimationTiming';
 import type { TileType } from '../board/TileTypes';
 import { BOARD_RECT } from '../core/Layout';
 import type { CellCoord } from '../core/Layout';
@@ -17,7 +22,6 @@ import {
   TILE_LANDING_SETTLE_MS,
   TILE_MATCH_SCALE_DOWN_MS,
   TILE_SWAP_RETARGET_MS,
-  CASCADE_ROW_STAGGER_MS,
 } from '../data/tuning';
 import type { BoardCellVisualState, BoardRenderState } from './BoardRenderState';
 
@@ -34,13 +38,6 @@ interface ActiveBoardAnimation {
   retargetStarts: Map<string, VisualSample>;
 }
 
-interface StepTiming {
-  step: BoardAnimationCascadeStep;
-  popStartMs: number;
-  fallStartMs: number;
-  endMs: number;
-}
-
 export class BoardAnimationPresenter {
   private activeAnimation: ActiveBoardAnimation | null = null;
   private lastRevisionId: number | null = null;
@@ -48,7 +45,7 @@ export class BoardAnimationPresenter {
   present(authoritativeState: BoardRenderState, elapsedSec: number): BoardRenderState {
     const trace = authoritativeState.animationTrace ?? null;
     if (trace != null && trace.revisionId !== this.lastRevisionId) {
-      const currentState = this.activeAnimation == null
+      const currentState = this.activeAnimation == null || !shouldRetargetIntoTrace(trace)
         ? null
         : this.sampleActiveAnimation(authoritativeState, elapsedSec);
       this.activeAnimation = {
@@ -79,7 +76,7 @@ export class BoardAnimationPresenter {
 
     const elapsedMs = Math.max(0, (elapsedSec - this.activeAnimation.startSec) * 1000);
     const trace = this.activeAnimation.trace;
-    const stepTimings = buildStepTimings(trace);
+    const stepTimings = getBoardAnimationStepTimings(trace);
     const boardCells = sampleTraceCells(trace, stepTimings, elapsedMs, this.activeAnimation.retargetStarts);
 
     return {
@@ -93,24 +90,23 @@ export class BoardAnimationPresenter {
       return true;
     }
 
-    const totalMs = getTraceDurationMs(this.activeAnimation.trace);
+    const totalMs = getBoardAnimationTraceDurationMs(this.activeAnimation.trace);
     const elapsedMs = Math.max(0, (elapsedSec - this.activeAnimation.startSec) * 1000);
     return elapsedMs >= totalMs;
   }
 }
 
-export function getTraceDurationMs(trace: BoardAnimationTrace): number {
-  const stepTimings = buildStepTimings(trace);
-  return stepTimings.length === 0 ? TILE_SWAP_RETARGET_MS : stepTimings[stepTimings.length - 1].endMs;
+function shouldRetargetIntoTrace(trace: BoardAnimationTrace): boolean {
+  return trace.kind !== 'levelIntro';
 }
 
 function sampleTraceCells(
   trace: BoardAnimationTrace,
-  stepTimings: readonly StepTiming[],
+  stepTimings: readonly BoardAnimationStepTiming[],
   elapsedMs: number,
   retargetStarts: ReadonlyMap<string, VisualSample>,
 ): BoardCellVisualState[] {
-  if (elapsedMs < TILE_SWAP_RETARGET_MS || stepTimings.length === 0) {
+  if (trace.kind !== 'levelIntro' && (elapsedMs < TILE_SWAP_RETARGET_MS || stepTimings.length === 0)) {
     return sampleSwapCells(trace, elapsedMs, retargetStarts);
   }
 
@@ -123,7 +119,13 @@ function sampleTraceCells(
     return samplePopCells(activeStep.step, elapsedMs - activeStep.popStartMs);
   }
 
-  return sampleFallCells(activeStep.step, elapsedMs - activeStep.fallStartMs, activeStep.endMs - activeStep.fallStartMs, retargetStarts);
+  return sampleFallCells(
+    activeStep.step,
+    elapsedMs - activeStep.fallStartMs,
+    activeStep.endMs - activeStep.fallStartMs,
+    activeStep.fallDelaysByTileId,
+    retargetStarts,
+  );
 }
 
 function sampleSwapCells(
@@ -149,25 +151,36 @@ function sampleSwapCells(
 }
 
 function samplePopCells(step: BoardAnimationCascadeStep, stepElapsedMs: number): BoardCellVisualState[] {
-  const clearedIds = new Set(step.clearedTiles.map((tile) => tile.tileId));
-  const popProgress = clamp01(stepElapsedMs / TILE_MATCH_SCALE_DOWN_MS);
-  const popScale = 1 - easeOutCubic(popProgress);
+  const clearedById = new Map(step.clearedTiles.map((tile) => [tile.tileId, tile]));
 
   return step.beforeClearSnapshot.cells.map((cell) =>
-    snapshotCellToRenderCell(cell, clearedIds.has(cell.tileId)
-      ? {
-          scale: popScale,
-          alpha: 1 - popProgress,
-          zIndex: 8,
-        }
+    snapshotCellToRenderCell(cell, clearedById.has(cell.tileId)
+      ? clearedTileOverrides(clearedById.get(cell.tileId)!, stepElapsedMs)
       : { zIndex: 0 }),
   );
+}
+
+function clearedTileOverrides(
+  tile: { clearDelayMs?: number },
+  stepElapsedMs: number,
+): Partial<Pick<BoardCellVisualState, 'scale' | 'alpha' | 'zIndex'>> {
+  const popProgress = clamp01((stepElapsedMs - (tile.clearDelayMs ?? 0)) / TILE_MATCH_SCALE_DOWN_MS);
+  if (popProgress <= 0) {
+    return { scale: 1, alpha: 1, zIndex: 8 };
+  }
+
+  return {
+    scale: 1 - easeOutCubic(popProgress),
+    alpha: 1 - popProgress,
+    zIndex: 8,
+  };
 }
 
 function sampleFallCells(
   step: BoardAnimationCascadeStep,
   stepElapsedMs: number,
   stepDurationMs: number,
+  fallDelaysByTileId: ReadonlyMap<string, number>,
   retargetStarts: ReadonlyMap<string, VisualSample>,
 ): BoardCellVisualState[] {
   const movingIds = new Set([
@@ -179,11 +192,11 @@ function sampleFallCells(
     .map((cell) => snapshotCellToRenderCell(cell, { zIndex: 0 }));
 
   for (const movement of step.fallingTiles) {
-    cells.push(sampleMovingTile(movement, stepElapsedMs, stepDurationMs, retargetStarts, 6));
+    cells.push(sampleMovingTile(movement, stepElapsedMs, stepDurationMs, fallDelaysByTileId, retargetStarts, 6));
   }
 
   for (const refill of step.refillTiles) {
-    cells.push(sampleMovingTile(refill, stepElapsedMs, stepDurationMs, retargetStarts, 7));
+    cells.push(sampleMovingTile(refill, stepElapsedMs, stepDurationMs, fallDelaysByTileId, retargetStarts, 7));
   }
 
   return cells;
@@ -193,21 +206,22 @@ function sampleMovingTile(
   movement: BoardAnimationMovement | BoardAnimationRefill,
   stepElapsedMs: number,
   stepDurationMs: number,
+  fallDelaysByTileId: ReadonlyMap<string, number>,
   retargetStarts: ReadonlyMap<string, VisualSample>,
   zIndex: number,
 ): BoardCellVisualState {
   const distanceRows = Math.max(1, Math.abs(movement.to.row - movement.from.row));
-  const delayMs = Math.max(0, movement.to.row) * CASCADE_ROW_STAGGER_MS;
+  const delayMs = fallDelaysByTileId.get(movement.tileId) ?? 0;
   const fallMs = clamp(
     distanceRows * TILE_FALL_DURATION_PER_ROW_MS + TILE_LANDING_SETTLE_MS,
     TILE_FALL_MIN_MS,
     Math.min(TILE_FALL_MAX_MS, stepDurationMs),
   );
   const progress = clamp01((stepElapsedMs - delayMs) / fallMs);
-  const eased = physicalFallEase(progress);
-  const start = retargetStarts.get(movement.tileId) ?? coordToRender(movement.from);
+  const eased = gravityFallEase(progress);
   const target = coordToRender(movement.to);
-  const settleScale = 1 + Math.sin(progress * Math.PI) * 0.045 * (1 - progress);
+  const start = startPositionForGravityMovement(movement, target, retargetStarts);
+  const settleScale = landingScale(progress);
 
   return {
     tileId: movement.tileId,
@@ -215,8 +229,8 @@ function sampleMovingTile(
     assetId: assetIdForTileType(movement.tileType),
     tileType: movement.tileType,
     isPath: movement.isPath,
-    alpha: progress <= 0 ? 0 : 1,
-    renderX: lerp(start.renderX, target.renderX, eased),
+    alpha: movement.from.row < 0 && progress <= 0 ? 0 : 1,
+    renderX: target.renderX,
     renderY: lerp(start.renderY, target.renderY, eased),
     scale: settleScale,
     zIndex,
@@ -224,35 +238,25 @@ function sampleMovingTile(
   };
 }
 
-function buildStepTimings(trace: BoardAnimationTrace): StepTiming[] {
-  let cursorMs = TILE_SWAP_RETARGET_MS;
-  return trace.cascadeSteps.map((step) => {
-    const popStartMs = cursorMs;
-    const fallStartMs = popStartMs + TILE_MATCH_SCALE_DOWN_MS;
-    const fallDurationMs = getStepFallDurationMs(step);
-    const timing = {
-      step,
-      popStartMs,
-      fallStartMs,
-      endMs: fallStartMs + fallDurationMs,
-    };
-    cursorMs = timing.endMs;
-    return timing;
-  });
-}
+function startPositionForGravityMovement(
+  movement: BoardAnimationMovement | BoardAnimationRefill,
+  target: VisualSample,
+  retargetStarts: ReadonlyMap<string, VisualSample>,
+): VisualSample {
+  const columnLockedStart = coordToRender({ col: movement.to.col, row: movement.from.row });
+  const retarget = retargetStarts.get(movement.tileId);
 
-function getStepFallDurationMs(step: BoardAnimationCascadeStep): number {
-  const distances = [
-    ...step.fallingTiles.map((movement) => Math.max(1, Math.abs(movement.to.row - movement.from.row))),
-    ...step.refillTiles.map((refill) => Math.max(1, Math.abs(refill.to.row - refill.from.row))),
-  ];
-  const maxDistance = Math.max(1, ...distances);
-  const maxRow = Math.max(0, ...step.fallingTiles.map((movement) => movement.to.row), ...step.refillTiles.map((refill) => refill.to.row));
-  return clamp(
-    maxDistance * TILE_FALL_DURATION_PER_ROW_MS + maxRow * CASCADE_ROW_STAGGER_MS + TILE_LANDING_SETTLE_MS,
-    TILE_FALL_MIN_MS,
-    TILE_FALL_MAX_MS,
-  );
+  if (retarget == null || Math.abs(retarget.renderX - target.renderX) > 0.5) {
+    return {
+      ...columnLockedStart,
+      renderX: target.renderX,
+    };
+  }
+
+  return {
+    ...retarget,
+    renderX: target.renderX,
+  };
 }
 
 function snapshotToCells(snapshot: BoardAnimationSnapshot): BoardCellVisualState[] {
@@ -304,11 +308,28 @@ function coordToRender(coord: CellCoord): VisualSample {
   };
 }
 
-function physicalFallEase(progress: number): number {
+function gravityFallEase(progress: number): number {
   const clamped = clamp01(progress);
-  const eased = easeOutCubic(clamped);
-  const overshoot = Math.sin(clamped * Math.PI) * 0.08 * (1 - clamped);
-  return clamp01(eased + overshoot);
+  const settleStart = 0.82;
+
+  if (clamped < settleStart) {
+    return Math.pow(clamped / settleStart, 2.4) * 0.96;
+  }
+
+  const settleProgress = (clamped - settleStart) / (1 - settleStart);
+  const settle = 0.96 + (1 - 0.96) * easeOutCubic(settleProgress);
+  const bounce = Math.sin(settleProgress * Math.PI * 2) * 0.015 * (1 - settleProgress);
+  return clamp01(settle + bounce);
+}
+
+function landingScale(progress: number): number {
+  const clamped = clamp01(progress);
+  if (clamped < 0.72) {
+    return 1;
+  }
+
+  const settleProgress = (clamped - 0.72) / 0.28;
+  return 1 + Math.sin(settleProgress * Math.PI * 2) * 0.045 * (1 - settleProgress);
 }
 
 function easeOutCubic(value: number): number {

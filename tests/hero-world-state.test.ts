@@ -132,10 +132,11 @@ describe('HeroWorldState', () => {
     const journeyMage = new MagusMatchGameApp(123, { debugLevelType: 'JOURNEY' })
       .getHeroWorldState()
       .objects.find((object) => object.templateId === HeroStageTemplateIds.mage);
-    const trialMage = new MagusMatchGameApp(123)
+    const trialApp = new MagusMatchGameApp(123);
+    const trialMage = trialApp
       .getHeroWorldState()
       .objects.find((object) => object.templateId === HeroStageTemplateIds.mage);
-    const trialLevel = new MagusMatchGameApp(123).getCurrentLevelForDebug();
+    const trialLevel = trialApp.getCurrentLevelForDebug();
     const baseTrialMagePosition = trialLevel?.type === 'TRIAL' ? getTrialMageWorldPosition(trialLevel) : null;
 
     expect(journeyMage?.transform.scale).toEqual(MAGE_WORLD_SCALE);
@@ -143,7 +144,7 @@ describe('HeroWorldState', () => {
     expect(MAGE_WORLD_SCALE).toEqual({ x: 2, y: 2, z: 2 });
     expect(journeyMage?.transform.position.y).toBeLessThan(1.6);
     expect(trialMage?.transform.position.y).toBeLessThan(-0.85);
-    expect(trialMage?.transform.position.x).toBeCloseTo((baseTrialMagePosition?.x ?? 0) + 0.85);
+    expect(trialMage?.transform.position.x).toBeCloseTo((baseTrialMagePosition?.x ?? 0) + 1.5);
   });
 
   it('doubles Trial enemy scales and lowers their world positions', () => {

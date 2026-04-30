@@ -4,6 +4,7 @@ import {
   addBoneProxyRig,
   applyFallbackMaterialToUnmaterialedMeshes,
   applyMageTextureToMeshes,
+  bleedTransparentPixelRgb,
   createMageLoopClip,
   ensureMageMeshesVisibleWithoutOverridingTextures,
   getMageTextureDebugInfo,
@@ -105,11 +106,36 @@ describe('normalizeModelToActorBounds', () => {
     expect(material).toBeInstanceOf(THREE.MeshBasicMaterial);
     expect(material.map).toBe(texture);
     expect(material.color.getHexString()).toBe('ffffff');
-    expect(material.transparent).toBe(false);
+    expect(material.transparent).toBe(true);
     expect(material.opacity).toBe(1);
-    expect(material.alphaTest).toBeCloseTo(0.08);
+    expect(material.alphaTest).toBeCloseTo(0.01);
     expect(material.depthWrite).toBe(true);
     expect(material.side).toBe(THREE.DoubleSide);
+  });
+
+  it('bleeds opaque edge colors into transparent texture pixels while preserving alpha', () => {
+    const pixels = new Uint8ClampedArray([
+      255, 255, 255, 0,
+      20, 40, 200, 255,
+      255, 255, 255, 0,
+    ]);
+
+    const cleaned = bleedTransparentPixelRgb(pixels, 3, 1, { iterations: 1 });
+
+    expect([...cleaned.slice(0, 4)]).toEqual([20, 40, 200, 0]);
+    expect([...cleaned.slice(4, 8)]).toEqual([20, 40, 200, 255]);
+    expect([...cleaned.slice(8, 12)]).toEqual([20, 40, 200, 0]);
+  });
+
+  it('does not alter opaque texture pixels during alpha bleed cleanup', () => {
+    const pixels = new Uint8ClampedArray([
+      255, 255, 255, 0,
+      90, 100, 110, 255,
+    ]);
+
+    const cleaned = bleedTransparentPixelRgb(pixels, 2, 1, { iterations: 1 });
+
+    expect([...cleaned.slice(4, 8)]).toEqual([90, 100, 110, 255]);
   });
 
   it('keeps meshes without UVs visible without applying the recovered mage texture', () => {

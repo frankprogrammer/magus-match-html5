@@ -175,8 +175,12 @@ export class ThreeObjectFactory {
       (texture) => {
         texture.colorSpace = THREE.SRGBColorSpace;
         this.mageTexture = createAlphaBleedCanvasTexture(texture);
-        if (import.meta.env.DEV && this.mageTexture !== texture) {
-          console.info(`Cleaned mage texture alpha fringe for ${textureUrl}`);
+        if (import.meta.env.DEV) {
+          console.info(
+            this.mageTexture === texture
+              ? `Skipped mage texture alpha fringe cleanup for ${textureUrl}`
+              : `Cleaned mage texture alpha fringe for ${textureUrl}`,
+          );
         }
         if (this.applyMageTextureToTemplateIfReady()) {
           this.mageTemplateVersion += 1;

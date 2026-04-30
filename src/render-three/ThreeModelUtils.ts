@@ -150,9 +150,16 @@ export function createAlphaBleedCanvasTexture(texture: THREE.Texture): THREE.Tex
     return texture;
   }
 
-  const image = texture.image as CanvasImageSource & { width?: number; height?: number };
-  const width = image.width ?? 0;
-  const height = image.height ?? 0;
+  const image = texture.image as CanvasImageSource & {
+    width?: number;
+    height?: number;
+    naturalWidth?: number;
+    naturalHeight?: number;
+    videoWidth?: number;
+    videoHeight?: number;
+  };
+  const width = image.width ?? image.naturalWidth ?? image.videoWidth ?? 0;
+  const height = image.height ?? image.naturalHeight ?? image.videoHeight ?? 0;
   if (width <= 0 || height <= 0) {
     return texture;
   }

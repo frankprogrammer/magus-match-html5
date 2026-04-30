@@ -1,5 +1,5 @@
-import type { GameEvent, SoundEventCategory } from './GameEvents';
-import type { GameInputCommand } from './GameInput';
+import type { GameEvent, SoundEventCategory } from "./GameEvents";
+import type { GameInputCommand } from "./GameInput";
 import {
   BOARD_SIZE,
   GAME_OVER_TRY_AGAIN_BUTTON_RECT,
@@ -9,30 +9,40 @@ import {
   logicalPointToBoardCell,
   TITLE_PLAY_BUTTON_RECT,
   pointInRect,
-} from './Layout';
-import type { CellCoord } from './Layout';
-import { createRandomSeed, SeededRng } from './Rng';
-import type { GamePhase, LevelType, RunState } from './Types';
-import type { Board } from '../board/Board';
-import { cloneBoard, createEmptyBoard, getAllPlayableCoords, getVoidCoords } from '../board/Board';
+} from "./Layout";
+import type { CellCoord } from "./Layout";
+import { createRandomSeed, SeededRng } from "./Rng";
+import type { GamePhase, LevelType, RunState } from "./Types";
+import type { Board } from "../board/Board";
+import {
+  cloneBoard,
+  createEmptyBoard,
+  getAllPlayableCoords,
+  getVoidCoords,
+} from "../board/Board";
 import {
   createLevelIntroBoardAnimationTrace,
   stampBoardAnimationTrace,
   type BoardAnimationTrace,
-} from '../board/BoardAnimationTrace';
-import { getBoardAnimationTraceDurationMs } from '../board/BoardAnimationTiming';
-import type { TileType } from '../board/TileTypes';
-import { AssetIds } from '../assets/AssetIds';
-import type { GeneratedLevel } from '../generator/LevelGenerator';
-import { generateLevel } from '../generator/LevelGenerator';
-import type { JourneyRuntimeState } from '../generator/JourneyRules';
+} from "../board/BoardAnimationTrace";
+import { getBoardAnimationTraceDurationMs } from "../board/BoardAnimationTiming";
+import type { TileType } from "../board/TileTypes";
+import { AssetIds } from "../assets/AssetIds";
+import type { GeneratedLevel } from "../generator/LevelGenerator";
+import { generateLevel } from "../generator/LevelGenerator";
+import type { JourneyRuntimeState } from "../generator/JourneyRules";
 import {
   createJourneyRuntime,
   getVisibleJourneyHintCells,
   processJourneyPowerUpActivation,
   processJourneySwap,
-} from '../generator/JourneyRules';
-import type { ActiveTrialMonster, SpellSchoolId, TrialDamageEvent, TrialRuntimeState } from '../generator/TrialRules';
+} from "../generator/JourneyRules";
+import type {
+  ActiveTrialMonster,
+  SpellSchoolId,
+  TrialDamageEvent,
+  TrialRuntimeState,
+} from "../generator/TrialRules";
 import {
   createTrialRuntime,
   getTrialMageWorldPosition,
@@ -40,12 +50,16 @@ import {
   processTrialPowerUpActivation,
   processTrialSwap,
   updateTrialRuntime,
-} from '../generator/TrialRules';
-import type { BoardRenderState, BoardVisualCueKind, BoardVisualCueState } from '../render-2d/BoardRenderState';
-import type { HudRenderState } from '../render-2d/HudRenderState';
-import type { ScreenRenderState } from '../render-2d/ScreenRenderState';
-import type { LeaderboardEntry } from '../run/Leaderboard';
-import { getHighScore } from '../run/Leaderboard';
+} from "../generator/TrialRules";
+import type {
+  BoardRenderState,
+  BoardVisualCueKind,
+  BoardVisualCueState,
+} from "../render-2d/BoardRenderState";
+import type { HudRenderState } from "../render-2d/HudRenderState";
+import type { ScreenRenderState } from "../render-2d/ScreenRenderState";
+import type { LeaderboardEntry } from "../run/Leaderboard";
+import { getHighScore } from "../run/Leaderboard";
 import {
   LEVEL_TRANSITION_HOLD_SEC,
   advanceRunAfterLoss,
@@ -53,14 +67,18 @@ import {
   createInitialRunState,
   deriveLevelSeed,
   selectLevelTypeForRun,
-} from '../run/RunProgression';
-import { scoreJourneyClear, scoreSwapStats, scoreTrialClear } from '../run/Scoring';
-import type { SwapScoringStats } from '../run/Scoring';
-import { CAMERA_SHAKE_MAX, CAMERA_SHAKE_MIN } from '../data/tuning';
-import { HeroStageTemplateIds } from '../world-3d/HeroStageTemplates';
-import type { HeroWorldState } from '../world-3d/HeroWorldState';
-import type { TransformState } from '../world-3d/TransformState';
-import type { WorldObjectState } from '../world-3d/WorldObjectState';
+} from "../run/RunProgression";
+import {
+  scoreJourneyClear,
+  scoreSwapStats,
+  scoreTrialClear,
+} from "../run/Scoring";
+import type { SwapScoringStats } from "../run/Scoring";
+import { CAMERA_SHAKE_MAX, CAMERA_SHAKE_MIN } from "../data/tuning";
+import { HeroStageTemplateIds } from "../world-3d/HeroStageTemplates";
+import type { HeroWorldState } from "../world-3d/HeroWorldState";
+import type { TransformState } from "../world-3d/TransformState";
+import type { WorldObjectState } from "../world-3d/WorldObjectState";
 
 export interface GameApp {
   update(dtSec: number, commands: readonly GameInputCommand[]): void;
@@ -80,16 +98,19 @@ export interface MagusMatchGameAppOptions {
   debugStartLevel?: number;
 }
 
-export const MAGE_WORLD_SCALE: TransformState['scale'] = { x: 1, y: 1, z: 1 };
+export const MAGE_WORLD_SCALE: TransformState["scale"] = { x: 2, y: 2, z: 2 };
 
-interface RuntimeBoardVisualCue extends Omit<BoardVisualCueState, 'value'> {
+interface RuntimeBoardVisualCue extends Omit<BoardVisualCueState, "value"> {
   remainingSec: number;
   durationSec: number;
 }
 
+const MAGE_WORLD_Y_OFFSET = -0.72;
+const TRIAL_MAGE_WORLD_X_OFFSET = 1.5;
+const TRIAL_MONSTER_SCALE_MULTIPLIER = 2;
 const TRIAL_HEALTH_BAR_WIDTH = 0.92;
-const TRIAL_HEALTH_BAR_HEIGHT = 0.09;
-const TRIAL_HEALTH_BAR_FILL_HEIGHT = 0.055;
+const TRIAL_HEALTH_BAR_HEIGHT = 0.18;
+const TRIAL_HEALTH_BAR_FILL_HEIGHT = 0.11;
 const TRIAL_HEALTH_BAR_Z_OFFSET = 0.08;
 
 export class MagusMatchGameApp implements GameApp {
@@ -101,10 +122,10 @@ export class MagusMatchGameApp implements GameApp {
   private currentLevel: GeneratedLevel | null = null;
   private journeyRuntime: JourneyRuntimeState | null = null;
   private trialRuntime: TrialRuntimeState | null = null;
-  private phase: GamePhase = 'TITLE';
+  private phase: GamePhase = "TITLE";
   private muted = false;
   private transitionTimerSec = 0;
-  private pendingLevelResult: 'win' | 'loss' | null = null;
+  private pendingLevelResult: "win" | "loss" | null = null;
   private pendingClearScore = 0;
   private levelMatchCount = 0;
   private levelValidSwapCount = 0;
@@ -118,7 +139,10 @@ export class MagusMatchGameApp implements GameApp {
   private animationClockSec = 0;
   private nextBoardAnimationRevision = 1;
 
-  constructor(seed?: number, private readonly options: MagusMatchGameAppOptions = {}) {
+  constructor(
+    seed?: number,
+    private readonly options: MagusMatchGameAppOptions = {},
+  ) {
     this.debugSeed = seed;
     this.reset(seed);
   }
@@ -129,34 +153,37 @@ export class MagusMatchGameApp implements GameApp {
     this.updateBoardJuice(clampedDtSec);
 
     for (const command of commands) {
-      if (command.type === 'restart') {
+      if (command.type === "restart") {
         this.tryAgain();
         continue;
       }
 
-      if (command.type === 'muteToggle') {
+      if (command.type === "muteToggle") {
         this.muted = !this.muted;
         continue;
       }
 
-      if (command.type === 'tap') {
+      if (command.type === "tap") {
         this.handleTap(command.x, command.y);
         continue;
       }
 
-      if (command.type === 'swap') {
+      if (command.type === "swap") {
         this.handleSwap(command.from, command.to);
       }
     }
 
-    if (this.phase === 'IDLE') {
+    if (this.phase === "IDLE") {
       this.elapsedSec += clampedDtSec;
       this.updateTrialStage(clampedDtSec);
     }
 
-    if (this.phase === 'WIN' || this.phase === 'LOSE') {
+    if (this.phase === "WIN" || this.phase === "LOSE") {
       this.transitionTimerSec += clampedDtSec;
-      if (this.transitionTimerSec >= LEVEL_TRANSITION_HOLD_SEC && this.hasLatestBoardAnimationFinished()) {
+      if (
+        this.transitionTimerSec >= LEVEL_TRANSITION_HOLD_SEC &&
+        this.hasLatestBoardAnimationFinished()
+      ) {
         this.advanceAfterLevelResult();
       }
     }
@@ -187,12 +214,21 @@ export class MagusMatchGameApp implements GameApp {
         coord,
         assetId: AssetIds.tiles.empty,
       })),
-      pathCells: getAllPlayableCoords(this.board).filter((coord) => this.board[coord.row][coord.col].isPath),
+      pathCells: getAllPlayableCoords(this.board).filter(
+        (coord) => this.board[coord.row][coord.col].isPath,
+      ),
       mageCell: this.journeyRuntime?.mageCell ?? null,
-      goalCell: this.currentLevel?.type === 'JOURNEY' ? this.currentLevel.journey.goalCell : null,
+      goalCell:
+        this.currentLevel?.type === "JOURNEY"
+          ? this.currentLevel.journey.goalCell
+          : null,
       hintedCells:
-        this.currentLevel?.type === 'JOURNEY' && this.journeyRuntime != null
-          ? getVisibleJourneyHintCells(this.currentLevel, this.journeyRuntime, this.elapsedSec)
+        this.currentLevel?.type === "JOURNEY" && this.journeyRuntime != null
+          ? getVisibleJourneyHintCells(
+              this.currentLevel,
+              this.journeyRuntime,
+              this.elapsedSec,
+            )
           : [],
       selectedCell: null,
       queuedSwap: null,
@@ -204,14 +240,14 @@ export class MagusMatchGameApp implements GameApp {
 
   getHeroWorldState(): HeroWorldState {
     const objects = this.getHeroWorldObjects();
-      return {
-        levelType: this.currentLevel?.type ?? 'JOURNEY',
-        backdropId: AssetIds.backdrops.castle,
+    return {
+      levelType: this.currentLevel?.type ?? "JOURNEY",
+      backdropId: AssetIds.backdrops.castle,
       cinematicState: phaseToCinematicState(this.phase),
       objects,
       activeProjectiles: this.trialRuntime?.projectiles ?? [],
       camera: {
-        mode: 'fixed',
+        mode: "fixed",
         position: { x: 0, y: 0, z: 12 },
         target: { x: 0, y: 0, z: 0 },
         fovDeg: 35,
@@ -238,7 +274,7 @@ export class MagusMatchGameApp implements GameApp {
     return {
       screen: screenForPhase(this.phase),
       phase: this.phase,
-      finalScore: this.phase === 'GAME_OVER' ? this.finalScore : this.run.score,
+      finalScore: this.phase === "GAME_OVER" ? this.finalScore : this.run.score,
       highScore: getHighScore(leaderboardRows),
       leaderboardRows,
       highlightedRank,
@@ -261,7 +297,10 @@ export class MagusMatchGameApp implements GameApp {
   reset(seed = createRandomSeed()): void {
     this.rng = new SeededRng(seed);
     this.run = createInitialRunState(seed);
-    if (this.options.debugStartLevel != null && this.options.debugStartLevel > 1) {
+    if (
+      this.options.debugStartLevel != null &&
+      this.options.debugStartLevel > 1
+    ) {
       const debugLevel = Math.floor(this.options.debugStartLevel);
       this.run = {
         ...this.run,
@@ -283,7 +322,7 @@ export class MagusMatchGameApp implements GameApp {
     this.latestBoardAnimationEndsAtSec = 0;
     this.animationClockSec = 0;
     this.nextBoardAnimationRevision = 1;
-    this.phase = 'TITLE';
+    this.phase = "TITLE";
     this.events = [];
   }
 
@@ -316,8 +355,12 @@ export class MagusMatchGameApp implements GameApp {
       ? null
       : {
           ...this.trialRuntime,
-          monsters: this.trialRuntime.monsters.map((monster) => ({ ...monster })),
-          projectiles: this.trialRuntime.projectiles.map((projectile) => ({ ...projectile })),
+          monsters: this.trialRuntime.monsters.map((monster) => ({
+            ...monster,
+          })),
+          projectiles: this.trialRuntime.projectiles.map((projectile) => ({
+            ...projectile,
+          })),
           defeatedMonsterIds: [...this.trialRuntime.defeatedMonsterIds],
         };
   }
@@ -339,9 +382,10 @@ export class MagusMatchGameApp implements GameApp {
       this.run.levelNumber,
       this.options.debugLevelType,
     );
-    const levelSeed = this.run.levelNumber === 1
-      ? this.run.seed
-      : deriveLevelSeed(this.run.seed, this.run.levelNumber);
+    const levelSeed =
+      this.run.levelNumber === 1
+        ? this.run.seed
+        : deriveLevelSeed(this.run.seed, this.run.levelNumber);
 
     this.currentLevel = generateLevel({
       levelNumber: this.run.levelNumber,
@@ -351,9 +395,13 @@ export class MagusMatchGameApp implements GameApp {
     });
     this.board = cloneBoard(this.currentLevel.initialBoard);
     this.journeyRuntime =
-      this.currentLevel.type === 'JOURNEY' ? createJourneyRuntime(this.currentLevel) : null;
+      this.currentLevel.type === "JOURNEY"
+        ? createJourneyRuntime(this.currentLevel)
+        : null;
     this.trialRuntime =
-      this.currentLevel.type === 'TRIAL' ? createTrialRuntime(this.currentLevel) : null;
+      this.currentLevel.type === "TRIAL"
+        ? createTrialRuntime(this.currentLevel)
+        : null;
     this.elapsedSec = 0;
     this.transitionTimerSec = 0;
     this.pendingLevelResult = null;
@@ -372,46 +420,55 @@ export class MagusMatchGameApp implements GameApp {
       this.prepareCurrentLevel();
     }
 
-    this.phase = 'IDLE';
+    this.phase = "IDLE";
     this.elapsedSec = 0;
     this.transitionTimerSec = 0;
-    this.captureBoardAnimationTrace(createLevelIntroBoardAnimationTrace(this.board, 0));
+    this.captureBoardAnimationTrace(
+      createLevelIntroBoardAnimationTrace(this.board, 0),
+    );
     this.events.push({
-      type: 'levelStarted',
+      type: "levelStarted",
       levelNumber: this.run.levelNumber,
-      levelType: this.currentLevel?.type ?? 'JOURNEY',
+      levelType: this.currentLevel?.type ?? "JOURNEY",
       seed: this.currentLevel?.seed ?? this.run.seed,
     });
   }
 
   private updateTrialStage(dtSec: number): void {
-    if (this.currentLevel?.type !== 'TRIAL' || this.trialRuntime == null) {
+    if (this.currentLevel?.type !== "TRIAL" || this.trialRuntime == null) {
       return;
     }
 
-    const nextRuntime = updateTrialRuntime(this.trialRuntime, this.currentLevel, dtSec);
+    const nextRuntime = updateTrialRuntime(
+      this.trialRuntime,
+      this.currentLevel,
+      dtSec,
+    );
     this.trialRuntime = nextRuntime;
-    if (nextRuntime.result === 'won') {
-      this.beginLevelResult('win');
-    } else if (nextRuntime.result === 'lost') {
-      this.beginLevelResult('loss');
+    if (nextRuntime.result === "won") {
+      this.beginLevelResult("win");
+    } else if (nextRuntime.result === "lost") {
+      this.beginLevelResult("loss");
     }
   }
 
   private handleTap(x: number, y: number): void {
     const point = { x, y };
-    if (this.phase === 'TITLE' && pointInRect(point, TITLE_PLAY_BUTTON_RECT)) {
+    if (this.phase === "TITLE" && pointInRect(point, TITLE_PLAY_BUTTON_RECT)) {
       this.startPreparedLevel();
       return;
     }
 
-    if (this.phase === 'GAME_OVER' && pointInRect(point, GAME_OVER_TRY_AGAIN_BUTTON_RECT)) {
+    if (
+      this.phase === "GAME_OVER" &&
+      pointInRect(point, GAME_OVER_TRY_AGAIN_BUTTON_RECT)
+    ) {
       this.tryAgain();
       this.startPreparedLevel();
       return;
     }
 
-    if (this.phase !== 'IDLE') {
+    if (this.phase !== "IDLE") {
       return;
     }
 
@@ -420,12 +477,12 @@ export class MagusMatchGameApp implements GameApp {
       return;
     }
 
-    if (this.currentLevel?.type === 'TRIAL') {
+    if (this.currentLevel?.type === "TRIAL") {
       this.handleTrialPowerUpTap(boardCell);
       return;
     }
 
-    if (this.currentLevel?.type === 'JOURNEY') {
+    if (this.currentLevel?.type === "JOURNEY") {
       this.handleJourneyPowerUpTap(boardCell);
     }
   }
@@ -434,21 +491,27 @@ export class MagusMatchGameApp implements GameApp {
     this.reset(this.debugSeed ?? createRandomSeed());
   }
 
-  private beginLevelResult(result: 'win' | 'loss'): void {
+  private beginLevelResult(result: "win" | "loss"): void {
     if (this.pendingLevelResult != null || this.currentLevel == null) {
       return;
     }
 
     this.pendingLevelResult = result;
     this.transitionTimerSec = 0;
-    this.phase = result === 'win' ? 'WIN' : 'LOSE';
-    this.pendingClearScore = result === 'win' ? this.getLevelClearScore() : 0;
-    if (result === 'win') {
-      this.requestSound(AssetIds.sounds.victorySting, { category: 'level', volume: 0.7 });
-      this.requestSound(AssetIds.sounds.cageYankWhoosh, { category: 'level', volume: 0.55 });
+    this.phase = result === "win" ? "WIN" : "LOSE";
+    this.pendingClearScore = result === "win" ? this.getLevelClearScore() : 0;
+    if (result === "win") {
+      this.requestSound(AssetIds.sounds.victorySting, {
+        category: "level",
+        volume: 0.7,
+      });
+      this.requestSound(AssetIds.sounds.cageYankWhoosh, {
+        category: "level",
+        volume: 0.55,
+      });
     }
     this.events.push({
-      type: 'levelEnded',
+      type: "levelEnded",
       levelNumber: this.run.levelNumber,
       levelType: this.currentLevel.type,
       result,
@@ -460,10 +523,10 @@ export class MagusMatchGameApp implements GameApp {
       return;
     }
 
-    if (this.pendingLevelResult === 'win') {
+    if (this.pendingLevelResult === "win") {
       this.run = advanceRunAfterWin(this.run, this.pendingClearScore);
       if (this.pendingClearScore > 0) {
-        this.events.push({ type: 'scoreChanged', score: this.run.score });
+        this.events.push({ type: "scoreChanged", score: this.run.score });
       }
       this.prepareCurrentLevel();
       this.startPreparedLevel();
@@ -473,12 +536,15 @@ export class MagusMatchGameApp implements GameApp {
     this.run = advanceRunAfterLoss(this.run);
     if (this.run.lives <= 0) {
       this.finalScore = this.run.score;
-      this.phase = 'GAME_OVER';
+      this.phase = "GAME_OVER";
       this.pendingLevelResult = null;
       this.transitionTimerSec = 0;
-      this.requestSound(AssetIds.sounds.runEnd, { category: 'run', volume: 0.72 });
+      this.requestSound(AssetIds.sounds.runEnd, {
+        category: "run",
+        volume: 0.72,
+      });
       this.events.push({
-        type: 'runEnded',
+        type: "runEnded",
         finalScore: this.run.score,
         levelsCleared: this.run.levelsCleared,
       });
@@ -489,17 +555,20 @@ export class MagusMatchGameApp implements GameApp {
     this.startPreparedLevel();
   }
 
-  private handleSwap(from: { col: number; row: number }, to: { col: number; row: number }): void {
-    if (this.phase !== 'IDLE') {
+  private handleSwap(
+    from: { col: number; row: number },
+    to: { col: number; row: number },
+  ): void {
+    if (this.phase !== "IDLE") {
       return;
     }
 
-    if (this.currentLevel?.type === 'TRIAL' && this.trialRuntime != null) {
+    if (this.currentLevel?.type === "TRIAL" && this.trialRuntime != null) {
       this.handleTrialSwap(from, to);
       return;
     }
 
-    if (this.currentLevel?.type !== 'JOURNEY' || this.journeyRuntime == null) {
+    if (this.currentLevel?.type !== "JOURNEY" || this.journeyRuntime == null) {
       return;
     }
 
@@ -527,18 +596,22 @@ export class MagusMatchGameApp implements GameApp {
     const scoreDelta = result.scoreDelta + scoreSwapStats(result.scoringStats);
     if (scoreDelta > 0) {
       this.run = { ...this.run, score: this.run.score + scoreDelta };
-      this.events.push({ type: 'scoreChanged', score: this.run.score });
+      this.events.push({ type: "scoreChanged", score: this.run.score });
     }
 
-    if (result.runtime.result === 'won') {
-      this.beginLevelResult('win');
-    } else if (result.runtime.result === 'lost') {
-      this.beginLevelResult('loss');
+    if (result.runtime.result === "won") {
+      this.beginLevelResult("win");
+    } else if (result.runtime.result === "lost") {
+      this.beginLevelResult("loss");
     }
   }
 
   private handleJourneyPowerUpTap(origin: CellCoord): void {
-    if (this.phase !== 'IDLE' || this.currentLevel?.type !== 'JOURNEY' || this.journeyRuntime == null) {
+    if (
+      this.phase !== "IDLE" ||
+      this.currentLevel?.type !== "JOURNEY" ||
+      this.journeyRuntime == null
+    ) {
       return;
     }
 
@@ -565,22 +638,29 @@ export class MagusMatchGameApp implements GameApp {
     const scoreDelta = result.scoreDelta + scoreSwapStats(result.scoringStats);
     if (scoreDelta > 0) {
       this.run = { ...this.run, score: this.run.score + scoreDelta };
-      this.events.push({ type: 'scoreChanged', score: this.run.score });
+      this.events.push({ type: "scoreChanged", score: this.run.score });
     }
 
-    if (result.runtime.result === 'won') {
-      this.beginLevelResult('win');
-    } else if (result.runtime.result === 'lost') {
-      this.beginLevelResult('loss');
+    if (result.runtime.result === "won") {
+      this.beginLevelResult("win");
+    } else if (result.runtime.result === "lost") {
+      this.beginLevelResult("loss");
     }
   }
 
   private handleTrialSwap(from: CellCoord, to: CellCoord): void {
-    if (this.currentLevel?.type !== 'TRIAL' || this.trialRuntime == null) {
+    if (this.currentLevel?.type !== "TRIAL" || this.trialRuntime == null) {
       return;
     }
 
-    const result = processTrialSwap(this.board, this.trialRuntime, this.currentLevel, from, to, this.rng);
+    const result = processTrialSwap(
+      this.board,
+      this.trialRuntime,
+      this.currentLevel,
+      from,
+      to,
+      this.rng,
+    );
     if (!result.valid) {
       return;
     }
@@ -596,28 +676,40 @@ export class MagusMatchGameApp implements GameApp {
 
     if (scoreDelta > 0) {
       this.run = { ...this.run, score: this.run.score + scoreDelta };
-      this.events.push({ type: 'scoreChanged', score: this.run.score });
+      this.events.push({ type: "scoreChanged", score: this.run.score });
     }
 
     if (result.damageEvents.some((event) => event.defeated)) {
-      this.requestSound(AssetIds.sounds.monsterDefeat, { category: 'enemy', volume: 0.62 });
+      this.requestSound(AssetIds.sounds.monsterDefeat, {
+        category: "enemy",
+        volume: 0.62,
+      });
     } else if (result.damageEvents.length > 0) {
-      this.requestSound(AssetIds.sounds.monsterDamage, { category: 'enemy', volume: 0.5 });
+      this.requestSound(AssetIds.sounds.monsterDamage, {
+        category: "enemy",
+        volume: 0.5,
+      });
     }
 
-    if (result.runtime.result === 'won') {
-      this.beginLevelResult('win');
-    } else if (result.runtime.result === 'lost') {
-      this.beginLevelResult('loss');
+    if (result.runtime.result === "won") {
+      this.beginLevelResult("win");
+    } else if (result.runtime.result === "lost") {
+      this.beginLevelResult("loss");
     }
   }
 
   private handleTrialPowerUpTap(origin: CellCoord): void {
-    if (this.currentLevel?.type !== 'TRIAL' || this.trialRuntime == null) {
+    if (this.currentLevel?.type !== "TRIAL" || this.trialRuntime == null) {
       return;
     }
 
-    const result = processTrialPowerUpActivation(this.board, this.trialRuntime, this.currentLevel, origin, this.rng);
+    const result = processTrialPowerUpActivation(
+      this.board,
+      this.trialRuntime,
+      this.currentLevel,
+      origin,
+      this.rng,
+    );
     if (!result.valid) {
       return;
     }
@@ -633,43 +725,62 @@ export class MagusMatchGameApp implements GameApp {
 
     if (scoreDelta > 0) {
       this.run = { ...this.run, score: this.run.score + scoreDelta };
-      this.events.push({ type: 'scoreChanged', score: this.run.score });
+      this.events.push({ type: "scoreChanged", score: this.run.score });
     }
 
     if (result.damageEvents.some((event) => event.defeated)) {
-      this.requestSound(AssetIds.sounds.monsterDefeat, { category: 'enemy', volume: 0.62 });
+      this.requestSound(AssetIds.sounds.monsterDefeat, {
+        category: "enemy",
+        volume: 0.62,
+      });
     } else if (result.damageEvents.length > 0) {
-      this.requestSound(AssetIds.sounds.monsterDamage, { category: 'enemy', volume: 0.5 });
+      this.requestSound(AssetIds.sounds.monsterDamage, {
+        category: "enemy",
+        volume: 0.5,
+      });
     }
 
-    if (result.runtime.result === 'won') {
-      this.beginLevelResult('win');
-    } else if (result.runtime.result === 'lost') {
-      this.beginLevelResult('loss');
+    if (result.runtime.result === "won") {
+      this.beginLevelResult("win");
+    } else if (result.runtime.result === "lost") {
+      this.beginLevelResult("loss");
     }
   }
 
   private getLevelClearScore(): number {
-    if (this.currentLevel?.type === 'JOURNEY' && this.journeyRuntime != null) {
-      return scoreJourneyClear(this.run.difficulty, this.journeyRuntime.movesRemaining);
+    if (this.currentLevel?.type === "JOURNEY" && this.journeyRuntime != null) {
+      return scoreJourneyClear(
+        this.run.difficulty,
+        this.journeyRuntime.movesRemaining,
+      );
     }
 
-    if (this.currentLevel?.type === 'TRIAL') {
-      return scoreTrialClear(this.run.difficulty, this.levelMatchCount, this.elapsedSec);
+    if (this.currentLevel?.type === "TRIAL") {
+      return scoreTrialClear(
+        this.run.difficulty,
+        this.levelMatchCount,
+        this.elapsedSec,
+      );
     }
 
     return 0;
   }
 
-  private captureBoardAnimationTrace(trace: BoardAnimationTrace | undefined): void {
-    const stampedTrace = stampBoardAnimationTrace(trace, this.nextBoardAnimationRevision);
+  private captureBoardAnimationTrace(
+    trace: BoardAnimationTrace | undefined,
+  ): void {
+    const stampedTrace = stampBoardAnimationTrace(
+      trace,
+      this.nextBoardAnimationRevision,
+    );
     if (stampedTrace == null) {
       return;
     }
 
     this.latestBoardAnimationTrace = stampedTrace;
     this.latestBoardAnimationEndsAtSec =
-      this.animationClockSec + getBoardAnimationTraceDurationMs(stampedTrace) / 1000;
+      this.animationClockSec +
+      getBoardAnimationTraceDurationMs(stampedTrace) / 1000;
     this.nextBoardAnimationRevision += 1;
   }
 
@@ -686,8 +797,8 @@ export class MagusMatchGameApp implements GameApp {
       category?: SoundEventCategory;
     } = {},
   ): void {
-    const event: Extract<GameEvent, { type: 'soundRequested' }> = {
-      type: 'soundRequested',
+    const event: Extract<GameEvent, { type: "soundRequested" }> = {
+      type: "soundRequested",
       soundId,
     };
     if (options.intensity != null) {
@@ -706,15 +817,21 @@ export class MagusMatchGameApp implements GameApp {
     this.events.push(event);
   }
 
-  private emitMatchAudioAndJuice(stats: SwapScoringStats, anchor: CellCoord): void {
+  private emitMatchAudioAndJuice(
+    stats: SwapScoringStats,
+    anchor: CellCoord,
+  ): void {
     if (stats.matchCount <= 0) {
       return;
     }
 
-    this.requestSound(AssetIds.sounds.tileMatch, { category: 'match', volume: 0.55 });
+    this.requestSound(AssetIds.sounds.tileMatch, {
+      category: "match",
+      volume: 0.55,
+    });
     for (let index = 0; index < stats.comboCount; index += 1) {
       this.requestSound(AssetIds.sounds.comboPitchStep, {
-        category: 'match',
+        category: "match",
         volume: 0.48,
         playbackRate: 1 + Math.min(6, index + 1) * 0.08,
       });
@@ -722,14 +839,14 @@ export class MagusMatchGameApp implements GameApp {
 
     if (stats.powerUpsCreated > 0) {
       this.requestSound(AssetIds.sounds.powerupCreate, {
-        category: 'match',
+        category: "match",
         volume: 0.58,
         intensity: Math.min(1.5, stats.powerUpsCreated),
       });
-      this.addBoardCue('powerPulse', anchor, 0.45);
+      this.addBoardCue("powerPulse", anchor, 0.45);
     }
 
-    this.addBoardCue('matchFlash', anchor, 0.3);
+    this.addBoardCue("matchFlash", anchor, 0.3);
     this.triggerBoardShake(stats.matchCount + stats.powerUpsCreated);
   }
 
@@ -739,27 +856,33 @@ export class MagusMatchGameApp implements GameApp {
     anchor: CellCoord,
   ): void {
     for (const coord of result.clearedStandardCells.slice(0, 8)) {
-      this.addBoardCue('matchFlash', coord, 0.28);
+      this.addBoardCue("matchFlash", coord, 0.28);
     }
 
     if (result.convertedPathCells.length > 0) {
       this.requestSound(AssetIds.sounds.pathConvert, {
-        category: 'match',
+        category: "match",
         volume: 0.56,
         intensity: Math.min(1.4, 0.75 + result.convertedPathCells.length / 8),
       });
       for (const coord of result.convertedPathCells.slice(0, 12)) {
-        this.addBoardCue('pathGlow', coord, 0.55);
+        this.addBoardCue("pathGlow", coord, 0.55);
       }
     }
 
     if (!coordsEqual(previousMageCell, result.runtime.mageCell)) {
-      this.requestSound(AssetIds.sounds.mageWalk, { category: 'level', volume: 0.42 });
-      this.addBoardCue('pathGlow', result.runtime.mageCell, 0.42);
+      this.requestSound(AssetIds.sounds.mageWalk, {
+        category: "level",
+        volume: 0.42,
+      });
+      this.addBoardCue("pathGlow", result.runtime.mageCell, 0.42);
     }
 
-    if (result.convertedPathCells.length === 0 && result.clearedStandardCells.length === 0) {
-      this.addBoardCue('matchFlash', anchor, 0.22);
+    if (
+      result.convertedPathCells.length === 0 &&
+      result.clearedStandardCells.length === 0
+    ) {
+      this.addBoardCue("matchFlash", anchor, 0.22);
     }
   }
 
@@ -769,9 +892,14 @@ export class MagusMatchGameApp implements GameApp {
   ): void {
     for (const event of damageEvents.slice(0, 8)) {
       const sounds = soundIdsForSpellSchool(event.schoolId);
-      this.requestSound(sounds.whoosh, { category: 'spell', volume: 0.42 });
-      this.requestSound(sounds.impact, { category: 'spell', volume: 0.48 });
-      this.addBoardCue('damagePopup', anchor, 0.45, `-${Math.round(event.damage)}`);
+      this.requestSound(sounds.whoosh, { category: "spell", volume: 0.42 });
+      this.requestSound(sounds.impact, { category: "spell", volume: 0.48 });
+      this.addBoardCue(
+        "damagePopup",
+        anchor,
+        0.45,
+        `-${Math.round(event.damage)}`,
+      );
     }
   }
 
@@ -818,7 +946,10 @@ export class MagusMatchGameApp implements GameApp {
       return 0;
     }
 
-    return Math.min(CAMERA_SHAKE_MAX, Math.max(CAMERA_SHAKE_MIN, this.shakeAmplitudePixels));
+    return Math.min(
+      CAMERA_SHAKE_MAX,
+      Math.max(CAMERA_SHAKE_MIN, this.shakeAmplitudePixels),
+    );
   }
 
   private getBoardVisualCueState(): BoardVisualCueState[] {
@@ -831,35 +962,36 @@ export class MagusMatchGameApp implements GameApp {
   }
 
   private getObjectiveText(): string {
-    if (this.currentLevel?.type === 'TRIAL' && this.trialRuntime != null) {
-      if (this.trialRuntime.result === 'won') {
-        return 'Trial cleared';
+    if (this.currentLevel?.type === "TRIAL" && this.trialRuntime != null) {
+      if (this.trialRuntime.result === "won") {
+        return "Trial cleared";
       }
 
-      if (this.trialRuntime.result === 'lost') {
-        return 'Monsters broke through';
+      if (this.trialRuntime.result === "lost") {
+        return "Monsters broke through";
       }
 
       return `Monsters ${this.trialRuntime.defeatedMonsterIds.length}/${this.trialRuntime.totalMonsters}`;
     }
 
-    if (this.currentLevel?.type !== 'JOURNEY' || this.journeyRuntime == null) {
-      return 'Journey';
+    if (this.currentLevel?.type !== "JOURNEY" || this.journeyRuntime == null) {
+      return "Journey";
     }
 
-    if (this.journeyRuntime.result === 'won') {
-      return 'Goal reached';
+    if (this.journeyRuntime.result === "won") {
+      return "Goal reached";
     }
 
-    if (this.journeyRuntime.result === 'lost') {
-      return 'Out of moves';
+    if (this.journeyRuntime.result === "lost") {
+      return "Out of moves";
     }
 
-    const hintVisible = getVisibleJourneyHintCells(
-      this.currentLevel,
-      this.journeyRuntime,
-      this.elapsedSec,
-    ).length > 0;
+    const hintVisible =
+      getVisibleJourneyHintCells(
+        this.currentLevel,
+        this.journeyRuntime,
+        this.elapsedSec,
+      ).length > 0;
 
     return hintVisible
       ? `Moves ${this.journeyRuntime.movesRemaining} - hinted path swap`
@@ -868,51 +1000,58 @@ export class MagusMatchGameApp implements GameApp {
 
   private getHeroWorldObjects(): WorldObjectState[] {
     const objects: WorldObjectState[] = [
-      createWorldObject('stage-backdrop', HeroStageTemplateIds.backdropForest, {
+      createWorldObject("stage-backdrop", HeroStageTemplateIds.backdropForest, {
         position: { x: 0, y: 0, z: -0.2 },
         scale: { x: 1, y: 1, z: 1 },
       }),
     ];
 
-    if (this.currentLevel?.type === 'TRIAL' && this.trialRuntime != null) {
+    if (this.currentLevel?.type === "TRIAL" && this.trialRuntime != null) {
       return [...objects, ...this.getTrialHeroWorldObjects()];
     }
 
-    if (this.currentLevel?.type !== 'JOURNEY' || this.journeyRuntime == null) {
+    if (this.currentLevel?.type !== "JOURNEY" || this.journeyRuntime == null) {
       return objects;
     }
 
     for (const coord of getAllPlayableCoords(this.board)) {
       if (this.board[coord.row][coord.col].isPath) {
         objects.push(
-          createWorldObject(`journey-path-${coord.col}-${coord.row}`, HeroStageTemplateIds.pathMarker, {
-            position: heroPositionForCell(coord, -0.05),
-            scale: { x: 0.35, y: 0.05, z: 0.35 },
-            renderOrder: 1,
-            replication: 'localCosmetic',
-          }),
+          createWorldObject(
+            `journey-path-${coord.col}-${coord.row}`,
+            HeroStageTemplateIds.pathMarker,
+            {
+              position: heroPositionForCell(coord, -0.05),
+              scale: { x: 0.35, y: 0.05, z: 0.35 },
+              renderOrder: 1,
+              replication: "localCosmetic",
+            },
+          ),
         );
       }
     }
 
     objects.push(
-        createWorldObject('actor-mage', HeroStageTemplateIds.mage, {
-          position: heroPositionForCell(this.journeyRuntime.mageCell, 0.35),
-          scale: MAGE_WORLD_SCALE,
-          renderOrder: 4,
-          animationId: phaseToMageAnimation(this.phase),
-        }),
-      createWorldObject('actor-prince-cage', HeroStageTemplateIds.princeCage, {
+      createWorldObject("actor-mage", HeroStageTemplateIds.mage, {
+        position: translateY(
+          heroPositionForCell(this.journeyRuntime.mageCell, 0.35),
+          MAGE_WORLD_Y_OFFSET,
+        ),
+        scale: MAGE_WORLD_SCALE,
+        renderOrder: 4,
+        animationId: phaseToMageAnimation(this.phase),
+      }),
+      createWorldObject("actor-prince-cage", HeroStageTemplateIds.princeCage, {
         position: heroPositionForCell(this.currentLevel.journey.goalCell, 0.55),
         scale: { x: 0.55, y: 0.75, z: 0.55 },
         renderOrder: 3,
         animationId: phaseToPrinceAnimation(this.phase),
       }),
-      createWorldObject('prop-goal-flag', HeroStageTemplateIds.goalFlag, {
+      createWorldObject("prop-goal-flag", HeroStageTemplateIds.goalFlag, {
         position: heroPositionForCell(this.currentLevel.journey.goalCell, 0.15),
         scale: { x: 0.35, y: 0.55, z: 0.35 },
         renderOrder: 2,
-        replication: 'localCosmetic',
+        replication: "localCosmetic",
       }),
     );
 
@@ -920,37 +1059,52 @@ export class MagusMatchGameApp implements GameApp {
   }
 
   private getTrialHeroWorldObjects(): WorldObjectState[] {
-    if (this.currentLevel?.type !== 'TRIAL' || this.trialRuntime == null) {
+    if (this.currentLevel?.type !== "TRIAL" || this.trialRuntime == null) {
       return [];
     }
 
-      const objects: WorldObjectState[] = [
-        createWorldObject('actor-mage', HeroStageTemplateIds.mage, {
-          position: getTrialMageWorldPosition(this.currentLevel),
-          scale: MAGE_WORLD_SCALE,
-          renderOrder: 5,
-          animationId: phaseToMageAnimation(this.phase),
-        }),
-      createWorldObject('trial-fail-line', HeroStageTemplateIds.pathMarker, {
-        position: { x: this.currentLevel.trial.contactX, y: this.currentLevel.trial.laneY, z: -0.03 },
+    const objects: WorldObjectState[] = [
+      createWorldObject("actor-mage", HeroStageTemplateIds.mage, {
+        position: translate(
+          getTrialMageWorldPosition(this.currentLevel),
+          TRIAL_MAGE_WORLD_X_OFFSET,
+          MAGE_WORLD_Y_OFFSET,
+        ),
+        scale: MAGE_WORLD_SCALE,
+        renderOrder: 5,
+        animationId: phaseToMageAnimation(this.phase),
+      }),
+      createWorldObject("trial-fail-line", HeroStageTemplateIds.pathMarker, {
+        position: {
+          x: this.currentLevel.trial.contactX,
+          y: this.currentLevel.trial.laneY,
+          z: -0.03,
+        },
         scale: { x: 0.06, y: 1.25, z: 0.18 },
         renderOrder: 1,
-        replication: 'localCosmetic',
-        tintHex: '#eb5757',
+        replication: "localCosmetic",
+        tintHex: "#eb5757",
         opacity: 0.6,
       }),
     ];
 
     for (const monster of this.trialRuntime.monsters) {
-      const monsterPosition = getTrialMonsterWorldPosition(this.currentLevel, monster);
+      const monsterPosition = translateY(
+        getTrialMonsterWorldPosition(this.currentLevel, monster),
+        trialMonsterWorldYOffset(monster.kind),
+      );
       objects.push(
-        createWorldObject(`trial-monster-${monster.monsterId}`, HeroStageTemplateIds.monsterPlaceholder, {
-          position: monsterPosition,
-          scale: scaleForTrialMonster(monster.kind),
-          renderOrder: 4,
-          animationId: this.phase === 'LOSE' ? 'victory' : 'walk',
-          tintHex: tintForTrialMonster(monster.kind),
-        }),
+        createWorldObject(
+          `trial-monster-${monster.monsterId}`,
+          HeroStageTemplateIds.monsterPlaceholder,
+          {
+            position: monsterPosition,
+            scale: scaleForTrialMonster(monster.kind),
+            renderOrder: 4,
+            animationId: this.phase === "LOSE" ? "victory" : "walk",
+            tintHex: tintForTrialMonster(monster.kind),
+          },
+        ),
         ...createTrialMonsterHealthBarObjects(monster, monsterPosition),
       );
     }
@@ -961,37 +1115,52 @@ export class MagusMatchGameApp implements GameApp {
 
 function assetIdForTileType(type: TileType): string {
   switch (type) {
-    case 'FIRE':
+    case "FIRE":
       return AssetIds.tiles.fire;
-    case 'ICE':
+    case "ICE":
       return AssetIds.tiles.ice;
-    case 'LIGHTNING':
+    case "LIGHTNING":
       return AssetIds.tiles.lightning;
-    case 'EARTH':
+    case "EARTH":
       return AssetIds.tiles.earth;
-    case 'LAND':
+    case "LAND":
       return AssetIds.tiles.land;
-    case 'ROCKET_H':
+    case "ROCKET_H":
       return AssetIds.powerUps.rocketH;
-    case 'ROCKET_V':
+    case "ROCKET_V":
       return AssetIds.powerUps.rocketV;
-    case 'TNT':
+    case "TNT":
       return AssetIds.powerUps.tnt;
-    case 'LIGHTBALL':
+    case "LIGHTBALL":
       return AssetIds.powerUps.lightball;
   }
 }
 
-function soundIdsForSpellSchool(schoolId: SpellSchoolId): { whoosh: string; impact: string } {
+function soundIdsForSpellSchool(schoolId: SpellSchoolId): {
+  whoosh: string;
+  impact: string;
+} {
   switch (schoolId) {
-    case 'fire':
-      return { whoosh: AssetIds.sounds.fireWhoosh, impact: AssetIds.sounds.fireImpact };
-    case 'ice':
-      return { whoosh: AssetIds.sounds.iceWhoosh, impact: AssetIds.sounds.iceImpact };
-    case 'lightning':
-      return { whoosh: AssetIds.sounds.lightningWhoosh, impact: AssetIds.sounds.lightningImpact };
-    case 'earth':
-      return { whoosh: AssetIds.sounds.earthWhoosh, impact: AssetIds.sounds.earthImpact };
+    case "fire":
+      return {
+        whoosh: AssetIds.sounds.fireWhoosh,
+        impact: AssetIds.sounds.fireImpact,
+      };
+    case "ice":
+      return {
+        whoosh: AssetIds.sounds.iceWhoosh,
+        impact: AssetIds.sounds.iceImpact,
+      };
+    case "lightning":
+      return {
+        whoosh: AssetIds.sounds.lightningWhoosh,
+        impact: AssetIds.sounds.lightningImpact,
+      };
+    case "earth":
+      return {
+        whoosh: AssetIds.sounds.earthWhoosh,
+        impact: AssetIds.sounds.earthImpact,
+      };
   }
 }
 
@@ -999,108 +1168,144 @@ function coordsEqual(first: CellCoord | null, second: CellCoord): boolean {
   return first != null && first.col === second.col && first.row === second.row;
 }
 
-export function phaseToCinematicState(phase: GamePhase): HeroWorldState['cinematicState'] {
-  if (phase === 'WIN') {
-    return 'victory';
+export function phaseToCinematicState(
+  phase: GamePhase,
+): HeroWorldState["cinematicState"] {
+  if (phase === "WIN") {
+    return "victory";
   }
 
-  if (phase === 'LOSE') {
-    return 'fail';
+  if (phase === "LOSE") {
+    return "fail";
   }
 
-  return 'none';
+  return "none";
 }
 
 function phaseToMageAnimation(phase: GamePhase): string {
-  if (phase === 'WIN') {
-    return 'victory';
+  if (phase === "WIN") {
+    return "victory";
   }
 
-  if (phase === 'LOSE') {
-    return 'stunned';
+  if (phase === "LOSE") {
+    return "stunned";
   }
 
-  return 'idle';
+  return "idle";
 }
 
 function phaseToPrinceAnimation(phase: GamePhase): string {
-  if (phase === 'WIN') {
-    return 'yank';
+  if (phase === "WIN") {
+    return "yank";
   }
 
-  if (phase === 'LOSE') {
-    return 'cower';
+  if (phase === "LOSE") {
+    return "cower";
   }
 
-  return 'cower';
+  return "cower";
 }
 
-function scaleForTrialMonster(kind: ActiveTrialMonster['kind']): TransformState['scale'] {
+function scaleForTrialMonster(
+  kind: ActiveTrialMonster["kind"],
+): TransformState["scale"] {
+  const scale = baseScaleForTrialMonster(kind);
+  return {
+    x: scale.x * TRIAL_MONSTER_SCALE_MULTIPLIER,
+    y: scale.y * TRIAL_MONSTER_SCALE_MULTIPLIER,
+    z: scale.z * TRIAL_MONSTER_SCALE_MULTIPLIER,
+  };
+}
+
+function baseScaleForTrialMonster(
+  kind: ActiveTrialMonster["kind"],
+): TransformState["scale"] {
   switch (kind) {
-    case 'kobold':
+    case "kobold":
       return { x: 0.46, y: 0.62, z: 0.46 };
-    case 'tallKobold':
+    case "tallKobold":
       return { x: 0.52, y: 0.86, z: 0.52 };
-    case 'miniBoss':
+    case "miniBoss":
       return { x: 0.7, y: 1.05, z: 0.7 };
   }
 }
 
-function tintForTrialMonster(kind: ActiveTrialMonster['kind']): string {
+function trialMonsterWorldYOffset(kind: ActiveTrialMonster["kind"]): number {
   switch (kind) {
-    case 'kobold':
-      return '#27ae60';
-    case 'tallKobold':
-      return '#8b6f47';
-    case 'miniBoss':
-      return '#eb5757';
+    case "kobold":
+      return -0.36;
+    case "tallKobold":
+      return -0.5;
+    case "miniBoss":
+      return -0.6;
+  }
+}
+
+function tintForTrialMonster(kind: ActiveTrialMonster["kind"]): string {
+  switch (kind) {
+    case "kobold":
+      return "#27ae60";
+    case "tallKobold":
+      return "#8b6f47";
+    case "miniBoss":
+      return "#eb5757";
   }
 }
 
 export function createTrialMonsterHealthBarObjects(
   monster: ActiveTrialMonster,
-  monsterPosition: TransformState['position'],
+  monsterPosition: TransformState["position"],
 ): WorldObjectState[] {
   const ratio = healthRatioForTrialMonster(monster);
   if (ratio <= 0) {
     return [];
   }
 
-  const barY = monsterPosition.y + healthBarYOffsetForTrialMonster(monster.kind);
+  const barY =
+    monsterPosition.y + healthBarYOffsetForTrialMonster(monster.kind);
   const barZ = monsterPosition.z + TRIAL_HEALTH_BAR_Z_OFFSET;
   const fillWidth = TRIAL_HEALTH_BAR_WIDTH * ratio;
-  const fillCenterX = monsterPosition.x - TRIAL_HEALTH_BAR_WIDTH / 2 + fillWidth / 2;
+  const fillCenterX =
+    monsterPosition.x - TRIAL_HEALTH_BAR_WIDTH / 2 + fillWidth / 2;
 
   return [
-    createWorldObject(`trial-monster-${monster.monsterId}-health-track`, HeroStageTemplateIds.healthBarTrack, {
-      position: { x: monsterPosition.x, y: barY, z: barZ },
-      scale: { x: TRIAL_HEALTH_BAR_WIDTH, y: TRIAL_HEALTH_BAR_HEIGHT, z: 1 },
-      renderOrder: 6,
-      replication: 'localCosmetic',
-      opacity: 0.85,
-    }),
-    createWorldObject(`trial-monster-${monster.monsterId}-health-fill`, HeroStageTemplateIds.healthBarFill, {
-      position: { x: fillCenterX, y: barY, z: barZ + 0.01 },
-      scale: { x: fillWidth, y: TRIAL_HEALTH_BAR_FILL_HEIGHT, z: 1 },
-      renderOrder: 7,
-      replication: 'localCosmetic',
-      tintHex: healthBarTintForRatio(ratio),
-      opacity: 0.95,
-    }),
+    createWorldObject(
+      `trial-monster-${monster.monsterId}-health-track`,
+      HeroStageTemplateIds.healthBarTrack,
+      {
+        position: { x: monsterPosition.x, y: barY, z: barZ },
+        scale: { x: TRIAL_HEALTH_BAR_WIDTH, y: TRIAL_HEALTH_BAR_HEIGHT, z: 1 },
+        renderOrder: 6,
+        replication: "localCosmetic",
+        opacity: 0.85,
+      },
+    ),
+    createWorldObject(
+      `trial-monster-${monster.monsterId}-health-fill`,
+      HeroStageTemplateIds.healthBarFill,
+      {
+        position: { x: fillCenterX, y: barY, z: barZ + 0.01 },
+        scale: { x: fillWidth, y: TRIAL_HEALTH_BAR_FILL_HEIGHT, z: 1 },
+        renderOrder: 7,
+        replication: "localCosmetic",
+        tintHex: healthBarTintForRatio(ratio),
+        opacity: 0.95,
+      },
+    ),
   ];
 }
 
 export function healthBarTintForRatio(ratio: number): string {
   const clampedRatio = Math.max(0, Math.min(1, ratio));
   if (clampedRatio > 0.5) {
-    return '#27ae60';
+    return "#27ae60";
   }
 
   if (clampedRatio >= 0.25) {
-    return '#f2c94c';
+    return "#f2c94c";
   }
 
-  return '#eb5757';
+  return "#eb5757";
 }
 
 function healthRatioForTrialMonster(monster: ActiveTrialMonster): number {
@@ -1111,36 +1316,38 @@ function healthRatioForTrialMonster(monster: ActiveTrialMonster): number {
   return Math.max(0, Math.min(1, monster.hp / monster.maxHp));
 }
 
-function healthBarYOffsetForTrialMonster(kind: ActiveTrialMonster['kind']): number {
+function healthBarYOffsetForTrialMonster(
+  kind: ActiveTrialMonster["kind"],
+): number {
   switch (kind) {
-    case 'kobold':
-      return 0.82;
-    case 'tallKobold':
-      return 1.05;
-    case 'miniBoss':
-      return 1.28;
+    case "kobold":
+      return 1.64;
+    case "tallKobold":
+      return 2.1;
+    case "miniBoss":
+      return 2.56;
   }
 }
 
-function screenForPhase(phase: GamePhase): ScreenRenderState['screen'] {
-  if (phase === 'TITLE') {
-    return 'title';
+function screenForPhase(phase: GamePhase): ScreenRenderState["screen"] {
+  if (phase === "TITLE") {
+    return "title";
   }
 
-  if (phase === 'GAME_OVER') {
-    return 'gameOver';
+  if (phase === "GAME_OVER") {
+    return "gameOver";
   }
 
-  return 'play';
+  return "play";
 }
 
 function transitionTextForPhase(phase: GamePhase): string | null {
-  if (phase === 'WIN') {
-    return 'Level Clear';
+  if (phase === "WIN") {
+    return "Level Clear";
   }
 
-  if (phase === 'LOSE') {
-    return 'Life Lost';
+  if (phase === "LOSE") {
+    return "Life Lost";
   }
 
   return null;
@@ -1150,10 +1357,10 @@ function createWorldObject(
   objectId: string,
   templateId: string,
   options: {
-    position: TransformState['position'];
-    scale: TransformState['scale'];
+    position: TransformState["position"];
+    scale: TransformState["scale"];
     renderOrder?: number;
-    replication?: WorldObjectState['replication'];
+    replication?: WorldObjectState["replication"];
     animationId?: string;
     tintHex?: string;
     opacity?: number;
@@ -1168,9 +1375,9 @@ function createWorldObject(
       scale: options.scale,
     },
     visible: true,
-    lifetime: 'persistent',
-    replication: options.replication ?? 'sharedGameplay',
-    renderLayer: 'heroStage',
+    lifetime: "persistent",
+    replication: options.replication ?? "sharedGameplay",
+    renderLayer: "heroStage",
     renderOrder: options.renderOrder,
     tintHex: options.tintHex,
     opacity: options.opacity,
@@ -1178,7 +1385,29 @@ function createWorldObject(
   };
 }
 
-function heroPositionForCell(coord: CellCoord, z: number): TransformState['position'] {
+function translate(
+  position: TransformState["position"],
+  offsetX: number,
+  offsetY: number,
+): TransformState["position"] {
+  return {
+    ...position,
+    x: position.x + offsetX,
+    y: position.y + offsetY,
+  };
+}
+
+function translateY(
+  position: TransformState["position"],
+  offsetY: number,
+): TransformState["position"] {
+  return translate(position, 0, offsetY);
+}
+
+function heroPositionForCell(
+  coord: CellCoord,
+  z: number,
+): TransformState["position"] {
   const normalizedX = coord.col / (BOARD_SIZE - 1);
   const normalizedY = coord.row / (BOARD_SIZE - 1);
   return {

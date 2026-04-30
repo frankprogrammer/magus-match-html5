@@ -135,16 +135,39 @@ export function applyMageTextureToMeshes(object: THREE.Object3D, texture: THREE.
       return;
     }
 
-    if (materialMissing(child.material)) {
-      child.material = createMageFallbackMaterial();
-    }
-
-    const updatedMaterials = materialsForMesh(child).map((material) =>
-      materialNeedsRecoveredTexture(material) ? materialWithTexture(material, texture) : material,
-    );
+    const hasUv = meshHasUv(child);
+    const updatedMaterials = materialMissing(child.material)
+      ? [hasUv ? materialWithTexture(texture) : createMageFallbackMaterial()]
+      : materialsForMesh(child).map((material) => (hasUv ? materialWithTexture(texture) : visibleMaterial(material)));
     child.material = updatedMaterials.length === 1 ? updatedMaterials[0] : updatedMaterials;
     child.visible = true;
   });
+}
+
+export interface MageTextureDebugInfo {
+  meshName: string;
+  hasUv: boolean;
+  materialCount: number;
+  textureStatus: 'applied' | 'skipped-no-uv';
+  materialTypes: string[];
+}
+
+export function getMageTextureDebugInfo(object: THREE.Object3D): MageTextureDebugInfo[] {
+  const info: MageTextureDebugInfo[] = [];
+  object.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) {
+      return;
+    }
+
+    info.push({
+      meshName: child.name || '(unnamed mesh)',
+      hasUv: meshHasUv(child),
+      materialCount: materialsForMesh(child).length,
+      textureStatus: meshHasUv(child) ? 'applied' : 'skipped-no-uv',
+      materialTypes: materialsForMesh(child).map((material) => material.type),
+    });
+  });
+  return info;
 }
 
 function createMageFallbackMaterial(): THREE.MeshStandardMaterial {
@@ -159,33 +182,29 @@ function createMageFallbackMaterial(): THREE.MeshStandardMaterial {
   });
 }
 
-function materialNeedsRecoveredTexture(material: THREE.Material): boolean {
-  const texturedMaterial = material as THREE.Material & { map?: THREE.Texture | null };
-  return texturedMaterial.map == null || material.transparent || material.opacity < 1;
-}
-
-function materialWithTexture(material: THREE.Material, texture: THREE.Texture): THREE.Material {
-  const texturedMaterial = material as THREE.MeshStandardMaterial & { map?: THREE.Texture | null };
-  if ('map' in texturedMaterial) {
-    texturedMaterial.map = texture;
-    texturedMaterial.transparent = false;
-    texturedMaterial.opacity = 1;
-    texturedMaterial.depthWrite = true;
-    texturedMaterial.side = THREE.DoubleSide;
-    texturedMaterial.needsUpdate = true;
-    return texturedMaterial;
-  }
-
-  return new THREE.MeshStandardMaterial({
+function materialWithTexture(texture: THREE.Texture): THREE.Material {
+  return new THREE.MeshBasicMaterial({
     map: texture,
     color: '#ffffff',
-    roughness: 0.66,
-    metalness: 0.08,
     side: THREE.DoubleSide,
     transparent: false,
+    alphaTest: 0.08,
     opacity: 1,
     depthWrite: true,
   });
+}
+
+function visibleMaterial(material: THREE.Material): THREE.Material {
+  material.side = THREE.DoubleSide;
+  material.transparent = false;
+  material.opacity = 1;
+  material.depthWrite = true;
+  material.needsUpdate = true;
+  return material;
+}
+
+function meshHasUv(mesh: THREE.Mesh): boolean {
+  return mesh.geometry.getAttribute('uv') != null;
 }
 
 function materialsForMesh(mesh: THREE.Mesh): THREE.Material[] {

@@ -7,6 +7,7 @@ import {
   MAGE_WORLD_SCALE,
   phaseToCinematicState,
 } from '../src/core/GameApp';
+import { getTrialMageWorldPosition } from '../src/generator/TrialRules';
 import { HeroStageTemplateIds } from '../src/world-3d/HeroStageTemplates';
 
 describe('HeroWorldState', () => {
@@ -72,6 +73,8 @@ describe('HeroWorldState', () => {
     expect(fill?.replication).toBe('localCosmetic');
     expect(track?.transform.position.y).toBeGreaterThan(monster?.transform.position.y ?? 0);
     expect(fill?.transform.scale.x).toBeCloseTo(track?.transform.scale.x ?? 0);
+    expect(track?.transform.scale.y).toBeCloseTo(0.18);
+    expect(fill?.transform.scale.y).toBeCloseTo(0.11);
     expect(fill?.tintHex).toBe('#27ae60');
   });
 
@@ -125,16 +128,29 @@ describe('HeroWorldState', () => {
     expect(healthBarTintForRatio(0.24)).toBe('#eb5757');
   });
 
-  it('uses a readable uniform mage world scale for normalized FBX models', () => {
+  it('uses doubled readable mage world scale for normalized FBX models', () => {
     const journeyMage = new MagusMatchGameApp(123, { debugLevelType: 'JOURNEY' })
       .getHeroWorldState()
       .objects.find((object) => object.templateId === HeroStageTemplateIds.mage);
     const trialMage = new MagusMatchGameApp(123)
       .getHeroWorldState()
       .objects.find((object) => object.templateId === HeroStageTemplateIds.mage);
+    const trialLevel = new MagusMatchGameApp(123).getCurrentLevelForDebug();
+    const baseTrialMagePosition = trialLevel?.type === 'TRIAL' ? getTrialMageWorldPosition(trialLevel) : null;
 
     expect(journeyMage?.transform.scale).toEqual(MAGE_WORLD_SCALE);
     expect(trialMage?.transform.scale).toEqual(MAGE_WORLD_SCALE);
-    expect(MAGE_WORLD_SCALE).toEqual({ x: 1, y: 1, z: 1 });
+    expect(MAGE_WORLD_SCALE).toEqual({ x: 2, y: 2, z: 2 });
+    expect(journeyMage?.transform.position.y).toBeLessThan(1.6);
+    expect(trialMage?.transform.position.y).toBeLessThan(-0.85);
+    expect(trialMage?.transform.position.x).toBeCloseTo((baseTrialMagePosition?.x ?? 0) + 0.85);
+  });
+
+  it('doubles Trial enemy scales and lowers their world positions', () => {
+    const state = new MagusMatchGameApp(789).getHeroWorldState();
+    const monster = state.objects.find((object) => object.templateId === HeroStageTemplateIds.monsterPlaceholder);
+
+    expect(monster?.transform.scale).toEqual({ x: 0.92, y: 1.24, z: 0.92 });
+    expect(monster?.transform.position.y).toBeLessThan(-0.85);
   });
 });

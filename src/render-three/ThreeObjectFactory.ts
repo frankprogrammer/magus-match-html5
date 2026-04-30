@@ -10,6 +10,7 @@ import {
   applyFallbackMaterialToUnmaterialedMeshes,
   createMageLoopClip,
   ensureMageMeshesVisibleWithoutOverridingTextures,
+  getMageTextureDebugInfo,
   hasRenderableGeometry,
   normalizeModelToActorBounds,
 } from "./ThreeModelUtils";
@@ -27,6 +28,7 @@ export class ThreeObjectFactory {
   private mageLoadStarted = false;
   private mageTexture: THREE.Texture | null = null;
   private mageTextureLoadStarted = false;
+  private mageTextureDebugShown = false;
   private mageBoneOnlyWarningShown = false;
 
   constructor() {
@@ -189,6 +191,13 @@ export class ThreeObjectFactory {
     }
 
     applyMageTextureToMeshes(this.mageTemplate, this.mageTexture);
+    if (!this.mageTextureDebugShown && import.meta.env.DEV) {
+      console.info(
+        "Applied forced mage texture to FBX meshes:",
+        getMageTextureDebugInfo(this.mageTemplate),
+      );
+      this.mageTextureDebugShown = true;
+    }
     return true;
   }
 }

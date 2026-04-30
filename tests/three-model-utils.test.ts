@@ -6,6 +6,7 @@ import {
   applyMageTextureToMeshes,
   createMageLoopClip,
   ensureMageMeshesVisibleWithoutOverridingTextures,
+  getMageTextureDebugInfo,
   hasRenderableGeometry,
   inferFrameRateForInclusiveFrameRange,
   normalizeModelToActorBounds,
@@ -85,25 +86,53 @@ describe('normalizeModelToActorBounds', () => {
     expect(material.map).toBe(texture);
   });
 
-  it('applies recovered mage texture to untextured or transparent materials', () => {
+  it('force-applies recovered mage texture over existing gray materials', () => {
     const texture = new THREE.Texture();
+    const oldTexture = new THREE.Texture();
     const mesh = new THREE.Mesh(
       new THREE.BoxGeometry(1, 1, 1),
       new THREE.MeshPhongMaterial({
-        color: '#000000',
-        transparent: true,
-        opacity: 0,
+        color: '#777777',
+        map: oldTexture,
       }),
     );
     mesh.visible = false;
 
     applyMageTextureToMeshes(mesh, texture);
 
-    const material = mesh.material as THREE.MeshPhongMaterial;
+    const material = mesh.material as unknown as THREE.MeshBasicMaterial;
     expect(mesh.visible).toBe(true);
+    expect(material).toBeInstanceOf(THREE.MeshBasicMaterial);
     expect(material.map).toBe(texture);
+    expect(material.color.getHexString()).toBe('ffffff');
     expect(material.transparent).toBe(false);
     expect(material.opacity).toBe(1);
+    expect(material.alphaTest).toBeCloseTo(0.08);
+    expect(material.depthWrite).toBe(true);
+    expect(material.side).toBe(THREE.DoubleSide);
+  });
+
+  it('keeps meshes without UVs visible without applying the recovered mage texture', () => {
+    const texture = new THREE.Texture();
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));
+    const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: '#777777' }));
+
+    applyMageTextureToMeshes(mesh, texture);
+
+    const material = mesh.material as THREE.MeshBasicMaterial;
+    expect(material.map).toBeNull();
+    expect(material.transparent).toBe(false);
+    expect(material.opacity).toBe(1);
+    expect(getMageTextureDebugInfo(mesh)).toEqual([
+      {
+        meshName: '(unnamed mesh)',
+        hasUv: false,
+        materialCount: 1,
+        textureStatus: 'skipped-no-uv',
+        materialTypes: ['MeshBasicMaterial'],
+      },
+    ]);
   });
 
   it('still gives unmaterialed mage meshes a visible fallback material', () => {

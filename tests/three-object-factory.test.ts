@@ -30,6 +30,19 @@ describe('ThreeObjectFactory', () => {
     expect(plane?.scale.y).toBeCloseTo(HERO_BACKDROP_VIEW_HEIGHT);
   });
 
+  it('creates synchronous unlit health bar track and fill objects', () => {
+    const factory = new ThreeObjectFactory();
+    const track = factory.create(HeroStageTemplateIds.healthBarTrack);
+    const fill = factory.create(HeroStageTemplateIds.healthBarFill);
+
+    expect(track).toBeInstanceOf(THREE.Mesh);
+    expect(fill).toBeInstanceOf(THREE.Mesh);
+    expect((track as THREE.Mesh).material).toBeInstanceOf(THREE.MeshBasicMaterial);
+    expect((fill as THREE.Mesh).material).toBeInstanceOf(THREE.MeshBasicMaterial);
+    expect(((track as THREE.Mesh).material as THREE.MeshBasicMaterial).depthWrite).toBe(false);
+    expect(((fill as THREE.Mesh).material as THREE.MeshBasicMaterial).depthWrite).toBe(false);
+  });
+
   it('computes cover sizing for wide and tall backdrop images', () => {
     expect(backdropCoverSizeForImageAspect(3)).toEqual({
       width: 15,

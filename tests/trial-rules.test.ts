@@ -130,6 +130,8 @@ describe('TrialRules', () => {
 
     expect(result.valid).toBe(true);
     expect(result.damageEvents.length).toBeGreaterThan(0);
+    expect(result.runtime.monsters[0]?.hp).toBeLessThan(50);
+    expect(result.runtime.monsters[0]?.maxHp).toBe(50);
     expect(result.runtime.projectiles[0].remainingSec).toBeCloseTo(0.08);
     expect(result.scoreDelta).toBeGreaterThan(0);
 

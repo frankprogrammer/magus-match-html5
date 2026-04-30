@@ -135,7 +135,7 @@ export function isTrialManifestClearable(
   const slowestWalkSpeed = Math.min(...manifest.map((monster) => monster.walkSpeed));
   const travelSec = (TRIAL_LANES[0].spawnX - TRIAL_CONTACT_X) / slowestWalkSpeed;
   const availableSec = manifest.length * travelSec;
-  const expectedAverageSkillDamage = availableSec * 1.5 * baseDamage * 0.2;
+  const expectedAverageSkillDamage = availableSec * 0.95 * baseDamage;
   const totalHp = manifest.reduce((sum, monster) => sum + monster.maxHp, 0);
 
   return expectedAverageSkillDamage >= totalHp;

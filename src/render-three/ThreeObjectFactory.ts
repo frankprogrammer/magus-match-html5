@@ -46,6 +46,10 @@ export class ThreeObjectFactory {
         return createMonsterPlaceholder();
       case HeroStageTemplateIds.projectilePlaceholder:
         return createProjectilePlaceholder();
+      case HeroStageTemplateIds.healthBarTrack:
+        return createHealthBarPlane("#1f1830", 0.85);
+      case HeroStageTemplateIds.healthBarFill:
+        return createHealthBarPlane("#27ae60", 0.95);
       default:
         return createFallback(templateId);
     }
@@ -341,6 +345,18 @@ function createProjectilePlaceholder(): THREE.Object3D {
     0,
     Math.PI / 2,
   );
+}
+
+function createHealthBarPlane(color: string, opacity: number): THREE.Object3D {
+  const material = new THREE.MeshBasicMaterial({
+    color,
+    transparent: opacity < 1,
+    opacity,
+    depthWrite: false,
+  });
+  const plane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), material);
+  plane.renderOrder = 8;
+  return plane;
 }
 
 function createFallback(templateId: string): THREE.Object3D {

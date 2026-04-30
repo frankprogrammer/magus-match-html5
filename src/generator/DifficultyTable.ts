@@ -47,10 +47,10 @@ export function getTrialDifficultyConfig(difficulty: number): TrialDifficultyCon
       waveCount: 1,
       spawnIntervalMs: 1200,
       waveGapMs: 0,
-      basicKoboldHp: 18,
-      tallKoboldHp: 40,
-      miniBossHp: 100,
-      walkSpeed: 0.2,
+      basicKoboldHp: 72,
+      tallKoboldHp: 120,
+      miniBossHp: 192,
+      walkSpeed: 0.25,
       baseDamage: 12,
     };
   }
@@ -63,10 +63,10 @@ export function getTrialDifficultyConfig(difficulty: number): TrialDifficultyCon
       waveCount: 1,
       spawnIntervalMs: 1050,
       waveGapMs: 0,
-      basicKoboldHp: 24,
-      tallKoboldHp: 46,
-      miniBossHp: 110,
-      walkSpeed: 0.22,
+      basicKoboldHp: 104,
+      tallKoboldHp: 130,
+      miniBossHp: 208,
+      walkSpeed: 0.275,
       baseDamage: 13,
     };
   }
@@ -79,10 +79,10 @@ export function getTrialDifficultyConfig(difficulty: number): TrialDifficultyCon
       waveCount: 1,
       spawnIntervalMs: 950,
       waveGapMs: 0,
-      basicKoboldHp: 30,
-      tallKoboldHp: 58,
-      miniBossHp: 120,
-      walkSpeed: 0.28,
+      basicKoboldHp: 140,
+      tallKoboldHp: 168,
+      miniBossHp: 224,
+      walkSpeed: 0.35,
       baseDamage: 14,
     };
   }
@@ -95,10 +95,10 @@ export function getTrialDifficultyConfig(difficulty: number): TrialDifficultyCon
       waveCount: 1,
       spawnIntervalMs: 850,
       waveGapMs: 0,
-      basicKoboldHp: 38,
-      tallKoboldHp: 72,
-      miniBossHp: 135,
-      walkSpeed: 0.32,
+      basicKoboldHp: 180,
+      tallKoboldHp: 210,
+      miniBossHp: 240,
+      walkSpeed: 0.4,
       baseDamage: 15,
     };
   }
@@ -110,10 +110,10 @@ export function getTrialDifficultyConfig(difficulty: number): TrialDifficultyCon
     waveCount: 2,
     spawnIntervalMs: 750,
     waveGapMs: 2200,
-    basicKoboldHp: 45,
-    tallKoboldHp: 86,
-    miniBossHp: 160,
-    walkSpeed: 0.38,
+    basicKoboldHp: 192,
+    tallKoboldHp: 224,
+    miniBossHp: 256,
+    walkSpeed: 0.475,
     baseDamage: 16,
   };
 }

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { AssetIds } from '../src/assets/AssetIds';
-import { MagusMatchGameApp, phaseToCinematicState } from '../src/core/GameApp';
+import {
+  createTrialMonsterHealthBarObjects,
+  healthBarTintForRatio,
+  MagusMatchGameApp,
+  phaseToCinematicState,
+} from '../src/core/GameApp';
 import { HeroStageTemplateIds } from '../src/world-3d/HeroStageTemplates';
 
 describe('HeroWorldState', () => {
@@ -51,6 +56,72 @@ describe('HeroWorldState', () => {
     expect(state.levelType).toBe('TRIAL');
     expect(state.objects.some((object) => object.templateId === HeroStageTemplateIds.mage)).toBe(true);
     expect(state.objects.some((object) => object.templateId === HeroStageTemplateIds.monsterPlaceholder)).toBe(true);
+  });
+
+  it('includes stable Trial enemy health bar objects above alive monsters', () => {
+    const state = new MagusMatchGameApp(789).getHeroWorldState();
+    const monster = state.objects.find((object) => object.templateId === HeroStageTemplateIds.monsterPlaceholder);
+    const track = state.objects.find((object) => object.templateId === HeroStageTemplateIds.healthBarTrack);
+    const fill = state.objects.find((object) => object.templateId === HeroStageTemplateIds.healthBarFill);
+
+    expect(monster).toBeDefined();
+    expect(track?.objectId).toBe('trial-monster-trial-1-0-health-track');
+    expect(fill?.objectId).toBe('trial-monster-trial-1-0-health-fill');
+    expect(track?.replication).toBe('localCosmetic');
+    expect(fill?.replication).toBe('localCosmetic');
+    expect(track?.transform.position.y).toBeGreaterThan(monster?.transform.position.y ?? 0);
+    expect(fill?.transform.scale.x).toBeCloseTo(track?.transform.scale.x ?? 0);
+    expect(fill?.tintHex).toBe('#27ae60');
+  });
+
+  it('scales and colors health bar fill from monster health ratio', () => {
+    const bars = createTrialMonsterHealthBarObjects(
+      {
+        monsterId: 'low',
+        kind: 'kobold',
+        laneId: 0,
+        hp: 20,
+        maxHp: 100,
+        x: 0,
+        spawnTimeMs: 0,
+        walkSpeed: 0.2,
+        scoreValue: 100,
+      },
+      { x: 2, y: -0.5, z: 0.35 },
+    );
+    const track = bars.find((object) => object.templateId === HeroStageTemplateIds.healthBarTrack);
+    const fill = bars.find((object) => object.templateId === HeroStageTemplateIds.healthBarFill);
+
+    expect(bars).toHaveLength(2);
+    expect(fill?.transform.scale.x).toBeCloseTo((track?.transform.scale.x ?? 0) * 0.2);
+    expect(fill?.transform.position.x).toBeLessThan(track?.transform.position.x ?? 0);
+    expect(fill?.tintHex).toBe('#eb5757');
+  });
+
+  it('omits health bar objects for defeated monsters', () => {
+    const bars = createTrialMonsterHealthBarObjects(
+      {
+        monsterId: 'defeated',
+        kind: 'kobold',
+        laneId: 0,
+        hp: 0,
+        maxHp: 100,
+        x: 0,
+        spawnTimeMs: 0,
+        walkSpeed: 0.2,
+        scoreValue: 100,
+      },
+      { x: 2, y: -0.5, z: 0.35 },
+    );
+
+    expect(bars).toEqual([]);
+  });
+
+  it('maps health bar color thresholds to green, gold, and red', () => {
+    expect(healthBarTintForRatio(0.75)).toBe('#27ae60');
+    expect(healthBarTintForRatio(0.5)).toBe('#f2c94c');
+    expect(healthBarTintForRatio(0.25)).toBe('#f2c94c');
+    expect(healthBarTintForRatio(0.24)).toBe('#eb5757');
   });
 
   it('uses the reduced mage world scale for temporary FBX proxy models', () => {

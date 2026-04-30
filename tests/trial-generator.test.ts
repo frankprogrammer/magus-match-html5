@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { countValidMoves } from '../src/board/BoardRules';
 import { detectMatches } from '../src/board/MatchDetection';
 import { getTrialDifficultyConfig } from '../src/generator/DifficultyTable';
-import { generateTrialLevel } from '../src/generator/TrialGenerator';
+import { generateTrialLevel, isTrialManifestClearable } from '../src/generator/TrialGenerator';
 import { getTrialEmptyCellBudget } from '../src/generator/TrialEmptyPatterns';
 
 describe('TrialGenerator', () => {
@@ -74,6 +74,47 @@ describe('TrialGenerator', () => {
     expect(isHorizontallySymmetric(voidCells)).toBe(true);
     expect(detectMatches(first.initialBoard)).toHaveLength(0);
     expect(countValidMoves(first.initialBoard)).toBeGreaterThanOrEqual(3);
+  });
+
+  it.each([
+    [1, 'kobold', 6],
+    [4, 'kobold', 8],
+    [4, 'tallKobold', 10],
+    [8, 'kobold', 10],
+    [8, 'tallKobold', 12],
+    [15, 'kobold', 12],
+    [15, 'tallKobold', 14],
+    [15, 'miniBoss', 16],
+    [19, 'kobold', 12],
+    [19, 'tallKobold', 14],
+    [19, 'miniBoss', 16],
+  ])('sets difficulty %s %s HP to %s base-damage match groups after doubled health tuning', (difficulty, kind, matchGroups) => {
+    const config = getTrialDifficultyConfig(difficulty);
+    const level = generateTrialLevel({ difficulty, seed: 8800 + difficulty });
+    const monsters = level.trial.waveManifest.filter((monster) => monster.kind === kind);
+
+    expect(monsters.length).toBeGreaterThan(0);
+    expect(monsters.every((monster) => monster.maxHp === config.baseDamage * matchGroups)).toBe(true);
+  });
+
+  it.each([
+    [1, 0.25],
+    [4, 0.275],
+    [8, 0.35],
+    [15, 0.4],
+    [19, 0.475],
+  ])('uses 25 percent faster Trial walk speed for difficulty %s', (difficulty, walkSpeed) => {
+    const level = generateTrialLevel({ difficulty, seed: 9900 + difficulty });
+
+    expect(level.trial.waveManifest.every((monster) => monster.walkSpeed === walkSpeed)).toBe(true);
+  });
+
+  it('keeps generated Trial manifests clearable after HP tuning', () => {
+    for (const difficulty of [1, 4, 8, 15, 19]) {
+      const level = generateTrialLevel({ difficulty, seed: 7100 + difficulty });
+
+      expect(isTrialManifestClearable(level.trial.waveManifest, level.trial.baseDamage)).toBe(true);
+    }
   });
 });
 

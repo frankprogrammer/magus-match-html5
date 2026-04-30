@@ -85,6 +85,11 @@ interface RuntimeBoardVisualCue extends Omit<BoardVisualCueState, 'value'> {
   durationSec: number;
 }
 
+const TRIAL_HEALTH_BAR_WIDTH = 0.92;
+const TRIAL_HEALTH_BAR_HEIGHT = 0.09;
+const TRIAL_HEALTH_BAR_FILL_HEIGHT = 0.055;
+const TRIAL_HEALTH_BAR_Z_OFFSET = 0.08;
+
 export class MagusMatchGameApp implements GameApp {
   private events: GameEvent[] = [];
   private rng = new SeededRng();
@@ -940,14 +945,16 @@ export class MagusMatchGameApp implements GameApp {
     ];
 
     for (const monster of this.trialRuntime.monsters) {
+      const monsterPosition = getTrialMonsterWorldPosition(this.currentLevel, monster);
       objects.push(
         createWorldObject(`trial-monster-${monster.monsterId}`, HeroStageTemplateIds.monsterPlaceholder, {
-          position: getTrialMonsterWorldPosition(this.currentLevel, monster),
+          position: monsterPosition,
           scale: scaleForTrialMonster(monster.kind),
           renderOrder: 4,
           animationId: this.phase === 'LOSE' ? 'victory' : 'walk',
           tintHex: tintForTrialMonster(monster.kind),
         }),
+        ...createTrialMonsterHealthBarObjects(monster, monsterPosition),
       );
     }
 
@@ -1050,6 +1057,71 @@ function tintForTrialMonster(kind: ActiveTrialMonster['kind']): string {
       return '#8b6f47';
     case 'miniBoss':
       return '#eb5757';
+  }
+}
+
+export function createTrialMonsterHealthBarObjects(
+  monster: ActiveTrialMonster,
+  monsterPosition: TransformState['position'],
+): WorldObjectState[] {
+  const ratio = healthRatioForTrialMonster(monster);
+  if (ratio <= 0) {
+    return [];
+  }
+
+  const barY = monsterPosition.y + healthBarYOffsetForTrialMonster(monster.kind);
+  const barZ = monsterPosition.z + TRIAL_HEALTH_BAR_Z_OFFSET;
+  const fillWidth = TRIAL_HEALTH_BAR_WIDTH * ratio;
+  const fillCenterX = monsterPosition.x - TRIAL_HEALTH_BAR_WIDTH / 2 + fillWidth / 2;
+
+  return [
+    createWorldObject(`trial-monster-${monster.monsterId}-health-track`, HeroStageTemplateIds.healthBarTrack, {
+      position: { x: monsterPosition.x, y: barY, z: barZ },
+      scale: { x: TRIAL_HEALTH_BAR_WIDTH, y: TRIAL_HEALTH_BAR_HEIGHT, z: 1 },
+      renderOrder: 6,
+      replication: 'localCosmetic',
+      opacity: 0.85,
+    }),
+    createWorldObject(`trial-monster-${monster.monsterId}-health-fill`, HeroStageTemplateIds.healthBarFill, {
+      position: { x: fillCenterX, y: barY, z: barZ + 0.01 },
+      scale: { x: fillWidth, y: TRIAL_HEALTH_BAR_FILL_HEIGHT, z: 1 },
+      renderOrder: 7,
+      replication: 'localCosmetic',
+      tintHex: healthBarTintForRatio(ratio),
+      opacity: 0.95,
+    }),
+  ];
+}
+
+export function healthBarTintForRatio(ratio: number): string {
+  const clampedRatio = Math.max(0, Math.min(1, ratio));
+  if (clampedRatio > 0.5) {
+    return '#27ae60';
+  }
+
+  if (clampedRatio >= 0.25) {
+    return '#f2c94c';
+  }
+
+  return '#eb5757';
+}
+
+function healthRatioForTrialMonster(monster: ActiveTrialMonster): number {
+  if (monster.maxHp <= 0) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min(1, monster.hp / monster.maxHp));
+}
+
+function healthBarYOffsetForTrialMonster(kind: ActiveTrialMonster['kind']): number {
+  switch (kind) {
+    case 'kobold':
+      return 0.82;
+    case 'tallKobold':
+      return 1.05;
+    case 'miniBoss':
+      return 1.28;
   }
 }
 

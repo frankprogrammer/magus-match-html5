@@ -112,6 +112,8 @@ const TRIAL_HEALTH_BAR_WIDTH = 0.92;
 const TRIAL_HEALTH_BAR_HEIGHT = 0.18;
 const TRIAL_HEALTH_BAR_FILL_HEIGHT = 0.11;
 const TRIAL_HEALTH_BAR_Z_OFFSET = 0.08;
+const TRIAL_HIT_SHAKE_X_AMPLITUDE = 0.14;
+const TRIAL_HIT_SHAKE_Y_AMPLITUDE = 0.045;
 
 export class MagusMatchGameApp implements GameApp {
   private events: GameEvent[] = [];
@@ -1097,9 +1099,15 @@ export class MagusMatchGameApp implements GameApp {
     ];
 
     for (const monster of this.trialRuntime.monsters) {
-      const monsterPosition = translateY(
+      const baseMonsterPosition = translateY(
         getTrialMonsterWorldPosition(this.currentLevel, monster),
         trialMonsterWorldYOffset(monster.kind),
+      );
+      const hitShakeOffset = trialMonsterHitShakeOffset(monster);
+      const monsterPosition = translate(
+        baseMonsterPosition,
+        hitShakeOffset.x,
+        hitShakeOffset.y,
       );
       objects.push(
         createWorldObject(
@@ -1301,6 +1309,21 @@ export function createTrialMonsterHealthBarObjects(
       },
     ),
   ];
+}
+
+export function trialMonsterHitShakeOffset(monster: ActiveTrialMonster): { x: number; y: number } {
+  const remainingSec = monster.hitShakeRemainingSec ?? 0;
+  const durationSec = monster.hitShakeDurationSec ?? 0;
+  if (remainingSec <= 0 || durationSec <= 0) {
+    return { x: 0, y: 0 };
+  }
+
+  const progress = 1 - Math.max(0, Math.min(1, remainingSec / durationSec));
+  const fade = 1 - progress;
+  return {
+    x: Math.sin(progress * Math.PI * 8) * TRIAL_HIT_SHAKE_X_AMPLITUDE * fade,
+    y: Math.sin(progress * Math.PI * 5) * TRIAL_HIT_SHAKE_Y_AMPLITUDE * fade,
+  };
 }
 
 export function healthBarTintForRatio(ratio: number): string {

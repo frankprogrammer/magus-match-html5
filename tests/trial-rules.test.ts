@@ -174,14 +174,106 @@ describe('TrialRules', () => {
       remainingSec: SPELL_MATCH_PROJECTILE_VISUAL_MS / 1000,
       durationSec: SPELL_MATCH_PROJECTILE_VISUAL_MS / 1000,
     });
+    const hitDelaySec = TILE_SWAP_RETARGET_MS / 1000 + SPELL_MATCH_PROJECTILE_VISUAL_MS / 1000;
+    expect(result.runtime.monsters[0]?.hitShakeDelaySec).toBeCloseTo(hitDelaySec);
+    expect(result.runtime.monsters[0]?.hitShakeQueueSec).toHaveLength(result.runtime.projectiles.length);
+    expect(result.runtime.monsters[0]?.hitShakeQueueSec?.[0]).toBeCloseTo(hitDelaySec);
+    expect(result.runtime.monsters[0]?.hitShakeDurationSec).toBeCloseTo(0.18);
+    expect(result.runtime.monsters[0]?.hitShakeRemainingSec).toBe(0);
     expect(result.scoreDelta).toBeGreaterThan(0);
 
     const waiting = updateTrialRuntime(result.runtime, level, 0.08);
     expect(waiting.projectiles[0].activationDelaySec).toBeCloseTo(TILE_SWAP_RETARGET_MS / 1000 - 0.08);
     expect(waiting.projectiles[0].remainingSec).toBeCloseTo(SPELL_MATCH_PROJECTILE_VISUAL_MS / 1000);
+    expect(waiting.monsters[0]?.hitShakeDelaySec).toBeCloseTo(hitDelaySec - 0.08);
+    expect(waiting.monsters[0]?.hitShakeQueueSec?.[0]).toBeCloseTo(hitDelaySec - 0.08);
 
-    const updated = updateTrialRuntime(waiting, level, TILE_SWAP_RETARGET_MS / 1000 + SPELL_MATCH_PROJECTILE_VISUAL_MS / 1000);
+    const shaking = updateTrialRuntime(waiting, level, hitDelaySec - 0.08);
+    expect(shaking.monsters[0]?.hitShakeDelaySec).toBeUndefined();
+    expect(shaking.monsters[0]?.hitShakeQueueSec).toBeUndefined();
+    expect(shaking.monsters[0]?.hitShakeRemainingSec).toBeCloseTo(0.18);
+
+    const updated = updateTrialRuntime(shaking, level, 0.18);
     expect(updated.projectiles).toHaveLength(0);
+    expect(updated.monsters[0]?.hitShakeRemainingSec).toBeUndefined();
+    expect(updated.monsters[0]?.hp).toBeLessThan(50);
+  });
+
+  it('plays queued hit shakes for later cascade-step impact timings', () => {
+    const level = testTrialLevel([monster({ monsterId: 'cascade-target', maxHp: 50 })]);
+    const runtime = createTrialRuntime(level);
+    const queuedRuntime = {
+      ...runtime,
+      monsters: [
+        {
+          ...runtime.monsters[0],
+          monsterId: 'cascade-target',
+          hp: 35,
+          maxHp: 50,
+          hitShakeDelaySec: 0.05,
+          hitShakeQueueSec: [0.05, 0.35],
+          hitShakeRemainingSec: 0,
+          hitShakeDurationSec: 0.18,
+        },
+      ],
+      projectiles: [],
+      defeatedMonsterIds: [],
+    };
+
+    const firstImpact = updateTrialRuntime(queuedRuntime, level, 0.05);
+    expect(firstImpact.monsters[0].hitShakeRemainingSec).toBeCloseTo(0.18);
+    expect(firstImpact.monsters[0].hitShakeDelaySec).toBeCloseTo(0.3);
+    expect(firstImpact.monsters[0].hitShakeQueueSec).toHaveLength(1);
+    expect(firstImpact.monsters[0].hitShakeQueueSec?.[0]).toBeCloseTo(0.3);
+
+    const betweenImpacts = updateTrialRuntime(firstImpact, level, 0.18);
+    expect(betweenImpacts.monsters[0].hitShakeRemainingSec).toBeUndefined();
+    expect(betweenImpacts.monsters[0].hitShakeDelaySec).toBeCloseTo(0.12);
+    expect(betweenImpacts.monsters[0].hitShakeQueueSec).toHaveLength(1);
+    expect(betweenImpacts.monsters[0].hitShakeQueueSec?.[0]).toBeCloseTo(0.12);
+
+    const secondImpact = updateTrialRuntime(betweenImpacts, level, 0.12);
+    expect(secondImpact.monsters[0].hitShakeDelaySec).toBeUndefined();
+    expect(secondImpact.monsters[0].hitShakeQueueSec).toBeUndefined();
+    expect(secondImpact.monsters[0].hitShakeRemainingSec).toBeCloseTo(0.18);
+  });
+
+  it('refreshes active hit shake when another queued impact arrives during the shake', () => {
+    const level = testTrialLevel([monster({ monsterId: 'overlap-target', maxHp: 50 })]);
+    const runtime = createTrialRuntime(level);
+    const queuedRuntime = {
+      ...runtime,
+      monsters: [
+        {
+          ...runtime.monsters[0],
+          monsterId: 'overlap-target',
+          hp: 35,
+          maxHp: 50,
+          hitShakeDelaySec: 0.05,
+          hitShakeQueueSec: [0.05, 0.1],
+          hitShakeRemainingSec: 0,
+          hitShakeDurationSec: 0.18,
+        },
+      ],
+      projectiles: [],
+      defeatedMonsterIds: [],
+    };
+
+    const firstImpact = updateTrialRuntime(queuedRuntime, level, 0.05);
+    expect(firstImpact.monsters[0].hitShakeRemainingSec).toBeCloseTo(0.18);
+    expect(firstImpact.monsters[0].hitShakeDelaySec).toBeCloseTo(0.05);
+
+    const refreshed = updateTrialRuntime(firstImpact, level, 0.05);
+    expect(refreshed.monsters[0]).toMatchObject({
+      monsterId: 'overlap-target',
+      hp: 35,
+      maxHp: 50,
+    });
+    expect(refreshed.monsters[0].hitShakeDelaySec).toBeUndefined();
+    expect(refreshed.monsters[0].hitShakeQueueSec).toBeUndefined();
+    expect(refreshed.monsters[0].hitShakeRemainingSec).toBeCloseTo(0.18);
+    expect(refreshed.projectiles).toEqual([]);
+    expect(refreshed.defeatedMonsterIds).toEqual([]);
   });
 
   it('uses power-up swaps as multi-shot damage instead of area damage', () => {
@@ -296,6 +388,12 @@ describe('TrialRules', () => {
       remainingSec: SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
       durationSec: SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
     });
+    expect(result.runtime.monsters[0]?.hitShakeDelaySec).toBeCloseTo(
+      TILE_SWAP_RETARGET_MS / 1000 + SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
+    );
+    expect(result.runtime.monsters[0]?.hitShakeQueueSec?.[0]).toBeCloseTo(
+      TILE_SWAP_RETARGET_MS / 1000 + SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
+    );
     expect(result.animationTrace?.cascadeSteps[0].clearedTiles.find((tile) => tile.clearDelayMs === 0)?.coord).toEqual({
       col: 1,
       row: 1,
@@ -324,8 +422,45 @@ describe('TrialRules', () => {
     expect(result.runtime.monsters[0].defeatDelaySec).toBeCloseTo(
       TILE_SWAP_RETARGET_MS / 1000 + SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
     );
+    expect(result.runtime.monsters[0].hitShakeDelaySec).toBeCloseTo(
+      TILE_SWAP_RETARGET_MS / 1000 + SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
+    );
+    expect(result.runtime.monsters[0].hitShakeQueueSec?.[0]).toBeCloseTo(
+      TILE_SWAP_RETARGET_MS / 1000 + SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
+    );
     expect(result.runtime.defeatedMonsterIds).toEqual([]);
     expect(result.runtime.result).toBe('playing');
+  });
+
+  it('expires active hit shake without changing monster gameplay state', () => {
+    const level = testTrialLevel([monster({ monsterId: 'shaker', maxHp: 50 })]);
+    const runtime = {
+      ...createTrialRuntime(level),
+      monsters: [
+        {
+          ...createTrialRuntime(level).monsters[0],
+          monsterId: 'shaker',
+          hp: 35,
+          maxHp: 50,
+          hitShakeRemainingSec: 0.05,
+          hitShakeDurationSec: 0.18,
+        },
+      ],
+      projectiles: [],
+      defeatedMonsterIds: [],
+    };
+
+    const updated = updateTrialRuntime(runtime, level, 0.05);
+
+    expect(updated.monsters[0]).toMatchObject({
+      monsterId: 'shaker',
+      hp: 35,
+      maxHp: 50,
+    });
+    expect(updated.monsters[0].hitShakeRemainingSec).toBeUndefined();
+    expect(updated.monsters[0].hitShakeDurationSec).toBeUndefined();
+    expect(updated.projectiles).toEqual([]);
+    expect(updated.defeatedMonsterIds).toEqual([]);
   });
 
   it('taps a Trial Lightball using the adjacent color with the highest board count', () => {

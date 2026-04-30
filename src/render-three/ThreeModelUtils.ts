@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { clone as cloneSkeletonObject } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
 const UNIT_Y = new THREE.Vector3(0, 1, 0);
+const MAGE_TEXTURE_ALPHA_TEST = 0.01;
 
 export function normalizeModelToActorBounds(source: THREE.Object3D, targetHeight: number): THREE.Group {
   const wrapper = new THREE.Group();
@@ -144,6 +145,126 @@ export function applyMageTextureToMeshes(object: THREE.Object3D, texture: THREE.
   });
 }
 
+export function createAlphaBleedCanvasTexture(texture: THREE.Texture): THREE.Texture {
+  if (typeof document === 'undefined') {
+    return texture;
+  }
+
+  const image = texture.image as CanvasImageSource & { width?: number; height?: number };
+  const width = image.width ?? 0;
+  const height = image.height ?? 0;
+  if (width <= 0 || height <= 0) {
+    return texture;
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  if (context == null) {
+    return texture;
+  }
+
+  context.drawImage(image, 0, 0, width, height);
+  const imageData = context.getImageData(0, 0, width, height);
+  const cleanedData = bleedTransparentPixelRgb(imageData.data, width, height);
+  imageData.data.set(cleanedData);
+  context.putImageData(imageData, 0, 0);
+
+  const cleanedTexture = new THREE.CanvasTexture(canvas);
+  cleanedTexture.colorSpace = THREE.SRGBColorSpace;
+  cleanedTexture.flipY = texture.flipY;
+  cleanedTexture.wrapS = texture.wrapS;
+  cleanedTexture.wrapT = texture.wrapT;
+  cleanedTexture.minFilter = texture.minFilter;
+  cleanedTexture.magFilter = texture.magFilter;
+  cleanedTexture.generateMipmaps = texture.generateMipmaps;
+  cleanedTexture.needsUpdate = true;
+  return cleanedTexture;
+}
+
+export function bleedTransparentPixelRgb(
+  source: Uint8ClampedArray,
+  width: number,
+  height: number,
+  options: {
+    iterations?: number;
+    targetAlphaMax?: number;
+    sourceAlphaMin?: number;
+  } = {},
+): Uint8ClampedArray {
+  const iterations = options.iterations ?? 8;
+  const targetAlphaMax = options.targetAlphaMax ?? 16;
+  const sourceAlphaMin = options.sourceAlphaMin ?? 24;
+  const result = new Uint8ClampedArray(source);
+  let hasBleedColor = new Uint8Array(width * height);
+
+  for (let index = 0; index < width * height; index += 1) {
+    hasBleedColor[index] = source[index * 4 + 3] >= sourceAlphaMin ? 1 : 0;
+  }
+
+  for (let iteration = 0; iteration < iterations; iteration += 1) {
+    const next = new Uint8ClampedArray(result);
+    const nextHasBleedColor = new Uint8Array(hasBleedColor);
+    let changed = false;
+
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const index = y * width + x;
+        const base = index * 4;
+        if (hasBleedColor[index] !== 0 || source[base + 3] > targetAlphaMax) {
+          continue;
+        }
+
+        let red = 0;
+        let green = 0;
+        let blue = 0;
+        let count = 0;
+        for (let dy = -1; dy <= 1; dy += 1) {
+          for (let dx = -1; dx <= 1; dx += 1) {
+            if (dx === 0 && dy === 0) {
+              continue;
+            }
+
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx < 0 || nx >= width || ny < 0 || ny >= height) {
+              continue;
+            }
+
+            const neighborIndex = ny * width + nx;
+            if (hasBleedColor[neighborIndex] === 0) {
+              continue;
+            }
+
+            const neighborBase = neighborIndex * 4;
+            red += result[neighborBase];
+            green += result[neighborBase + 1];
+            blue += result[neighborBase + 2];
+            count += 1;
+          }
+        }
+
+        if (count > 0) {
+          next[base] = Math.round(red / count);
+          next[base + 1] = Math.round(green / count);
+          next[base + 2] = Math.round(blue / count);
+          nextHasBleedColor[index] = 1;
+          changed = true;
+        }
+      }
+    }
+
+    result.set(next);
+    hasBleedColor = nextHasBleedColor;
+    if (!changed) {
+      break;
+    }
+  }
+
+  return result;
+}
+
 export interface MageTextureDebugInfo {
   meshName: string;
   hasUv: boolean;
@@ -187,8 +308,8 @@ function materialWithTexture(texture: THREE.Texture): THREE.Material {
     map: texture,
     color: '#ffffff',
     side: THREE.DoubleSide,
-    transparent: false,
-    alphaTest: 0.08,
+    transparent: true,
+    alphaTest: MAGE_TEXTURE_ALPHA_TEST,
     opacity: 1,
     depthWrite: true,
   });

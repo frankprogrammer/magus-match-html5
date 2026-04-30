@@ -9,6 +9,7 @@ import {
   applyMageTextureToMeshes,
   applyFallbackMaterialToUnmaterialedMeshes,
   createMageLoopClip,
+  createAlphaBleedCanvasTexture,
   ensureMageMeshesVisibleWithoutOverridingTextures,
   getMageTextureDebugInfo,
   hasRenderableGeometry,
@@ -173,7 +174,10 @@ export class ThreeObjectFactory {
       textureUrl,
       (texture) => {
         texture.colorSpace = THREE.SRGBColorSpace;
-        this.mageTexture = texture;
+        this.mageTexture = createAlphaBleedCanvasTexture(texture);
+        if (import.meta.env.DEV && this.mageTexture !== texture) {
+          console.info(`Cleaned mage texture alpha fringe for ${textureUrl}`);
+        }
         if (this.applyMageTextureToTemplateIfReady()) {
           this.mageTemplateVersion += 1;
         }

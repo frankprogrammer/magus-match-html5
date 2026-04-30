@@ -11,7 +11,7 @@ export class ThreeHeroStage {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly factory = new ThreeObjectFactory();
   private readonly objectCache = new ThreeObjectCache();
-  private readonly projectileCache = new Map<string, THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial>>();
+  private readonly projectileCache = new Map<string, ProjectileParticleSystem>();
   private readonly cameraController = new ThreeCameraController();
   private readonly animationMixers = new Map<string, THREE.AnimationMixer>();
   private elapsedSec = 0;
@@ -52,7 +52,7 @@ export class ThreeHeroStage {
       this.factory.dispose(object);
     }
     for (const [, projectile] of this.projectileCache.entries()) {
-      this.scene.remove(projectile);
+      this.scene.remove(projectile.mesh);
       disposeProjectileSystem(projectile);
     }
     this.animationMixers.clear();
@@ -83,7 +83,7 @@ export class ThreeHeroStage {
 
     for (const [objectId, projectile] of [...this.projectileCache.entries()]) {
       if (!seen.has(objectId)) {
-        this.scene.remove(projectile);
+        this.scene.remove(projectile.mesh);
         disposeProjectileSystem(projectile);
         this.projectileCache.delete(objectId);
       }
@@ -93,7 +93,7 @@ export class ThreeHeroStage {
   private getOrCreateProjectile(
     objectId: string,
     projectileState: ProjectileState,
-  ): THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial> {
+  ): ProjectileParticleSystem {
     const existing = this.projectileCache.get(objectId);
     if (existing != null) {
       return existing;
@@ -101,7 +101,7 @@ export class ThreeHeroStage {
 
     const projectile = createProjectileParticleSystem(projectileState);
     this.projectileCache.set(objectId, projectile);
-    this.scene.add(projectile);
+    this.scene.add(projectile.mesh);
     return projectile;
   }
 
@@ -246,7 +246,7 @@ function applyMaterialOverrides(
 export function projectileColor(schoolId: ProjectileState['schoolId']): string {
   switch (schoolId) {
     case 'fire':
-      return '#eb5757';
+      return '#ff8a1f';
     case 'ice':
       return '#38d5ff';
     case 'lightning':
@@ -256,41 +256,66 @@ export function projectileColor(schoolId: ProjectileState['schoolId']): string {
   }
 }
 
+export function projectileParticleColorComponents(
+  projectile: Pick<ProjectileState, 'schoolId' | 'effectKind'>,
+): readonly [number, number, number] {
+  const color = new THREE.Color(projectileColor(projectile.schoolId));
+  return [color.r, color.g, color.b];
+}
+
+export function projectileMaterialSettings(
+  projectile: Pick<ProjectileState, 'schoolId' | 'effectKind'>,
+): { color: string; blending: THREE.Blending; transparent: boolean } {
+  return {
+    color: projectileColor(projectile.schoolId),
+    blending: projectile.effectKind === 'bomb' ? THREE.NormalBlending : THREE.NormalBlending,
+    transparent: true,
+  };
+}
+
 function isProjectileVisible(projectile: ProjectileState): boolean {
   return projectile.activationDelaySec <= 0 && projectile.remainingSec > 0;
 }
 
+interface ProjectileParticleSystem {
+  mesh: THREE.InstancedMesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
+  texture: THREE.CanvasTexture;
+  dummy: THREE.Object3D;
+}
+
 function createProjectileParticleSystem(
   projectile: ProjectileState,
-): THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial> {
+): ProjectileParticleSystem {
   const particleCount = projectileParticleCount(projectile.effectKind);
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(particleCount * 3), 3));
-  const material = new THREE.PointsMaterial({
-    color: projectileColor(projectile.schoolId),
-    size: projectilePointSize(projectile.effectKind),
+  const geometry = new THREE.PlaneGeometry(1, 1);
+  const texture = createProjectileParticleTexture();
+  const settings = projectileMaterialSettings(projectile);
+  const material = new THREE.MeshBasicMaterial({
+    map: texture,
+    color: settings.color,
     transparent: true,
     opacity: 1,
-    blending: THREE.AdditiveBlending,
+    blending: settings.blending,
     depthWrite: false,
-    sizeAttenuation: false,
+    depthTest: true,
   });
-  const points = new THREE.Points(geometry, material);
-  points.frustumCulled = false;
-  points.renderOrder = projectile.effectKind === 'bomb' ? 32 : 30;
-  return points;
+  const mesh = new THREE.InstancedMesh(geometry, material, particleCount);
+  mesh.frustumCulled = false;
+  mesh.renderOrder = projectile.effectKind === 'bomb' ? 32 : 30;
+  return { mesh, texture, dummy: new THREE.Object3D() };
 }
 
 function applyProjectileState(
-  points: THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial>,
+  system: ProjectileParticleSystem,
   projectile: ProjectileState,
 ): void {
-  const positions = points.geometry.getAttribute('position') as THREE.BufferAttribute;
   const progress = projectileProgress(projectile);
   const direction = projectileDirection(projectile);
   const spread = projectileSpread(projectile.effectKind, progress);
+  const particleScale = projectileQuadScale(projectile.effectKind);
+  const settings = projectileMaterialSettings(projectile);
 
-  for (let index = 0; index < positions.count; index += 1) {
+  for (let index = 0; index < system.mesh.count; index += 1) {
     const alongSeed = deterministicUnit(`${projectile.projectileId}:along:${index}`);
     const angleSeed = deterministicUnit(`${projectile.projectileId}:angle:${index}`);
     const radiusSeed = deterministicUnit(`${projectile.projectileId}:radius:${index}`);
@@ -307,26 +332,39 @@ function applyProjectileState(
       direction.perpY * Math.cos(angle) * horizontalRadius +
       Math.sin(angle) * verticalRadius;
     const z = projectile.from.z + direction.dz * eased + Math.sin(angle) * spread.depth * radius;
-    positions.setXYZ(index, x, y, z);
+    const particleSizeMultiplier = 0.75 + radiusSeed * 0.45;
+    system.dummy.position.set(x, y, z);
+    system.dummy.rotation.set(0, 0, 0);
+    system.dummy.scale.set(
+      particleScale.x * particleSizeMultiplier,
+      particleScale.y * particleSizeMultiplier,
+      1,
+    );
+    system.dummy.updateMatrix();
+    system.mesh.setMatrixAt(index, system.dummy.matrix);
   }
 
-  positions.needsUpdate = true;
-  points.material.color.set(projectileColor(projectile.schoolId));
-  points.material.opacity = projectileOpacity(projectile.effectKind, progress);
-  points.material.size = projectilePointSize(projectile.effectKind);
+  system.mesh.instanceMatrix.needsUpdate = true;
+  system.mesh.material.color.set(settings.color);
+  system.mesh.material.opacity = projectileOpacity(projectile.effectKind, progress);
+  system.mesh.material.blending = settings.blending;
+  system.mesh.material.needsUpdate = true;
 }
 
-function disposeProjectileSystem(points: THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial>): void {
-  points.geometry.dispose();
-  points.material.dispose();
+function disposeProjectileSystem(system: ProjectileParticleSystem): void {
+  system.mesh.geometry.dispose();
+  system.mesh.material.dispose();
+  system.texture.dispose();
 }
 
 function projectileParticleCount(effectKind: ProjectileState['effectKind']): number {
   return effectKind === 'bomb' ? 220 : 96;
 }
 
-function projectilePointSize(effectKind: ProjectileState['effectKind']): number {
-  return effectKind === 'bomb' ? 14 : 7;
+export function projectileQuadScale(effectKind: ProjectileState['effectKind']): { x: number; y: number } {
+  return effectKind === 'bomb'
+    ? { x: 0.6, y: 0.78 }
+    : { x: 0.27, y: 0.36 };
 }
 
 function projectileSpread(
@@ -352,7 +390,32 @@ function projectileTravelScale(effectKind: ProjectileState['effectKind']): numbe
 function projectileOpacity(effectKind: ProjectileState['effectKind'], progress: number): number {
   const fadeIn = clamp01(progress / 0.16);
   const fadeOut = clamp01((1 - progress) / (effectKind === 'bomb' ? 0.32 : 0.42));
-  return (effectKind === 'bomb' ? 0.98 : 0.86) * Math.min(fadeIn, fadeOut);
+  return (effectKind === 'bomb' ? 0.78 : 0.92) * Math.min(fadeIn, fadeOut);
+}
+
+function createProjectileParticleTexture(): THREE.CanvasTexture {
+  const size = 64;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext('2d');
+  if (context == null) {
+    throw new Error('Unable to create projectile particle texture context.');
+  }
+
+  const center = size / 2;
+  const gradient = context.createRadialGradient(center, center, 0, center, center, center);
+  gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+  gradient.addColorStop(0.36, 'rgba(255, 255, 255, 0.82)');
+  gradient.addColorStop(0.72, 'rgba(255, 255, 255, 0.22)');
+  gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, size, size);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.needsUpdate = true;
+  return texture;
 }
 
 function projectileProgress(projectile: ProjectileState): number {

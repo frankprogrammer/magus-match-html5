@@ -144,7 +144,18 @@ describe('HeroWorldState', () => {
     expect(MAGE_WORLD_SCALE).toEqual({ x: 2, y: 2, z: 2 });
     expect(journeyMage?.transform.position.y).toBeLessThan(1.6);
     expect(trialMage?.transform.position.y).toBeLessThan(-0.85);
-    expect(trialMage?.transform.position.x).toBeCloseTo((baseTrialMagePosition?.x ?? 0) + 1.5);
+    expect(trialMage?.transform.position.x).toBeCloseTo(baseTrialMagePosition?.x ?? 0);
+  });
+
+  it('places the Trial contact marker at the mage front edge', () => {
+    const app = new MagusMatchGameApp(123);
+    const state = app.getHeroWorldState();
+    const level = app.getCurrentLevelForDebug();
+    const contactMarker = state.objects.find((object) => object.objectId === 'trial-fail-line');
+
+    expect(level?.type).toBe('TRIAL');
+    expect(contactMarker?.templateId).toBe(HeroStageTemplateIds.pathMarker);
+    expect(contactMarker?.transform.position.x).toBeCloseTo(level?.type === 'TRIAL' ? level.trial.contactX : 0);
   });
 
   it('doubles Trial enemy scales and lowers their world positions', () => {

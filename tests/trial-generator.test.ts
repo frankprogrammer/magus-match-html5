@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { countValidMoves } from '../src/board/BoardRules';
 import { detectMatches } from '../src/board/MatchDetection';
 import { getTrialDifficultyConfig } from '../src/generator/DifficultyTable';
-import { generateTrialLevel, isTrialManifestClearable } from '../src/generator/TrialGenerator';
+import {
+  generateTrialLevel,
+  getTrialMonsterContactRadius,
+  isTrialManifestClearable,
+  TRIAL_CLEARABILITY_DAMAGE_RATE,
+  TRIAL_MAGE_CONTACT_RADIUS,
+} from '../src/generator/TrialGenerator';
 import { getTrialEmptyCellBudget } from '../src/generator/TrialEmptyPatterns';
 
 describe('TrialGenerator', () => {
@@ -44,8 +50,22 @@ describe('TrialGenerator', () => {
     });
     expect(level.trial.lanes[0].spawnX).toBeGreaterThan(level.trial.contactX);
     expect(level.trial.mageX).toBeLessThan(level.trial.lanes[0].spawnX);
+    expect(level.trial.contactX).toBeCloseTo(level.trial.mageX + TRIAL_MAGE_CONTACT_RADIUS);
     expect(level.trial.waveManifest.map((monster) => monster.spawnTimeMs)).toEqual([0, 1200, 2400]);
     expect(level.trial.waveManifest.every((monster) => monster.laneId === 0)).toBe(true);
+  });
+
+  it('uses monster body radii when estimating Trial clearability', () => {
+    const level = generateTrialLevel({ difficulty: 1, seed: 777 });
+    const kobold = level.trial.waveManifest[0];
+    const centerContactX = level.trial.contactX + getTrialMonsterContactRadius(kobold.kind);
+    const availableSec = (level.trial.lanes[0].spawnX - centerContactX) / kobold.walkSpeed;
+    const barelyTooMuchHp =
+      Math.floor(availableSec * TRIAL_CLEARABILITY_DAMAGE_RATE * level.trial.baseDamage) + 1;
+
+    expect(
+      isTrialManifestClearable([{ ...kobold, maxHp: barelyTooMuchHp }], level.trial.baseDamage),
+    ).toBe(false);
   });
 
   it('adds no Trial empty cells at difficulty 1', () => {

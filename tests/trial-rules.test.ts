@@ -3,12 +3,13 @@ import { createBoardFromTileTypes } from '../src/board/Board';
 import { detectMatches } from '../src/board/MatchDetection';
 import { SeededRng } from '../src/core/Rng';
 import type { GeneratedTrialLevel, TrialMonsterManifestEntry } from '../src/generator/TrialGenerator';
-import { generateTrialLevel } from '../src/generator/TrialGenerator';
+import { generateTrialLevel, getTrialMonsterContactRadius } from '../src/generator/TrialGenerator';
 import {
   createTrialRuntime,
   damageMultiplierForMatch,
   getTrialMageWorldPosition,
   getTrialMonsterWorldPosition,
+  hasTrialMonsterReachedMage,
   processTrialPowerUpActivation,
   processTrialSwap,
   processTrialRocketActivation,
@@ -17,19 +18,34 @@ import {
 } from '../src/generator/TrialRules';
 
 describe('TrialRules', () => {
-  it('moves monsters left by walk speed and fails exactly at the contact line', () => {
+  it('moves monsters left by walk speed and fails when the kobold body overlaps the mage body', () => {
     const level = testTrialLevel([monster({ walkSpeed: 0.5 })]);
     const runtime = createTrialRuntime(level);
     const activeMonster = runtime.monsters[0];
+    const contactCenterX = level.trial.contactX + getTrialMonsterContactRadius(activeMonster.kind);
     const nearFailRuntime = {
       ...runtime,
-      monsters: [{ ...activeMonster, x: level.trial.contactX + activeMonster.walkSpeed }],
+      monsters: [{ ...activeMonster, x: contactCenterX + activeMonster.walkSpeed }],
     };
 
     const updated = updateTrialRuntime(nearFailRuntime, level, 1);
 
-    expect(updated.monsters[0].x).toBeCloseTo(level.trial.contactX);
+    expect(updated.monsters[0].x).toBeCloseTo(contactCenterX);
     expect(updated.result).toBe('lost');
+  });
+
+  it.each([
+    ['kobold', 0.44],
+    ['tallKobold', 0.5],
+    ['miniBoss', 0.67],
+  ] as const)('uses %s contact radius for Trial body overlap', (kind, radius) => {
+    const level = testTrialLevel([monster({ kind })]);
+    const runtime = createTrialRuntime(level);
+    const activeMonster = runtime.monsters[0];
+
+    expect(getTrialMonsterContactRadius(kind)).toBe(radius);
+    expect(hasTrialMonsterReachedMage(level, { ...activeMonster, x: level.trial.contactX + radius + 0.01 })).toBe(false);
+    expect(hasTrialMonsterReachedMage(level, { ...activeMonster, x: level.trial.contactX + radius })).toBe(true);
   });
 
   it('spawns only one active monster at a time', () => {

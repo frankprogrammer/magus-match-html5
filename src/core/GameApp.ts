@@ -106,7 +106,6 @@ interface RuntimeBoardVisualCue extends Omit<BoardVisualCueState, "value"> {
 }
 
 const MAGE_WORLD_Y_OFFSET = -0.72;
-const TRIAL_MAGE_WORLD_X_OFFSET = 1.5;
 const TRIAL_MONSTER_SCALE_MULTIPLIER = 2;
 const TRIAL_HEALTH_BAR_WIDTH = 0.92;
 const TRIAL_HEALTH_BAR_HEIGHT = 0.18;
@@ -1065,9 +1064,8 @@ export class MagusMatchGameApp implements GameApp {
 
     const objects: WorldObjectState[] = [
       createWorldObject("actor-mage", HeroStageTemplateIds.mage, {
-        position: translate(
+        position: translateY(
           getTrialMageWorldPosition(this.currentLevel),
-          TRIAL_MAGE_WORLD_X_OFFSET,
           MAGE_WORLD_Y_OFFSET,
         ),
         scale: MAGE_WORLD_SCALE,

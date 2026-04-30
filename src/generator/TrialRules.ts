@@ -35,6 +35,7 @@ import type { SeededRng } from '../core/Rng';
 import type { LevelResult, Vec3Data } from '../core/Types';
 import { SPELL_PROJECTILE_VISUAL_MS } from '../data/tuning';
 import { createSwapScoringStats, EMPTY_SWAP_SCORING_STATS, type SwapScoringStats } from '../run/Scoring';
+import { getTrialMonsterContactRadius } from './TrialGenerator';
 import type { GeneratedTrialLevel, TrialMonsterKind, TrialMonsterManifestEntry } from './TrialGenerator';
 
 export type SpellSchoolId = 'fire' | 'ice' | 'lightning' | 'earth';
@@ -616,7 +617,7 @@ function expireProjectiles(runtime: TrialRuntimeState, dtSec: number): TrialRunt
 }
 
 function getTrialResult(runtime: TrialRuntimeState, level: GeneratedTrialLevel): LevelResult {
-  if (runtime.monsters.some((monster) => monster.x <= level.trial.contactX)) {
+  if (runtime.monsters.some((monster) => hasTrialMonsterReachedMage(level, monster))) {
     return 'lost';
   }
 
@@ -629,6 +630,13 @@ function getTrialResult(runtime: TrialRuntimeState, level: GeneratedTrialLevel):
   }
 
   return 'playing';
+}
+
+export function hasTrialMonsterReachedMage(
+  level: GeneratedTrialLevel,
+  monster: ActiveTrialMonster,
+): boolean {
+  return monster.x - getTrialMonsterContactRadius(monster.kind) <= level.trial.contactX;
 }
 
 function spellSchoolForTileType(tileType: StandardTileType): SpellSchoolId {

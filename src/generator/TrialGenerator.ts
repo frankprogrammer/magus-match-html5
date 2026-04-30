@@ -42,9 +42,11 @@ export interface GenerateTrialLevelOptions {
   seed: number;
 }
 
-export const TRIAL_MAGE_X = -4.35;
-export const TRIAL_CONTACT_X = -3.95;
+export const TRIAL_MAGE_X = -2.85;
+export const TRIAL_MAGE_CONTACT_RADIUS = 0.55;
+export const TRIAL_CONTACT_X = TRIAL_MAGE_X + TRIAL_MAGE_CONTACT_RADIUS;
 export const TRIAL_LANE_Y = -0.85;
+export const TRIAL_CLEARABILITY_DAMAGE_RATE = 1;
 
 const TRIAL_LANES: readonly TrialLane[] = [
   { laneId: 0, y: TRIAL_LANE_Y, spawnX: 4.65 },
@@ -132,13 +134,25 @@ export function isTrialManifestClearable(
     return true;
   }
 
-  const slowestWalkSpeed = Math.min(...manifest.map((monster) => monster.walkSpeed));
-  const travelSec = (TRIAL_LANES[0].spawnX - TRIAL_CONTACT_X) / slowestWalkSpeed;
-  const availableSec = manifest.length * travelSec;
-  const expectedAverageSkillDamage = availableSec * 0.95 * baseDamage;
+  const availableSec = manifest.reduce((sum, monster) => {
+    const centerContactX = TRIAL_CONTACT_X + getTrialMonsterContactRadius(monster.kind);
+    return sum + (TRIAL_LANES[0].spawnX - centerContactX) / monster.walkSpeed;
+  }, 0);
+  const expectedAverageSkillDamage = availableSec * TRIAL_CLEARABILITY_DAMAGE_RATE * baseDamage;
   const totalHp = manifest.reduce((sum, monster) => sum + monster.maxHp, 0);
 
   return expectedAverageSkillDamage >= totalHp;
+}
+
+export function getTrialMonsterContactRadius(kind: TrialMonsterKind): number {
+  switch (kind) {
+    case 'kobold':
+      return 0.44;
+    case 'tallKobold':
+      return 0.5;
+    case 'miniBoss':
+      return 0.67;
+  }
 }
 
 function tuneManifestForClearability(

@@ -3,6 +3,7 @@ import { AssetIds } from '../src/assets/AssetIds';
 import { BOARD_RECT } from '../src/core/Layout';
 import type { DrawImageRef, GameRenderer, TextStyle } from '../src/render-2d/GameRenderer';
 import type { BoardRenderState } from '../src/render-2d/BoardRenderState';
+import type { HudRenderState } from '../src/render-2d/HudRenderState';
 import { buildBoardCellVisuals, renderFrame } from '../src/render-2d/RenderFrame';
 
 describe('buildBoardCellVisuals', () => {
@@ -113,7 +114,36 @@ describe('buildBoardCellVisuals', () => {
     expect(renderer.calls).not.toContain('rect:#241832:0,0,1080,1920');
     expect(renderer.calls).not.toContain('rect:#1f1830:0,490,1080,150');
     expect(renderer.calls).toContain(`image:${AssetIds.ui.hudBanner}:0,490,1080,150`);
-    expect(renderer.calls).toContain('text:Level 1:32,490,180,150');
+    expect(renderer.calls).toContain('text:Level 1:56,490,190,150');
+  });
+
+  it('draws padded white HUD text with dynamic fitting and no mute label', () => {
+    const renderer = new FakeRenderer(new Set());
+
+    renderFrame(renderer, oneTileState('tile.fire'), hudState({ scoreText: '999999999999', objectiveText: 'Monsters 999/999' }), 0);
+
+    expect(renderer.calls).toContain('text:Level 1:56,490,190,150');
+    expect(renderer.calls).toContain('text:Lives 3:270,490,190,150');
+    expect(renderer.calls).toContain('text:Score 999999999999:480,490,280,150');
+    expect(renderer.calls).toContain('text:Monsters 999/999:772,490,252,150');
+    expect(renderer.calls).not.toContain('text:MUTE');
+    expect(renderer.calls).not.toContain('text:SOUND');
+
+    const hudStyles = renderer.textCalls.filter((call) => call.y === 490);
+    expect(hudStyles).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ text: 'Level 1', style: expect.objectContaining({ color: '#ffffff', minFontSize: 22 }) }),
+        expect.objectContaining({ text: 'Lives 3', style: expect.objectContaining({ color: '#ffffff', minFontSize: 22 }) }),
+        expect.objectContaining({
+          text: 'Score 999999999999',
+          style: expect.objectContaining({ color: '#ffffff', minFontSize: 20 }),
+        }),
+        expect.objectContaining({
+          text: 'Monsters 999/999',
+          style: expect.objectContaining({ color: '#ffffff', minFontSize: 18, align: 'right' }),
+        }),
+      ]),
+    );
   });
 
   it('draws empty cell art for void board cells behind the tile layer', () => {
@@ -200,7 +230,7 @@ function oneTileState(assetId: string): BoardRenderState {
   };
 }
 
-function hudState() {
+function hudState(overrides: Partial<HudRenderState> = {}): HudRenderState {
   return {
     phase: 'IDLE' as const,
     levelText: 'Level 1',
@@ -208,11 +238,13 @@ function hudState() {
     scoreText: '0',
     objectiveText: 'Moves 20',
     muted: false,
+    ...overrides,
   };
 }
 
 class FakeRenderer implements GameRenderer {
   readonly calls: string[] = [];
+  readonly textCalls: Array<{ text: string; x: number; y: number; width: number; height: number; style: TextStyle }> = [];
 
   constructor(private readonly availableImages: ReadonlySet<string>) {}
 
@@ -262,8 +294,9 @@ class FakeRenderer implements GameRenderer {
     this.calls.push(`image:${image.id}:${x},${y},${width},${height}`);
   }
 
-  drawText(text: string, x: number, y: number, width: number, height: number, _style: TextStyle): void {
+  drawText(text: string, x: number, y: number, width: number, height: number, style: TextStyle): void {
     this.calls.push(`text:${text}`);
     this.calls.push(`text:${text}:${x},${y},${width},${height}`);
+    this.textCalls.push({ text, x, y, width, height, style });
   }
 }

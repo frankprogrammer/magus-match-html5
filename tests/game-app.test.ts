@@ -4,7 +4,7 @@ import type { Board } from '../src/board/Board';
 import type { BoardAnimationSnapshot, BoardAnimationTrace } from '../src/board/BoardAnimationTrace';
 import { getBoardAnimationTraceDurationMs } from '../src/board/BoardAnimationTiming';
 import { findValidMoves } from '../src/board/BoardRules';
-import { GAME_OVER_TRY_AGAIN_BUTTON_RECT, TITLE_PLAY_BUTTON_RECT } from '../src/core/Layout';
+import { GAME_OVER_TRY_AGAIN_BUTTON_RECT, HUD_MUTE_TOGGLE_RECT, TITLE_PLAY_BUTTON_RECT } from '../src/core/Layout';
 import { MagusMatchGameApp } from '../src/core/GameApp';
 import type { GameEvent } from '../src/core/GameEvents';
 import { CAMERA_SHAKE_MAX, CAMERA_SHAKE_MIN } from '../src/data/tuning';
@@ -279,6 +279,14 @@ describe('MagusMatchGameApp', () => {
 
     expect(app.getHudState().muted).toBe(true);
     expect(app.getScreenState().muted).toBe(true);
+  });
+
+  it('does not toggle mute from the old HUD tap area', () => {
+    const app = new MagusMatchGameApp(1002);
+
+    tap(app, HUD_MUTE_TOGGLE_RECT);
+
+    expect(app.getHudState().muted).toBe(false);
   });
 
   it('builds Game Over screen state with leaderboard data and controls', () => {

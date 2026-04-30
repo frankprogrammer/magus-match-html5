@@ -4,6 +4,7 @@ export interface DrawImageRef {
 
 export interface TextStyle {
   fontSize: number;
+  minFontSize?: number;
   fontFamily?: string;
   fontWeight?: 'normal' | 'bold';
   color: string;

@@ -398,11 +398,6 @@ export class MagusMatchGameApp implements GameApp {
 
   private handleTap(x: number, y: number): void {
     const point = { x, y };
-    if (pointInRect(point, HUD_MUTE_TOGGLE_RECT)) {
-      this.muted = !this.muted;
-      return;
-    }
-
     if (this.phase === 'TITLE' && pointInRect(point, TITLE_PLAY_BUTTON_RECT)) {
       this.startPreparedLevel();
       return;

@@ -9,6 +9,8 @@ import type { ScreenRenderState } from './ScreenRenderState';
 
 const HUD_VISUAL_OVERLAP_PX = 10;
 const HUD_VISUAL_Y = HERO_STAGE_HEIGHT - HUD_VISUAL_OVERLAP_PX;
+const HUD_CONTENT_PADDING_X = 56;
+const HUD_TEXT_COLOR = '#ffffff';
 
 export interface BoardCellVisual {
   tileId: string;
@@ -115,34 +117,32 @@ function drawCanvasBands(renderer: GameRenderer): void {
 
 function drawHud(renderer: GameRenderer, hudState: HudRenderState): void {
   const y = HUD_VISUAL_Y;
-  renderer.drawText(hudState.levelText, 32, y, 180, HUD_HEIGHT, {
+  renderer.drawText(hudState.levelText, HUD_CONTENT_PADDING_X, y, 190, HUD_HEIGHT, {
     fontSize: 34,
+    minFontSize: 22,
     fontWeight: 'bold',
-    color: '#241832',
+    color: HUD_TEXT_COLOR,
     align: 'left',
   });
-  renderer.drawText(hudState.livesText, 230, y, 200, HUD_HEIGHT, {
+  renderer.drawText(hudState.livesText, 270, y, 190, HUD_HEIGHT, {
     fontSize: 34,
+    minFontSize: 22,
     fontWeight: 'bold',
-    color: '#241832',
+    color: HUD_TEXT_COLOR,
     align: 'left',
   });
-  renderer.drawText(`Score ${hudState.scoreText}`, 452, y, 230, HUD_HEIGHT, {
+  renderer.drawText(`Score ${hudState.scoreText}`, 480, y, 280, HUD_HEIGHT, {
     fontSize: 34,
+    minFontSize: 20,
     fontWeight: 'bold',
-    color: '#241832',
+    color: HUD_TEXT_COLOR,
     align: 'left',
   });
-  renderer.drawText(hudState.objectiveText, 700, y, 300, HUD_HEIGHT, {
+  renderer.drawText(hudState.objectiveText, 772, y, LOGICAL_WIDTH - HUD_CONTENT_PADDING_X - 772, HUD_HEIGHT, {
     fontSize: 28,
+    minFontSize: 18,
     fontWeight: 'bold',
-    color: '#241832',
-    align: 'right',
-  });
-  renderer.drawText(hudState.muted ? 'MUTE' : 'SOUND', 1010, y, 48, HUD_HEIGHT, {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#4b2e83',
+    color: HUD_TEXT_COLOR,
     align: 'right',
   });
 }

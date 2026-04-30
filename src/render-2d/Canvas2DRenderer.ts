@@ -78,12 +78,20 @@ export class Canvas2DRenderer implements GameRenderer {
 
   drawText(text: string, x: number, y: number, width: number, height: number, style: TextStyle): void {
     this.ctx.fillStyle = style.color;
-    this.ctx.font = `${style.fontWeight ?? 'normal'} ${style.fontSize}px ${
-      style.fontFamily ?? 'Inter, Arial, sans-serif'
-    }`;
+    this.ctx.font = fontString(style, style.fontSize);
+    const minFontSize = Math.min(style.fontSize, style.minFontSize ?? style.fontSize);
+    let fittedFontSize = style.fontSize;
+    while (fittedFontSize > minFontSize && this.ctx.measureText(text).width > width) {
+      fittedFontSize -= 1;
+      this.ctx.font = fontString(style, fittedFontSize);
+    }
     this.ctx.textAlign = style.align ?? 'left';
     this.ctx.textBaseline = 'middle';
     const tx = style.align === 'center' ? x + width / 2 : style.align === 'right' ? x + width : x;
     this.ctx.fillText(text, tx, y + height / 2, width);
   }
+}
+
+function fontString(style: TextStyle, fontSize: number): string {
+  return `${style.fontWeight ?? 'normal'} ${fontSize}px ${style.fontFamily ?? 'Inter, Arial, sans-serif'}`;
 }

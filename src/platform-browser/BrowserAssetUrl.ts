@@ -1,16 +1,32 @@
-export function resolveBrowserAssetUrl(url: string, baseUrl = getViteBaseUrl()): string {
+/// <reference types="vite/client" />
+
+const VITE_BASE_URL = import.meta.env.BASE_URL;
+
+export function resolveBrowserAssetUrl(
+  url: string,
+  baseUrl = VITE_BASE_URL,
+  documentBaseUrl = getDocumentBaseUrl(),
+): string {
   if (isAbsoluteOrSpecialUrl(url)) {
     return url;
   }
 
-  const normalizedBase = normalizeBaseUrl(baseUrl);
   const normalizedPath = url.replace(/^\/+/, '');
+
+  if (isRelativeBaseUrl(baseUrl)) {
+    if (documentBaseUrl != null) {
+      return new URL(normalizedPath, toDirectoryBaseUrl(documentBaseUrl)).toString();
+    }
+
+    return `./${normalizedPath}`;
+  }
+
+  const normalizedBase = normalizeBaseUrl(baseUrl);
   return `${normalizedBase}${normalizedPath}`;
 }
 
-function getViteBaseUrl(): string {
-  const meta = import.meta as ImportMeta & { env?: { BASE_URL?: string } };
-  return meta.env?.BASE_URL ?? '/';
+function getDocumentBaseUrl(): string | undefined {
+  return typeof document === 'undefined' ? undefined : document.baseURI;
 }
 
 function normalizeBaseUrl(baseUrl: string): string {
@@ -19,6 +35,19 @@ function normalizeBaseUrl(baseUrl: string): string {
   }
 
   return baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+}
+
+function isRelativeBaseUrl(baseUrl: string): boolean {
+  const trimmedBase = baseUrl.trim();
+  return trimmedBase === '' || trimmedBase === './' || trimmedBase === '.';
+}
+
+function toDirectoryBaseUrl(baseUrl: string): string {
+  try {
+    return new URL('.', baseUrl).toString();
+  } catch {
+    return baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+  }
 }
 
 function isAbsoluteOrSpecialUrl(url: string): boolean {

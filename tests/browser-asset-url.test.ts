@@ -18,6 +18,32 @@ describe('resolveBrowserAssetUrl', () => {
     );
   });
 
+  it('resolves root-relative manifest assets against document base when Vite base is relative', () => {
+    expect(
+      resolveBrowserAssetUrl('/assets/tiles/tile-fire.png', './', 'https://frankprogrammer.github.io/magus-match-html5/'),
+    ).toBe('https://frankprogrammer.github.io/magus-match-html5/assets/tiles/tile-fire.png');
+  });
+
+  it('resolves branch-preview assets against document base when Vite base is relative', () => {
+    expect(
+      resolveBrowserAssetUrl(
+        '/assets/tiles/tile-fire.png',
+        './',
+        'https://frankprogrammer.github.io/magus-match-html5/branches/test-branch/',
+      ),
+    ).toBe('https://frankprogrammer.github.io/magus-match-html5/branches/test-branch/assets/tiles/tile-fire.png');
+  });
+
+  it('ignores query strings and index filenames when resolving against a relative Vite base', () => {
+    expect(
+      resolveBrowserAssetUrl(
+        '/assets/ui/ui-banner.png',
+        './',
+        'https://frankprogrammer.github.io/magus-match-html5/index.html?levelType=trial',
+      ),
+    ).toBe('https://frankprogrammer.github.io/magus-match-html5/assets/ui/ui-banner.png');
+  });
+
   it('preserves external and special URLs', () => {
     expect(resolveBrowserAssetUrl('https://example.com/tile.png', '/magus-match-html5/')).toBe(
       'https://example.com/tile.png',

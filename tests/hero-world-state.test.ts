@@ -5,7 +5,7 @@ import { HeroStageTemplateIds } from '../src/world-3d/HeroStageTemplates';
 
 describe('HeroWorldState', () => {
   it('includes backdrop, mage, prince cage, goal, and Journey path markers', () => {
-    const app = new MagusMatchGameApp(123);
+    const app = new MagusMatchGameApp(123, { debugLevelType: 'JOURNEY' });
     const state = app.getHeroWorldState();
     const objectsByTemplate = new Map(state.objects.map((object) => [object.templateId, object]));
 
@@ -45,7 +45,7 @@ describe('HeroWorldState', () => {
   });
 
   it('includes Trial mage and monster placeholders for debug Trial levels', () => {
-    const app = new MagusMatchGameApp(789, { debugLevelType: 'TRIAL' });
+    const app = new MagusMatchGameApp(789);
     const state = app.getHeroWorldState();
 
     expect(state.levelType).toBe('TRIAL');
@@ -54,10 +54,10 @@ describe('HeroWorldState', () => {
   });
 
   it('uses the reduced mage world scale for temporary FBX proxy models', () => {
-    const journeyMage = new MagusMatchGameApp(123)
+    const journeyMage = new MagusMatchGameApp(123, { debugLevelType: 'JOURNEY' })
       .getHeroWorldState()
       .objects.find((object) => object.templateId === HeroStageTemplateIds.mage);
-    const trialMage = new MagusMatchGameApp(123, { debugLevelType: 'TRIAL' })
+    const trialMage = new MagusMatchGameApp(123)
       .getHeroWorldState()
       .objects.find((object) => object.templateId === HeroStageTemplateIds.mage);
 

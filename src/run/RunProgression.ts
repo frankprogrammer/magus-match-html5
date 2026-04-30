@@ -1,4 +1,3 @@
-import { SeededRng } from '../core/Rng';
 import type { LevelType, RunState } from '../core/Types';
 
 export const INITIAL_LIVES = 3;
@@ -20,16 +19,14 @@ export function selectLevelTypeForRun(
   levelNumber: number,
   forcedLevelType?: LevelType,
 ): LevelType {
+  void runSeed;
+  void levelNumber;
+
   if (forcedLevelType != null) {
     return forcedLevelType;
   }
 
-  if (levelNumber === 1) {
-    return 'JOURNEY';
-  }
-
-  const rng = new SeededRng(hashSeed(runSeed, levelNumber, 0x6d2b79f5));
-  return rng.nextFloat() < 0.5 ? 'JOURNEY' : 'TRIAL';
+  return 'TRIAL';
 }
 
 export function deriveLevelSeed(runSeed: number, levelNumber: number): number {

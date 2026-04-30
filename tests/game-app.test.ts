@@ -46,8 +46,17 @@ describe('MagusMatchGameApp', () => {
     expect(first.getBoardRenderState().boardCells).toEqual(second.getBoardRenderState().boardCells);
   });
 
-  it('starts level 1 as a Journey level', () => {
+  it('starts level 1 as a Trial level by default', () => {
     const app = new MagusMatchGameApp(555);
+
+    expect(app.getHudState().phase).toBe('TITLE');
+    expect(app.getCurrentLevelForDebug()?.type).toBe('TRIAL');
+    expect(app.getTrialRuntimeForDebug()?.monsters.length).toBe(1);
+    expect(app.getJourneyRuntimeForDebug()).toBeNull();
+  });
+
+  it('can still start level 1 as Journey through an override', () => {
+    const app = new MagusMatchGameApp(555, { debugLevelType: 'JOURNEY' });
 
     expect(app.getHudState().phase).toBe('TITLE');
     expect(app.getCurrentLevelForDebug()?.type).toBe('JOURNEY');
@@ -84,7 +93,7 @@ describe('MagusMatchGameApp', () => {
   });
 
   it('emits Journey match, path, and mage audio through events', () => {
-    const app = new MagusMatchGameApp(555);
+    const app = new MagusMatchGameApp(555, { debugLevelType: 'JOURNEY' });
     const level = app.getCurrentLevelForDebug();
     if (level?.type !== 'JOURNEY') {
       throw new Error('Expected generated Journey level.');
@@ -121,7 +130,7 @@ describe('MagusMatchGameApp', () => {
   });
 
   it('keeps board shake and visual cue render state within comfort limits', () => {
-    const app = new MagusMatchGameApp(555);
+    const app = new MagusMatchGameApp(555, { debugLevelType: 'JOURNEY' });
     const level = app.getCurrentLevelForDebug();
     if (level?.type !== 'JOURNEY') {
       throw new Error('Expected generated Journey level.');
@@ -139,7 +148,7 @@ describe('MagusMatchGameApp', () => {
   });
 
   it('accepts another valid swap while a board animation is active', () => {
-    const app = new MagusMatchGameApp(555);
+    const app = new MagusMatchGameApp(555, { debugLevelType: 'JOURNEY' });
     const level = app.getCurrentLevelForDebug();
     if (level?.type !== 'JOURNEY') {
       throw new Error('Expected generated Journey level.');
@@ -177,7 +186,7 @@ describe('MagusMatchGameApp', () => {
   });
 
   it('keeps Journey tile IDs unique across consecutive refills', () => {
-    const app = new MagusMatchGameApp(555);
+    const app = new MagusMatchGameApp(555, { debugLevelType: 'JOURNEY' });
     const level = app.getCurrentLevelForDebug();
     if (level?.type !== 'JOURNEY') {
       throw new Error('Expected generated Journey level.');
@@ -204,7 +213,7 @@ describe('MagusMatchGameApp', () => {
     expect(app.getBoardRenderState().animationTrace?.kind).toBe('levelIntro');
     expect(app.getBoardRenderState().animationTrace?.cascadeSteps[0].refillTiles.length).toBe(64);
     expect(app.drainEvents()).toEqual([
-      { type: 'levelStarted', levelNumber: 1, levelType: 'JOURNEY', seed: 777 },
+      { type: 'levelStarted', levelNumber: 1, levelType: 'TRIAL', seed: 777 },
     ]);
   });
 

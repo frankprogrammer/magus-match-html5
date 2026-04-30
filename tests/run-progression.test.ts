@@ -19,19 +19,16 @@ describe('run progression', () => {
     });
   });
 
-  it('always selects Journey for level 1 and deterministic mixed types afterward', () => {
-    expect(selectLevelTypeForRun(42, 1)).toBe('JOURNEY');
-
-    const firstPass = Array.from({ length: 12 }, (_, index) => selectLevelTypeForRun(42, index + 2));
-    const secondPass = Array.from({ length: 12 }, (_, index) => selectLevelTypeForRun(42, index + 2));
-
-    expect(firstPass).toEqual(secondPass);
-    expect(firstPass).toContain('JOURNEY');
-    expect(firstPass).toContain('TRIAL');
+  it('selects Trial by default for every run level', () => {
+    expect(selectLevelTypeForRun(42, 1)).toBe('TRIAL');
+    expect(selectLevelTypeForRun(42, 2)).toBe('TRIAL');
+    expect(selectLevelTypeForRun(99, 12)).toBe('TRIAL');
   });
 
   it('respects debug level type overrides and derives stable level seeds', () => {
     expect(selectLevelTypeForRun(42, 1, 'TRIAL')).toBe('TRIAL');
+    expect(selectLevelTypeForRun(42, 1, 'JOURNEY')).toBe('JOURNEY');
+    expect(selectLevelTypeForRun(42, 8, 'JOURNEY')).toBe('JOURNEY');
     expect(deriveLevelSeed(42, 5)).toBe(deriveLevelSeed(42, 5));
     expect(deriveLevelSeed(42, 5)).not.toBe(deriveLevelSeed(42, 6));
   });

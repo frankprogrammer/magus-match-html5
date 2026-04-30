@@ -8,6 +8,7 @@ import {
   resolvePowerUpChain,
   selectLightballTapTargetType,
 } from '../src/board/PowerUps';
+import { ROCKET_SWEEP_CLEAR_STAGGER_MS, TNT_EXPLOSION_RING_DELAY_MS } from '../src/data/tuning';
 
 describe('power-up detonation patterns', () => {
   it('clears full row and column for rockets', () => {
@@ -157,8 +158,17 @@ describe('power-up detonation patterns', () => {
     const chain = resolvePowerUpChain(board, { col: 0, row: 0 });
 
     expect(chain.detonations.map((entry) => entry.detonation.powerUpType)).toEqual(['ROCKET_H', 'TNT']);
+    expect(chain.detonations[1].activationDelayMs).toBe(2 * ROCKET_SWEEP_CLEAR_STAGGER_MS);
     expect(chain.detonations[0].detonation.clearedCells).not.toContainEqual({ col: 2, row: 0 });
     expect(chain.detonations[1].detonation.clearedCells).toContainEqual({ col: 2, row: 0 });
+    expect(chain.clearTimings).toContainEqual({
+      coord: { col: 2, row: 0 },
+      clearDelayMs: 2 * ROCKET_SWEEP_CLEAR_STAGGER_MS,
+    });
+    expect(chain.clearTimings).toContainEqual({
+      coord: { col: 1, row: 1 },
+      clearDelayMs: 2 * ROCKET_SWEEP_CLEAR_STAGGER_MS + TNT_EXPLOSION_RING_DELAY_MS,
+    });
     expect(chain.clearedCells).toContainEqual({ col: 1, row: 1 });
   });
 

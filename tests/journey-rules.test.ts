@@ -3,6 +3,7 @@ import { createBoardFromTileTypes } from '../src/board/Board';
 import type { Board } from '../src/board/Board';
 import type { CellCoord } from '../src/core/Layout';
 import { SeededRng } from '../src/core/Rng';
+import { ROCKET_SWEEP_CLEAR_STAGGER_MS } from '../src/data/tuning';
 import type { GeneratedJourneyLevel } from '../src/generator/JourneyGenerator';
 import {
   advanceMageOneStep,
@@ -223,12 +224,13 @@ describe('Journey rules', () => {
     expect(result.valid).toBe(true);
     expect(result.runtime.movesRemaining).toBe(19);
     expect(result.convertedPathCells).toContainEqual({ col: 1, row: 1 });
-    expect(result.animationTrace?.cascadeSteps[0].clearedTiles).not.toContainEqual(
-      expect.objectContaining({ coord: { col: 2, row: 0 } }),
-    );
-    expect(result.animationTrace?.cascadeSteps[1].clearedTiles).toContainEqual(
-      expect.objectContaining({ coord: { col: 2, row: 0 } }),
-    );
+    const firstStepTiles = result.animationTrace?.cascadeSteps[0].clearedTiles ?? [];
+    expect(firstStepTiles).toContainEqual(expect.objectContaining({
+      coord: { col: 2, row: 0 },
+      clearDelayMs: 2 * ROCKET_SWEEP_CLEAR_STAGGER_MS,
+    }));
+    expect(firstStepTiles).toContainEqual(expect.objectContaining({ coord: { col: 1, row: 1 } }));
+    expect(result.animationTrace?.cascadeSteps[0].refillTiles.length).toBeGreaterThan(0);
   });
 
   it('ignores non-power-up Journey taps', () => {

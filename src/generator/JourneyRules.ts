@@ -28,6 +28,7 @@ import {
   resolvePowerUpChain,
   selectLightballTapTargetType,
   type PowerUpDetonation,
+  type PowerUpChainResolution,
 } from '../board/PowerUps';
 import { isMatchableTileType, isStandardTileType, type MatchableTileType, type TileType } from '../board/TileTypes';
 import { FIRST_MATCH_HINT_DELAY_MS } from '../data/tuning';
@@ -257,38 +258,29 @@ function resolveJourneyPowerUpActivation(
   const workingBoard = cloneBoard(board);
   const nextTileId = createBoardScopedTileIdFactory(workingBoard, 'journey-powerup-cascade-tile');
   const chain = resolvePowerUpChain(workingBoard, origin, { lightballTargetType });
-  const chainStepInputs: {
-    beforeClearBoard: Board;
-    beforeGravityBoard: Board;
-    detonation: PowerUpDetonation;
-  }[] = [];
+  const beforeChainClearBoard = cloneBoard(workingBoard);
   const chainConvertedPathCells: CellCoord[] = [];
   const chainClearedStandardCells: CellCoord[] = [];
 
   for (const entry of chain.detonations) {
-    const beforeClearBoard = cloneBoard(workingBoard);
     const detonationResult = applyJourneyDetonation(workingBoard, entry.detonation);
     chainConvertedPathCells.push(...detonationResult.convertedPathCells);
     chainClearedStandardCells.push(...detonationResult.clearedStandardCells);
-    const beforeGravityBoard = cloneBoard(workingBoard);
-    chainStepInputs.push({ beforeClearBoard, beforeGravityBoard, detonation: entry.detonation });
   }
 
+  const beforeGravityBoard = cloneBoard(workingBoard);
   const refillResult = settleBoardWithVoidAwareRefill(workingBoard, rng, nextTileId);
   const finalDetonationBoard = cloneBoard(workingBoard);
-  const chainSteps = chainStepInputs.map((input, index) => {
-    const isFinalChainStep = index === chainStepInputs.length - 1;
-    return buildBoardAnimationCascadeStep(
-      index,
-      input.beforeClearBoard,
-      input.beforeGravityBoard,
-      isFinalChainStep ? refillResult.afterGravityBoard : input.beforeGravityBoard,
-      isFinalChainStep ? finalDetonationBoard : input.beforeGravityBoard,
-      input.detonation.clearedCells,
-      clearDelayMap(input.detonation),
-      isFinalChainStep ? refillResult.refillTiles : [],
-    );
-  });
+  const chainStep = buildBoardAnimationCascadeStep(
+    0,
+    beforeChainClearBoard,
+    beforeGravityBoard,
+    refillResult.afterGravityBoard,
+    finalDetonationBoard,
+    chain.clearedCells,
+    absoluteChainClearDelayMap(chain),
+    refillResult.refillTiles,
+  );
   const cascadeResolution = resolveJourneyBoard(workingBoard, rng, {
     nextTileId,
     animation,
@@ -309,10 +301,10 @@ function resolveJourneyPowerUpActivation(
     animationTrace: createBoardAnimationTrace(
       animation,
       [
-        ...chainSteps,
+        chainStep,
         ...(cascadeResolution.animationTrace?.cascadeSteps.map((step, index) => ({
           ...step,
-          stepIndex: index + chainSteps.length,
+          stepIndex: index + 1,
         })) ?? []),
       ],
       cascadeResolution.board,
@@ -461,8 +453,17 @@ function matchableTargetType(type?: TileType): MatchableTileType | undefined {
   return type != null && isMatchableTileType(type) ? type : undefined;
 }
 
-function clearDelayMap(detonation: PowerUpDetonation): ReadonlyMap<string, number> {
-  return new Map(detonation.clearTimings.map((timing) => [coordKey(timing.coord), timing.clearDelayMs]));
+function absoluteChainClearDelayMap(chain: PowerUpChainResolution): ReadonlyMap<string, number> {
+  const delays = new Map<string, number>();
+  for (const timing of chain.clearTimings) {
+    const key = coordKey(timing.coord);
+    const currentDelay = delays.get(key);
+    if (currentDelay == null || timing.clearDelayMs < currentDelay) {
+      delays.set(key, timing.clearDelayMs);
+    }
+  }
+
+  return delays;
 }
 
 function invalidJourneySwap(board: Board, runtime: JourneyRuntimeState): JourneySwapResult {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createBoardFromTileTypes } from '../src/board/Board';
 import { detectMatches } from '../src/board/MatchDetection';
 import { SeededRng } from '../src/core/Rng';
+import { ROCKET_SWEEP_CLEAR_STAGGER_MS } from '../src/data/tuning';
 import type { GeneratedTrialLevel, TrialMonsterManifestEntry } from '../src/generator/TrialGenerator';
 import { generateTrialLevel, getTrialMonsterContactRadius } from '../src/generator/TrialGenerator';
 import {
@@ -333,7 +334,7 @@ describe('TrialRules', () => {
     });
   });
 
-  it('chains Trial power-ups with multiple damage sources and sequential animation steps', () => {
+  it('chains Trial power-ups with multiple damage sources and one timed chain animation step', () => {
     const board = createBoardFromTileTypes([
       ['ROCKET_H', 'FIRE', 'TNT', 'ICE'],
       ['EARTH', 'LIGHTNING', 'FIRE', 'ICE'],
@@ -358,12 +359,13 @@ describe('TrialRules', () => {
     expect(result.valid).toBe(true);
     expect(result.scoringStats.validSwapCount).toBe(1);
     expect(result.damageEvents.length).toBeGreaterThanOrEqual(8);
-    expect(result.animationTrace?.cascadeSteps[0].clearedTiles).not.toContainEqual(
-      expect.objectContaining({ coord: { col: 2, row: 0 } }),
-    );
-    expect(result.animationTrace?.cascadeSteps[1].clearedTiles).toContainEqual(
-      expect.objectContaining({ coord: { col: 2, row: 0 } }),
-    );
+    const firstStepTiles = result.animationTrace?.cascadeSteps[0].clearedTiles ?? [];
+    expect(firstStepTiles).toContainEqual(expect.objectContaining({
+      coord: { col: 2, row: 0 },
+      clearDelayMs: 2 * ROCKET_SWEEP_CLEAR_STAGGER_MS,
+    }));
+    expect(firstStepTiles).toContainEqual(expect.objectContaining({ coord: { col: 1, row: 1 } }));
+    expect(result.animationTrace?.cascadeSteps[0].refillTiles.length).toBeGreaterThan(0);
   });
 
   it('ignores non-power-up Trial taps', () => {

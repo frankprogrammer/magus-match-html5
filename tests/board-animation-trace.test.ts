@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { createBoardFromTileTypes } from '../src/board/Board';
-import { buildBoardAnimationCascadeStep, createLevelIntroBoardAnimationTrace } from '../src/board/BoardAnimationTrace';
+import {
+  buildBoardAnimationCascadeStep,
+  createInvalidSwapAnimationTrace,
+  createLevelIntroBoardAnimationTrace,
+} from '../src/board/BoardAnimationTrace';
 import { resolveCascades } from '../src/board/Cascade';
 import { SeededRng } from '../src/core/Rng';
 import type { CellCoord } from '../src/core/Layout';
@@ -101,6 +105,31 @@ describe('board animation traces', () => {
       step.refillTiles.find((refill) => refill.to.row === 1)?.from.row ?? 0,
     );
     expect(trace.finalSnapshot.cells).toHaveLength(4);
+  });
+
+  it('creates an invalid-swap trace without mutating the authoritative board', () => {
+    const board = createBoardFromTileTypes([
+      ['FIRE', 'ICE'],
+      ['EARTH', 'LIGHTNING'],
+    ]);
+
+    const trace = createInvalidSwapAnimationTrace(board, { col: 0, row: 0 }, { col: 1, row: 0 }, 16);
+
+    expect(trace.kind).toBe('invalidSwap');
+    expect(trace.revisionId).toBe(16);
+    expect(trace.swappedCells).toEqual({ from: { col: 0, row: 0 }, to: { col: 1, row: 0 } });
+    expect(trace.cascadeSteps).toEqual([]);
+    expect(trace.finalSnapshot).toEqual(trace.preSwapSnapshot);
+    expect(trace.postSwapSnapshot.cells.find((cell) => cell.tileType === 'FIRE')?.coord).toEqual({
+      col: 1,
+      row: 0,
+    });
+    expect(trace.postSwapSnapshot.cells.find((cell) => cell.tileType === 'ICE')?.coord).toEqual({
+      col: 0,
+      row: 0,
+    });
+    expect(board[0][0].tile?.type).toBe('FIRE');
+    expect(board[0][1].tile?.type).toBe('ICE');
   });
 
   it('creates void-aware level intro slide refills for cells below empty spaces', () => {

@@ -276,6 +276,49 @@ describe('TrialRules', () => {
     expect(refreshed.defeatedMonsterIds).toEqual([]);
   });
 
+  it('returns an invalid-swap animation trace for adjacent swaps that make no match', () => {
+    const board = createBoardFromTileTypes([
+      ['FIRE', 'ICE', 'EARTH'],
+      ['LIGHTNING', 'EARTH', 'ICE'],
+    ]);
+    const level = testTrialLevel([monster({ monsterId: 'a', maxHp: 50 })], board);
+    const runtime = createTrialRuntime(level);
+
+    const result = processTrialSwap(
+      board,
+      runtime,
+      level,
+      { col: 0, row: 0 },
+      { col: 1, row: 0 },
+      new SeededRng(51),
+    );
+
+    expect(result.valid).toBe(false);
+    expect(result.animationTrace?.kind).toBe('invalidSwap');
+    expect(result.board).toBe(board);
+    expect(result.runtime).toBe(runtime);
+    expect(result.damageEvents).toEqual([]);
+    expect(result.scoreDelta).toBe(0);
+    expect(result.scoringStats.validSwapCount).toBe(0);
+  });
+
+  it('hard-rejects non-adjacent Trial swaps without an animation trace', () => {
+    const board = createBoardFromTileTypes([['FIRE', 'ICE', 'EARTH']]);
+    const level = testTrialLevel([monster({ monsterId: 'a', maxHp: 50 })], board);
+
+    const result = processTrialSwap(
+      board,
+      createTrialRuntime(level),
+      level,
+      { col: 0, row: 0 },
+      { col: 2, row: 0 },
+      new SeededRng(52),
+    );
+
+    expect(result.valid).toBe(false);
+    expect(result.animationTrace).toBeUndefined();
+  });
+
   it('uses power-up swaps as multi-shot damage instead of area damage', () => {
     const board = createBoardFromTileTypes([['ROCKET_H', 'EARTH']]);
     const level = testTrialLevel(

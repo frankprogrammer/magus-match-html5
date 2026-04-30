@@ -16,6 +16,9 @@ import type { TileType } from '../board/TileTypes';
 import { BOARD_RECT } from '../core/Layout';
 import type { CellCoord } from '../core/Layout';
 import {
+  INVALID_SWAP_FORWARD_MS,
+  INVALID_SWAP_HOLD_MS,
+  INVALID_SWAP_RETURN_MS,
   TILE_FALL_DURATION_PER_ROW_MS,
   TILE_FALL_MAX_MS,
   TILE_FALL_MIN_MS,
@@ -136,6 +139,10 @@ function sampleTraceCells(
   elapsedMs: number,
   retargetStarts: ReadonlyMap<string, VisualSample>,
 ): BoardCellVisualState[] {
+  if (trace.kind === 'invalidSwap') {
+    return sampleInvalidSwapCells(trace, elapsedMs, retargetStarts);
+  }
+
   if (trace.kind !== 'levelIntro' && (elapsedMs < TILE_SWAP_RETARGET_MS || stepTimings.length === 0)) {
     return sampleSwapCells(trace, elapsedMs, retargetStarts);
   }
@@ -388,8 +395,9 @@ function sampleSwapCells(
   trace: BoardAnimationTrace,
   elapsedMs: number,
   retargetStarts: ReadonlyMap<string, VisualSample>,
+  durationMs = TILE_SWAP_RETARGET_MS,
 ): BoardCellVisualState[] {
-  const progress = clamp01(elapsedMs / TILE_SWAP_RETARGET_MS);
+  const progress = clamp01(elapsedMs / durationMs);
   return trace.postSwapSnapshot.cells.map((cell) => {
     const target = coordToRender(cell.coord);
     const retarget = retargetStarts.get(cell.tileId);
@@ -401,6 +409,43 @@ function sampleSwapCells(
       renderY: lerp(start.renderY, target.renderY, eased),
       scale: lerp(start.scale, 1, eased),
       alpha: lerp(start.alpha, 1, eased),
+      zIndex: 5,
+    });
+  });
+}
+
+function sampleInvalidSwapCells(
+  trace: BoardAnimationTrace,
+  elapsedMs: number,
+  retargetStarts: ReadonlyMap<string, VisualSample>,
+): BoardCellVisualState[] {
+  if (elapsedMs < INVALID_SWAP_FORWARD_MS) {
+    return sampleSwapCells(trace, elapsedMs, retargetStarts, INVALID_SWAP_FORWARD_MS);
+  }
+
+  if (elapsedMs < INVALID_SWAP_FORWARD_MS + INVALID_SWAP_HOLD_MS) {
+    return trace.postSwapSnapshot.cells.map((cell) =>
+      snapshotCellToRenderCell(cell, {
+        ...coordToRender(cell.coord),
+        scale: 1,
+        alpha: 1,
+        zIndex: 5,
+      }),
+    );
+  }
+
+  const returnElapsedMs = elapsedMs - INVALID_SWAP_FORWARD_MS - INVALID_SWAP_HOLD_MS;
+  const progress = clamp01(returnElapsedMs / INVALID_SWAP_RETURN_MS);
+  const eased = easeOutCubic(progress);
+  return trace.finalSnapshot.cells.map((cell) => {
+    const target = coordToRender(cell.coord);
+    const postSwapCell = trace.postSwapSnapshot.cells.find((candidate) => candidate.tileId === cell.tileId);
+    const start = postSwapCell == null ? target : coordToRender(postSwapCell.coord);
+    return snapshotCellToRenderCell(cell, {
+      renderX: lerp(start.renderX, target.renderX, eased),
+      renderY: lerp(start.renderY, target.renderY, eased),
+      scale: 1,
+      alpha: 1,
       zIndex: 5,
     });
   });

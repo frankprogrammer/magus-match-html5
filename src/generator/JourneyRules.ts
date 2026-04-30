@@ -4,6 +4,7 @@ import type { SeededRng } from '../core/Rng';
 import {
   buildBoardAnimationCascadeStep,
   createBoardAnimationTrace,
+  createInvalidSwapAnimationTrace,
   type BoardAnimationCascadeStep,
   type BoardAnimationTrace,
   type BoardAnimationTraceOptions,
@@ -78,6 +79,10 @@ export function processJourneySwap(
 
   const validation = validateSwap(board, from, to);
   if (!validation.valid) {
+    if (validation.reason === 'noMatch') {
+      return invalidJourneySwap(board, runtime, createInvalidSwapAnimationTrace(board, from, to, 0));
+    }
+
     return invalidJourneySwap(board, runtime);
   }
 
@@ -466,7 +471,11 @@ function absoluteChainClearDelayMap(chain: PowerUpChainResolution): ReadonlyMap<
   return delays;
 }
 
-function invalidJourneySwap(board: Board, runtime: JourneyRuntimeState): JourneySwapResult {
+function invalidJourneySwap(
+  board: Board,
+  runtime: JourneyRuntimeState,
+  animationTrace?: BoardAnimationTrace,
+): JourneySwapResult {
   return {
     valid: false,
     board,
@@ -475,7 +484,7 @@ function invalidJourneySwap(board: Board, runtime: JourneyRuntimeState): Journey
     convertedPathCells: [],
     clearedStandardCells: [],
     scoringStats: EMPTY_SWAP_SCORING_STATS,
-    animationTrace: undefined,
+    animationTrace,
   };
 }
 

@@ -113,6 +113,50 @@ describe('Journey rules', () => {
     expect(result.runtime.result).toBe('lost');
   });
 
+  it('returns an invalid-swap animation trace for adjacent swaps that make no match', () => {
+    const level = testLevel({ moveBudget: 20, goalCell: { col: 7, row: 7 } });
+    const board = createBoardFromTileTypes([
+      ['FIRE', 'ICE', 'EARTH'],
+      ['LIGHTNING', 'EARTH', 'ICE'],
+    ]);
+    board[0][0].isPath = true;
+    const runtime = createJourneyRuntime(level);
+
+    const result = processJourneySwap(
+      board,
+      runtime,
+      level,
+      { col: 0, row: 0 },
+      { col: 1, row: 0 },
+      new SeededRng(22),
+    );
+
+    expect(result.valid).toBe(false);
+    expect(result.animationTrace?.kind).toBe('invalidSwap');
+    expect(result.board).toBe(board);
+    expect(result.runtime).toBe(runtime);
+    expect(result.runtime.movesRemaining).toBe(20);
+    expect(result.scoreDelta).toBe(0);
+  });
+
+  it('hard-rejects non-adjacent Journey swaps without an animation trace', () => {
+    const level = testLevel({ moveBudget: 20, goalCell: { col: 7, row: 7 } });
+    const board = createBoardFromTileTypes([['FIRE', 'ICE', 'EARTH']]);
+    board[0][0].isPath = true;
+
+    const result = processJourneySwap(
+      board,
+      createJourneyRuntime(level),
+      level,
+      { col: 0, row: 0 },
+      { col: 2, row: 0 },
+      new SeededRng(23),
+    );
+
+    expect(result.valid).toBe(false);
+    expect(result.animationTrace).toBeUndefined();
+  });
+
   it('taps a Journey rocket as a valid move and converts LAND in the sweep', () => {
     const level = testLevel({ moveBudget: 20, goalCell: { col: 7, row: 7 } });
     const board = createBoardFromTileTypes([

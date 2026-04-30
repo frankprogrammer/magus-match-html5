@@ -593,6 +593,7 @@ export class MagusMatchGameApp implements GameApp {
     );
 
     if (!result.valid) {
+      this.captureBoardAnimationTrace(result.animationTrace);
       return;
     }
 
@@ -673,6 +674,7 @@ export class MagusMatchGameApp implements GameApp {
       this.rng,
     );
     if (!result.valid) {
+      this.captureBoardAnimationTrace(result.animationTrace);
       return;
     }
 

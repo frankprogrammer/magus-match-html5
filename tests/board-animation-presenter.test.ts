@@ -1,10 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { createLevelIntroBoardAnimationTrace, type BoardAnimationTrace } from '../src/board/BoardAnimationTrace';
+import {
+  createInvalidSwapAnimationTrace,
+  createLevelIntroBoardAnimationTrace,
+  type BoardAnimationTrace,
+} from '../src/board/BoardAnimationTrace';
 import { getBoardAnimationTraceDurationMs } from '../src/board/BoardAnimationTiming';
 import { createBoardFromTileTypes } from '../src/board/Board';
 import { BOARD_RECT } from '../src/core/Layout';
 import { BoardAnimationPresenter } from '../src/render-2d/BoardAnimationPresenter';
 import type { BoardCellVisualState, BoardRenderState } from '../src/render-2d/BoardRenderState';
+import {
+  INVALID_SWAP_FORWARD_MS,
+  INVALID_SWAP_HOLD_MS,
+  INVALID_SWAP_RETURN_MS,
+} from '../src/data/tuning';
 
 describe('BoardAnimationPresenter', () => {
   it('scales matched tiles down, falls tiles physically, and settles to the authoritative board', () => {
@@ -262,6 +271,39 @@ describe('BoardAnimationPresenter', () => {
     expect(settled.boardCells.map((cell) => cell.tileId).sort()).toEqual(
       state.boardCells.map((cell) => cell.tileId).sort(),
     );
+  });
+
+  it('animates invalid swaps forward and then back to the authoritative cells', () => {
+    const presenter = new BoardAnimationPresenter();
+    const board = createBoardFromTileTypes([
+      ['FIRE', 'ICE'],
+      ['EARTH', 'LIGHTNING'],
+    ]);
+    const trace = createInvalidSwapAnimationTrace(board, { col: 0, row: 0 }, { col: 1, row: 0 }, 32);
+    const state = boardState(trace);
+
+    presenter.present(state, 0);
+    const forward = presenter.present(state, INVALID_SWAP_FORWARD_MS / 2000);
+    const held = presenter.present(state, (INVALID_SWAP_FORWARD_MS + INVALID_SWAP_HOLD_MS / 2) / 1000);
+    const returning = presenter.present(
+      state,
+      (INVALID_SWAP_FORWARD_MS + INVALID_SWAP_HOLD_MS + INVALID_SWAP_RETURN_MS / 2) / 1000,
+    );
+    const settled = presenter.present(state, getBoardAnimationTraceDurationMs(trace) / 1000);
+    const originalX = BOARD_RECT.x;
+    const swappedX = BOARD_RECT.x + BOARD_RECT.cellSize;
+
+    expect(trace.cascadeSteps).toEqual([]);
+    expect(getBoardAnimationTraceDurationMs(trace)).toBe(
+      INVALID_SWAP_FORWARD_MS + INVALID_SWAP_HOLD_MS + INVALID_SWAP_RETURN_MS,
+    );
+    expect(forward.boardCells.find((cell) => cell.tileType === 'FIRE')?.renderX).toBeGreaterThan(originalX);
+    expect(forward.boardCells.find((cell) => cell.tileType === 'FIRE')?.renderX).toBeLessThan(swappedX);
+    expect(held.boardCells.find((cell) => cell.tileType === 'FIRE')?.renderX).toBeCloseTo(swappedX);
+    expect(returning.boardCells.find((cell) => cell.tileType === 'FIRE')?.renderX).toBeGreaterThan(originalX);
+    expect(returning.boardCells.find((cell) => cell.tileType === 'FIRE')?.renderX).toBeLessThan(swappedX);
+    expect(settled).toBe(state);
+    expect(settled.boardCells.find((cell) => cell.tileType === 'FIRE')?.coord).toEqual({ col: 0, row: 0 });
   });
 
   it('uses shared board-layer trace duration for presenter completion', () => {

@@ -41,6 +41,13 @@ Then it publishes:
 
 The workflow preserves existing deployed folders, so updating one branch preview does not delete the main build or other branch previews.
 
+For branch previews, the workflow merges the latest `origin/main` into the pushed branch before building. This keeps branch preview builds current with `main` while still including the branch changes. If the merge conflicts, the workflow fails and the branch needs to be updated locally.
+
+Each deploy includes `build-info.json` so you can verify what was published:
+
+- Main: `https://frankprogrammer.github.io/magus-match-html5/build-info.json`
+- Branch: `https://frankprogrammer.github.io/magus-match-html5/branches/<branch-slug>/build-info.json`
+
 ## Local Checks
 
 Run these before pushing:

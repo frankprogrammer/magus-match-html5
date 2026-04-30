@@ -26,6 +26,7 @@ import {
   type BoardAnimationTrace,
 } from "../board/BoardAnimationTrace";
 import { getBoardAnimationTraceDurationMs } from "../board/BoardAnimationTiming";
+import { findStandardMatchHints } from "../board/BoardHints";
 import type { TileType } from "../board/TileTypes";
 import { AssetIds } from "../assets/AssetIds";
 import type { GeneratedLevel } from "../generator/LevelGenerator";
@@ -75,7 +76,13 @@ import {
   scoreTrialClear,
 } from "../run/Scoring";
 import type { SwapScoringStats } from "../run/Scoring";
-import { CAMERA_SHAKE_MAX, CAMERA_SHAKE_MIN } from "../data/tuning";
+import {
+  CAMERA_SHAKE_MAX,
+  CAMERA_SHAKE_MIN,
+  MATCH_HINT_ACTIVE_SEC,
+  MATCH_HINT_IDLE_DELAY_SEC,
+  MATCH_HINT_PAUSE_SEC,
+} from "../data/tuning";
 import { HeroStageTemplateIds } from "../world-3d/HeroStageTemplates";
 import type { HeroWorldState } from "../world-3d/HeroWorldState";
 import type { TransformState } from "../world-3d/TransformState";
@@ -138,6 +145,7 @@ export class MagusMatchGameApp implements GameApp {
   private latestBoardAnimationEndsAtSec = 0;
   private animationClockSec = 0;
   private nextBoardAnimationRevision = 1;
+  private matchHintTimerSec = 0;
 
   constructor(
     seed?: number,
@@ -175,6 +183,7 @@ export class MagusMatchGameApp implements GameApp {
 
     if (this.phase === "IDLE") {
       this.elapsedSec += clampedDtSec;
+      this.updateMatchHintTimer(clampedDtSec);
       this.updateTrialStage(clampedDtSec);
     }
 
@@ -236,6 +245,7 @@ export class MagusMatchGameApp implements GameApp {
       shakePixels: this.getShakePixels(),
       visualCues: this.getBoardVisualCueState(),
       animationTrace: this.latestBoardAnimationTrace,
+      matchHint: this.getMatchHintVisualState(),
     };
   }
 
@@ -323,6 +333,7 @@ export class MagusMatchGameApp implements GameApp {
     this.latestBoardAnimationEndsAtSec = 0;
     this.animationClockSec = 0;
     this.nextBoardAnimationRevision = 1;
+    this.resetMatchHintTimer();
     this.phase = "TITLE";
     this.events = [];
   }
@@ -414,6 +425,7 @@ export class MagusMatchGameApp implements GameApp {
     this.shakeAmplitudePixels = 0;
     this.latestBoardAnimationTrace = null;
     this.latestBoardAnimationEndsAtSec = this.animationClockSec;
+    this.resetMatchHintTimer();
   }
 
   private startPreparedLevel(): void {
@@ -424,6 +436,7 @@ export class MagusMatchGameApp implements GameApp {
     this.phase = "IDLE";
     this.elapsedSec = 0;
     this.transitionTimerSec = 0;
+    this.resetMatchHintTimer();
     this.captureBoardAnimationTrace(
       createLevelIntroBoardAnimationTrace(this.board, 0),
     );
@@ -486,6 +499,8 @@ export class MagusMatchGameApp implements GameApp {
       return;
     }
 
+    this.resetMatchHintTimer();
+
     if (this.currentLevel?.type === "TRIAL") {
       this.handleTrialPowerUpTap(boardCell);
       return;
@@ -505,6 +520,7 @@ export class MagusMatchGameApp implements GameApp {
       return;
     }
 
+    this.resetMatchHintTimer();
     this.pendingLevelResult = result;
     this.transitionTimerSec = 0;
     this.phase = result === "win" ? "WIN" : "LOSE";
@@ -571,6 +587,8 @@ export class MagusMatchGameApp implements GameApp {
     if (this.phase !== "IDLE") {
       return;
     }
+
+    this.resetMatchHintTimer();
 
     if (this.currentLevel?.type === "TRIAL" && this.trialRuntime != null) {
       this.handleTrialSwap(from, to);
@@ -970,6 +988,45 @@ export class MagusMatchGameApp implements GameApp {
       text: cue.text,
       value: Math.max(0, Math.min(1, cue.remainingSec / cue.durationSec)),
     }));
+  }
+
+  private resetMatchHintTimer(): void {
+    this.matchHintTimerSec = 0;
+  }
+
+  private updateMatchHintTimer(dtSec: number): void {
+    this.matchHintTimerSec += Math.max(0, dtSec);
+  }
+
+  private getMatchHintVisualState(): BoardRenderState["matchHint"] {
+    if (this.phase !== "IDLE") {
+      return null;
+    }
+
+    if (this.matchHintTimerSec < MATCH_HINT_IDLE_DELAY_SEC) {
+      return null;
+    }
+
+    const cycleDurationSec = MATCH_HINT_ACTIVE_SEC + MATCH_HINT_PAUSE_SEC;
+    const cycleElapsedSec = this.matchHintTimerSec - MATCH_HINT_IDLE_DELAY_SEC;
+    const cycleIndex = Math.floor(cycleElapsedSec / cycleDurationSec);
+    const cyclePhaseSec = cycleElapsedSec - cycleIndex * cycleDurationSec;
+    if (cyclePhaseSec >= MATCH_HINT_ACTIVE_SEC) {
+      return null;
+    }
+
+    const hints = findStandardMatchHints(this.board);
+    if (hints.length === 0) {
+      return null;
+    }
+
+    const hint = hints[cycleIndex % hints.length];
+    return {
+      flashCells: hint.flashCells,
+      movingCell: hint.movingCell,
+      direction: hint.direction,
+      progress: Math.max(0, Math.min(1, cyclePhaseSec / MATCH_HINT_ACTIVE_SEC)),
+    };
   }
 
   private getObjectiveText(): string {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AssetIds } from '../src/assets/AssetIds';
 import { BOARD_RECT } from '../src/core/Layout';
+import { MATCH_HINT_BOUNCE_DISTANCE_PX } from '../src/data/tuning';
 import type { DrawImageRef, GameRenderer, TextStyle } from '../src/render-2d/GameRenderer';
 import type { BoardRenderState } from '../src/render-2d/BoardRenderState';
 import type { HudRenderState } from '../src/render-2d/HudRenderState';
@@ -97,6 +98,46 @@ describe('buildBoardCellVisuals', () => {
     expect(buildBoardCellVisuals(state, 0)).toEqual([]);
   });
 
+  it('flashes match hint cells synchronously and bounces only the completing tile', () => {
+    const state = oneTileState('tile.fire');
+    state.boardCells = [
+      {
+        tileId: 'tile-0',
+        coord: { col: 0, row: 0 },
+        assetId: 'tile.fire',
+        tileType: 'FIRE',
+        isPath: false,
+        alpha: 1,
+      },
+      {
+        tileId: 'tile-1',
+        coord: { col: 1, row: 0 },
+        assetId: 'tile.fire',
+        tileType: 'FIRE',
+        isPath: false,
+        alpha: 1,
+      },
+    ];
+    state.matchHint = {
+      flashCells: [
+        { col: 0, row: 0 },
+        { col: 1, row: 0 },
+      ],
+      movingCell: { col: 0, row: 0 },
+      direction: { col: 1, row: 0 },
+      progress: 1 / 12,
+    };
+
+    const visuals = buildBoardCellVisuals(state, 0);
+
+    expect(visuals[0].flash).toBeCloseTo(visuals[1].flash);
+    expect(visuals[0].flash).toBeGreaterThan(0);
+    expect(visuals[0].flash).toBeLessThanOrEqual(0.5);
+    expect(visuals[0].x).toBeCloseTo(BOARD_RECT.x + MATCH_HINT_BOUNCE_DISTANCE_PX);
+    expect(visuals[1].x).toBeCloseTo(BOARD_RECT.x + BOARD_RECT.cellSize);
+    expect(visuals[0].zIndex).toBeGreaterThan(visuals[1].zIndex);
+  });
+
   it('draws image assets when available', () => {
     const renderer = new FakeRenderer(new Set(['tile.fire']));
 
@@ -107,6 +148,38 @@ describe('buildBoardCellVisuals', () => {
     expect(renderer.calls).not.toContain(
       `rect:#171225:${BOARD_RECT.x},${BOARD_RECT.y},${BOARD_RECT.cellSize},${BOARD_RECT.cellSize}`,
     );
+  });
+
+  it('draws loaded tile flashes through the tile image alpha mask', () => {
+    const renderer = new FakeRenderer(new Set(['tile.fire']));
+    const state = oneTileState('tile.fire');
+    state.matchHint = {
+      flashCells: [{ col: 0, row: 0 }],
+      movingCell: { col: 0, row: 0 },
+      direction: { col: 1, row: 0 },
+      progress: 0.1,
+    };
+
+    renderFrame(renderer, state, hudState(), 0);
+
+    expect(renderer.calls).toContain('mask:tile.fire:#ffffff');
+    expect(renderer.calls.some((call) => call.startsWith('rect:rgba(255, 255, 255'))).toBe(false);
+  });
+
+  it('keeps rectangular flashes for fallback tile rendering', () => {
+    const renderer = new FakeRenderer(new Set());
+    const state = oneTileState('tile.fire');
+    state.matchHint = {
+      flashCells: [{ col: 0, row: 0 }],
+      movingCell: { col: 0, row: 0 },
+      direction: { col: 1, row: 0 },
+      progress: 0.1,
+    };
+
+    renderFrame(renderer, state, hudState(), 0);
+
+    expect(renderer.calls).not.toContain('mask:tile.fire:#ffffff');
+    expect(renderer.calls.some((call) => call.startsWith('rect:rgba(255, 255, 255'))).toBe(true);
   });
 
   it('draws the HUD banner image across the middle UI band when available', () => {
@@ -462,6 +535,19 @@ class FakeRenderer implements GameRenderer {
   drawImage(image: DrawImageRef, x: number, y: number, width: number, height: number): void {
     this.calls.push(`image:${image.id}`);
     this.calls.push(`image:${image.id}:${x},${y},${width},${height}`);
+  }
+
+  drawImageAlphaMaskFill(
+    image: DrawImageRef,
+    color: string,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    alpha: number,
+  ): void {
+    this.calls.push(`mask:${image.id}:${color}`);
+    this.calls.push(`mask:${image.id}:${color}:${x},${y},${width},${height},${alpha}`);
   }
 
   drawText(text: string, x: number, y: number, width: number, height: number, style: TextStyle): void {

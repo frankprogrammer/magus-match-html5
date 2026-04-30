@@ -74,6 +74,13 @@ export interface BoardEmptyCellVisualState {
   assetId: string;
 }
 
+export interface BoardMatchHintVisualState {
+  flashCells: readonly CellCoord[];
+  movingCell: CellCoord;
+  direction: CellCoord;
+  progress: number;
+}
+
 export interface BoardRenderState {
   logicalWidth: number;
   logicalHeight: number;
@@ -87,6 +94,7 @@ export interface BoardRenderState {
   mageCell: CellCoord | null;
   goalCell: CellCoord | null;
   hintedCells: readonly CellCoord[];
+  matchHint?: BoardMatchHintVisualState | null;
   selectedCell: CellCoord | null;
   queuedSwap: { from: CellCoord; to: CellCoord } | null;
   shakePixels: number;

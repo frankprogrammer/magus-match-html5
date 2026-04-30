@@ -33,5 +33,14 @@ export interface GameRenderer {
   ): void;
   hasImage(image: DrawImageRef): boolean;
   drawImage(image: DrawImageRef, x: number, y: number, width: number, height: number): void;
+  drawImageAlphaMaskFill(
+    image: DrawImageRef,
+    color: string,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    alpha: number,
+  ): void;
   drawText(text: string, x: number, y: number, width: number, height: number, style: TextStyle): void;
 }

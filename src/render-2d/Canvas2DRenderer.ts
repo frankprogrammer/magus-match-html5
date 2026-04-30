@@ -1,6 +1,9 @@
 import type { DrawImageRef, GameRenderer, TextStyle } from './GameRenderer';
 
 export class Canvas2DRenderer implements GameRenderer {
+  private maskCanvas: HTMLCanvasElement | null = null;
+  private maskCtx: CanvasRenderingContext2D | null = null;
+
   constructor(
     private readonly ctx: CanvasRenderingContext2D,
     private images: Record<string, HTMLImageElement>,
@@ -91,6 +94,41 @@ export class Canvas2DRenderer implements GameRenderer {
     this.ctx.drawImage(img, x, y, width, height);
   }
 
+  drawImageAlphaMaskFill(
+    image: DrawImageRef,
+    color: string,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    alpha: number,
+  ): void {
+    const img = this.images[image.id];
+    if (img == null || width <= 0 || height <= 0 || alpha <= 0) {
+      return;
+    }
+
+    const maskCtx = this.getMaskContext(Math.ceil(width), Math.ceil(height));
+    if (maskCtx == null) {
+      return;
+    }
+
+    const maskWidth = Math.ceil(width);
+    const maskHeight = Math.ceil(height);
+    maskCtx.clearRect(0, 0, maskWidth, maskHeight);
+    maskCtx.globalCompositeOperation = 'source-over';
+    maskCtx.globalAlpha = 1;
+    maskCtx.drawImage(img, 0, 0, maskWidth, maskHeight);
+    maskCtx.globalCompositeOperation = 'source-in';
+    maskCtx.globalAlpha = Math.max(0, Math.min(1, alpha));
+    maskCtx.fillStyle = color;
+    maskCtx.fillRect(0, 0, maskWidth, maskHeight);
+    maskCtx.globalAlpha = 1;
+    maskCtx.globalCompositeOperation = 'source-over';
+
+    this.ctx.drawImage(maskCtx.canvas, 0, 0, maskWidth, maskHeight, x, y, width, height);
+  }
+
   drawText(text: string, x: number, y: number, width: number, height: number, style: TextStyle): void {
     this.ctx.fillStyle = style.color;
     this.ctx.font = fontString(style, style.fontSize);
@@ -104,6 +142,30 @@ export class Canvas2DRenderer implements GameRenderer {
     this.ctx.textBaseline = 'middle';
     const tx = style.align === 'center' ? x + width / 2 : style.align === 'right' ? x + width : x;
     this.ctx.fillText(text, tx, y + height / 2, width);
+  }
+
+  private getMaskContext(width: number, height: number): CanvasRenderingContext2D | null {
+    if (this.maskCanvas == null) {
+      if (typeof document === 'undefined') {
+        return null;
+      }
+
+      this.maskCanvas = document.createElement('canvas');
+      this.maskCtx = this.maskCanvas.getContext('2d');
+    }
+
+    if (this.maskCtx == null || this.maskCanvas == null) {
+      return null;
+    }
+
+    if (this.maskCanvas.width < width) {
+      this.maskCanvas.width = width;
+    }
+    if (this.maskCanvas.height < height) {
+      this.maskCanvas.height = height;
+    }
+
+    return this.maskCtx;
   }
 }
 

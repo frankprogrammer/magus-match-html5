@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
 import { AssetIds } from "../assets/AssetIds";
 import { getAssetManifestEntry } from "../assets/AssetManifest";
+import { resolveBrowserAssetUrl } from "../platform-browser/BrowserAssetUrl";
 import { HeroStageTemplateIds } from "../world-3d/HeroStageTemplates";
 import {
   addBoneProxyRig,
@@ -99,16 +100,17 @@ export class ThreeObjectFactory {
 
     this.mageLoadStarted = true;
     const loader = new FBXLoader();
+    const mageUrl = resolveBrowserAssetUrl(entry.browserUrl);
     loader.load(
-      entry.browserUrl,
+      mageUrl,
       (loaded) => {
         if (!hasRenderableGeometry(loaded)) {
           const proxyAdded = addBoneProxyRig(loaded);
           if (!this.mageBoneOnlyWarningShown) {
             console.warn(
               proxyAdded
-                ? `Mage FBX at ${entry.browserUrl} has animation bones but no renderable meshes; using temporary bone proxy visuals.`
-                : `Mage FBX at ${entry.browserUrl} has no renderable meshes and no usable bones; keeping placeholder mage.`,
+                ? `Mage FBX at ${mageUrl} has animation bones but no renderable meshes; using temporary bone proxy visuals.`
+                : `Mage FBX at ${mageUrl} has no renderable meshes and no usable bones; keeping placeholder mage.`,
             );
             this.mageBoneOnlyWarningShown = true;
           }
@@ -135,7 +137,7 @@ export class ThreeObjectFactory {
       },
       undefined,
       (error) => {
-        console.warn(`Failed to load mage FBX from ${entry.browserUrl}`, error);
+        console.warn(`Failed to load mage FBX from ${mageUrl}`, error);
       },
     );
   }
@@ -221,8 +223,9 @@ function startCastleBackdropTextureLoad(plane: THREE.Mesh): void {
     return;
   }
 
+  const backdropUrl = resolveBrowserAssetUrl(entry.browserUrl);
   new THREE.TextureLoader().load(
-    entry.browserUrl,
+    backdropUrl,
     (texture) => {
       texture.colorSpace = THREE.SRGBColorSpace;
       const image = texture.image as
@@ -242,7 +245,7 @@ function startCastleBackdropTextureLoad(plane: THREE.Mesh): void {
     undefined,
     (error) => {
       console.warn(
-        `Failed to load castle backdrop texture from ${entry.browserUrl}`,
+        `Failed to load castle backdrop texture from ${backdropUrl}`,
         error,
       );
     },

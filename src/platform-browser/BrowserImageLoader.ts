@@ -1,5 +1,6 @@
 import type { AssetManifestEntry } from '../assets/AssetManifest';
 import { getTextureAssetEntries } from '../assets/AssetManifest';
+import { resolveBrowserAssetUrl } from './BrowserAssetUrl';
 
 export type BrowserImageMap = Record<string, HTMLImageElement>;
 
@@ -17,6 +18,6 @@ function loadImageEntry(entry: AssetManifestEntry): Promise<[string, HTMLImageEl
     const image = new Image();
     image.onload = () => resolve([entry.id, image]);
     image.onerror = () => resolve(null);
-    image.src = entry.browserUrl;
+    image.src = resolveBrowserAssetUrl(entry.browserUrl);
   });
 }

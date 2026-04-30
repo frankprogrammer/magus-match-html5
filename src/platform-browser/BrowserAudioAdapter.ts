@@ -5,6 +5,7 @@ import {
   type FallbackSynthProfile,
   type SoundManifestEntry,
 } from '../audio/SoundManifest';
+import { resolveBrowserAssetUrl } from './BrowserAssetUrl';
 
 type SoundRequestEvent = Extract<GameEvent, { type: 'soundRequested' }>;
 
@@ -80,7 +81,7 @@ export class BrowserAudioAdapter {
     }
 
     try {
-      const arrayBuffer = await this.fetchArrayBuffer(entry.browserUrl);
+      const arrayBuffer = await this.fetchArrayBuffer(resolveBrowserAssetUrl(entry.browserUrl));
       const decoded = await context.decodeAudioData(arrayBuffer.slice(0));
       this.loadedBuffers.set(entry.id, decoded);
     } catch {

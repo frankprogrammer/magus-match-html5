@@ -44,6 +44,7 @@ import type { GeneratedTrialLevel, TrialMonsterKind, TrialMonsterManifestEntry }
 export type SpellSchoolId = 'fire' | 'ice' | 'lightning' | 'earth';
 
 const TRIAL_DEFEAT_TIMER_EPSILON_SEC = 0.000001;
+const TRIAL_HIT_SHAKE_DURATION_SEC = 0.18;
 
 export interface ActiveTrialMonster {
   monsterId: string;
@@ -56,6 +57,10 @@ export interface ActiveTrialMonster {
   walkSpeed: number;
   scoreValue: number;
   defeatDelaySec?: number;
+  hitShakeDelaySec?: number;
+  hitShakeQueueSec?: readonly number[];
+  hitShakeRemainingSec?: number;
+  hitShakeDurationSec?: number;
 }
 
 export interface TrialProjectileRuntimeState {
@@ -147,7 +152,8 @@ export function updateTrialRuntime(
   const elapsedMs = runtime.elapsedMs + Math.max(0, dtSec) * 1000;
   const elapsedSec = Math.max(0, dtSec);
   const visualRuntime = expireProjectiles(runtime, elapsedSec);
-  const defeatRuntime = advancePendingDefeats(visualRuntime, elapsedSec);
+  const shakeRuntime = advanceHitShakes(visualRuntime, elapsedSec);
+  const defeatRuntime = advancePendingDefeats(shakeRuntime, elapsedSec);
   const movedRuntime = {
     ...defeatRuntime,
     elapsedMs,
@@ -399,6 +405,7 @@ function applyDamageSources(
               ...monster,
               hp: nextHp,
               defeatDelaySec: defeated ? source.activationDelaySec + source.durationSec : monster.defeatDelaySec,
+              ...scheduleHitShake(monster, source.activationDelaySec + source.durationSec),
             }
           : monster,
       );
@@ -717,6 +724,72 @@ function advancePendingDefeats(runtime: TrialRuntimeState, dtSec: number): Trial
     ...runtime,
     monsters,
     defeatedMonsterIds,
+  };
+}
+
+function scheduleHitShake(
+  monster: ActiveTrialMonster,
+  hitDelaySec: number,
+): Pick<
+  ActiveTrialMonster,
+  'hitShakeDelaySec' | 'hitShakeQueueSec' | 'hitShakeRemainingSec' | 'hitShakeDurationSec'
+> {
+  const hitShakeQueueSec = [...(monster.hitShakeQueueSec ?? []), Math.max(0, hitDelaySec)].sort((a, b) => a - b);
+  const activeShakeSec = monster.hitShakeRemainingSec ?? 0;
+
+  return {
+    hitShakeDelaySec: hitShakeQueueSec[0],
+    hitShakeQueueSec,
+    hitShakeRemainingSec: activeShakeSec > 0 ? TRIAL_HIT_SHAKE_DURATION_SEC : activeShakeSec,
+    hitShakeDurationSec: TRIAL_HIT_SHAKE_DURATION_SEC,
+  };
+}
+
+function advanceHitShakes(runtime: TrialRuntimeState, dtSec: number): TrialRuntimeState {
+  const elapsed = Math.max(0, dtSec);
+  return {
+    ...runtime,
+    monsters: runtime.monsters.map((monster) => advanceMonsterHitShake(monster, elapsed)),
+  };
+}
+
+function advanceMonsterHitShake(monster: ActiveTrialMonster, elapsedSec: number): ActiveTrialMonster {
+  const queuedDelays = monster.hitShakeQueueSec ?? (monster.hitShakeDelaySec != null ? [monster.hitShakeDelaySec] : []);
+  const advancedQueue = queuedDelays
+    .map((delaySec) => delaySec - elapsedSec)
+    .sort((a, b) => a - b);
+  const arrivedCount = advancedQueue.filter((delaySec) => delaySec <= TRIAL_DEFEAT_TIMER_EPSILON_SEC).length;
+  const futureQueue = advancedQueue.filter((delaySec) => delaySec > TRIAL_DEFEAT_TIMER_EPSILON_SEC);
+  let hitShakeDelaySec = futureQueue[0];
+  const hitShakeQueueSec = futureQueue.length > 0 ? futureQueue : undefined;
+  let hitShakeRemainingSec = monster.hitShakeRemainingSec;
+  const hitShakeDurationSec = monster.hitShakeDurationSec ?? TRIAL_HIT_SHAKE_DURATION_SEC;
+
+  if (arrivedCount > 0) {
+    hitShakeRemainingSec = hitShakeDurationSec;
+  } else if (hitShakeRemainingSec != null && hitShakeRemainingSec > 0) {
+    hitShakeRemainingSec -= elapsedSec;
+    if (hitShakeRemainingSec <= TRIAL_DEFEAT_TIMER_EPSILON_SEC) {
+      hitShakeRemainingSec = undefined;
+    }
+  }
+
+  if ((hitShakeRemainingSec ?? 0) <= TRIAL_DEFEAT_TIMER_EPSILON_SEC && hitShakeQueueSec == null) {
+    return {
+      ...monster,
+      hitShakeDelaySec: undefined,
+      hitShakeQueueSec: undefined,
+      hitShakeRemainingSec: undefined,
+      hitShakeDurationSec: undefined,
+    };
+  }
+
+  return {
+    ...monster,
+    hitShakeDelaySec,
+    hitShakeQueueSec,
+    hitShakeRemainingSec,
+    hitShakeDurationSec,
   };
 }
 

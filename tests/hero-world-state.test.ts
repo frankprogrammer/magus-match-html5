@@ -6,6 +6,7 @@ import {
   MagusMatchGameApp,
   MAGE_WORLD_SCALE,
   phaseToCinematicState,
+  trialMonsterHitShakeOffset,
 } from '../src/core/GameApp';
 import { getTrialMageWorldPosition } from '../src/generator/TrialRules';
 import { HeroStageTemplateIds } from '../src/world-3d/HeroStageTemplates';
@@ -102,6 +103,49 @@ describe('HeroWorldState', () => {
     expect(fill?.tintHex).toBe('#eb5757');
   });
 
+  it('applies the same Trial hit shake offset to the enemy and health bar objects', () => {
+    const app = new MagusMatchGameApp(789);
+    const runtime = app.getTrialRuntimeForDebug();
+    if (runtime == null) {
+      throw new Error('Expected Trial runtime.');
+    }
+
+    const monster = {
+      ...runtime.monsters[0],
+      hp: 15,
+      maxHp: 30,
+      hitShakeRemainingSec: 0.13,
+      hitShakeDurationSec: 0.18,
+    };
+    setTrialRuntimeForDebug(app, {
+      ...runtime,
+      monsters: [monster],
+    });
+
+    const shakenState = app.getHeroWorldState();
+    setTrialRuntimeForDebug(app, {
+      ...runtime,
+      monsters: [{ ...monster, hitShakeRemainingSec: undefined, hitShakeDurationSec: undefined }],
+    });
+    const stableState = app.getHeroWorldState();
+    const offset = trialMonsterHitShakeOffset(monster);
+
+    const shakenMonster = shakenState.objects.find((object) => object.objectId === `trial-monster-${monster.monsterId}`);
+    const shakenTrack = shakenState.objects.find((object) => object.objectId === `trial-monster-${monster.monsterId}-health-track`);
+    const shakenFill = shakenState.objects.find((object) => object.objectId === `trial-monster-${monster.monsterId}-health-fill`);
+    const stableMonster = stableState.objects.find((object) => object.objectId === `trial-monster-${monster.monsterId}`);
+    const stableTrack = stableState.objects.find((object) => object.objectId === `trial-monster-${monster.monsterId}-health-track`);
+    const stableFill = stableState.objects.find((object) => object.objectId === `trial-monster-${monster.monsterId}-health-fill`);
+
+    expect(offset.x).not.toBe(0);
+    expect(shakenMonster?.transform.position.x).toBeCloseTo((stableMonster?.transform.position.x ?? 0) + offset.x);
+    expect(shakenMonster?.transform.position.y).toBeCloseTo((stableMonster?.transform.position.y ?? 0) + offset.y);
+    expect(shakenTrack?.transform.position.x).toBeCloseTo((stableTrack?.transform.position.x ?? 0) + offset.x);
+    expect(shakenTrack?.transform.position.y).toBeCloseTo((stableTrack?.transform.position.y ?? 0) + offset.y);
+    expect(shakenFill?.transform.position.x).toBeCloseTo((stableFill?.transform.position.x ?? 0) + offset.x);
+    expect(shakenFill?.transform.position.y).toBeCloseTo((stableFill?.transform.position.y ?? 0) + offset.y);
+  });
+
   it('omits health bar objects for defeated monsters', () => {
     const bars = createTrialMonsterHealthBarObjects(
       {
@@ -166,3 +210,7 @@ describe('HeroWorldState', () => {
     expect(monster?.transform.position.y).toBeLessThan(-0.85);
   });
 });
+
+function setTrialRuntimeForDebug(app: MagusMatchGameApp, runtime: NonNullable<ReturnType<MagusMatchGameApp['getTrialRuntimeForDebug']>>): void {
+  (app as unknown as { trialRuntime: typeof runtime }).trialRuntime = runtime;
+}

@@ -2,8 +2,10 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import {
   addBoneProxyRig,
-  applyVisibleMageMaterialToMeshes,
+  applyFallbackMaterialToUnmaterialedMeshes,
+  applyMageTextureToMeshes,
   createMageLoopClip,
+  ensureMageMeshesVisibleWithoutOverridingTextures,
   hasRenderableGeometry,
   inferFrameRateForInclusiveFrameRange,
   normalizeModelToActorBounds,
@@ -60,27 +62,59 @@ describe('normalizeModelToActorBounds', () => {
     expect(root.getObjectByName('proxy-sphere-head')).toBeInstanceOf(THREE.Mesh);
   });
 
-  it('forces loaded mage meshes to opaque visible fallback materials', () => {
+  it('keeps textured mage materials while making hidden meshes visible', () => {
+    const texture = new THREE.Texture();
     const mesh = new THREE.Mesh(
       new THREE.BoxGeometry(1, 1, 1),
       new THREE.MeshPhongMaterial({
         color: '#000000',
         transparent: true,
         opacity: 0,
-        map: new THREE.Texture(),
+        map: texture,
       }),
     );
     mesh.name = 'neck';
     mesh.visible = false;
 
-    applyVisibleMageMaterialToMeshes(mesh);
+    ensureMageMeshesVisibleWithoutOverridingTextures(mesh);
 
-    const material = mesh.material as unknown as THREE.MeshStandardMaterial;
+    const material = mesh.material as unknown as THREE.MeshPhongMaterial;
     expect(mesh.visible).toBe(true);
-    expect(mesh.material).toBeInstanceOf(THREE.MeshStandardMaterial);
     expect(material.transparent).toBe(false);
     expect(material.opacity).toBe(1);
-    expect(material.map).toBeNull();
+    expect(material.map).toBe(texture);
+  });
+
+  it('applies recovered mage texture to untextured or transparent materials', () => {
+    const texture = new THREE.Texture();
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshPhongMaterial({
+        color: '#000000',
+        transparent: true,
+        opacity: 0,
+      }),
+    );
+    mesh.visible = false;
+
+    applyMageTextureToMeshes(mesh, texture);
+
+    const material = mesh.material as THREE.MeshPhongMaterial;
+    expect(mesh.visible).toBe(true);
+    expect(material.map).toBe(texture);
+    expect(material.transparent).toBe(false);
+    expect(material.opacity).toBe(1);
+  });
+
+  it('still gives unmaterialed mage meshes a visible fallback material', () => {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
+    mesh.material = null as unknown as THREE.Material;
+
+    applyFallbackMaterialToUnmaterialedMeshes(mesh);
+    ensureMageMeshesVisibleWithoutOverridingTextures(mesh);
+
+    expect(mesh.material).toBeInstanceOf(THREE.MeshStandardMaterial);
+    expect((mesh.material as THREE.MeshStandardMaterial).opacity).toBe(1);
   });
 
   it('selects the first nonzero mage clip and infers the natural 0-60 frame timing', () => {

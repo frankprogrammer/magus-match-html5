@@ -10,6 +10,7 @@ describe('AssetManifest', () => {
       ...Object.values(AssetIds.backdrops),
       ...Object.values(AssetIds.rigs),
       ...Object.values(AssetIds.ui),
+      ...Object.values(AssetIds.materials),
       ...Object.values(AssetIds.sounds),
       AssetIds.props.princeCage,
       AssetIds.props.goalFlag,
@@ -53,6 +54,11 @@ describe('AssetManifest', () => {
     expect(AssetManifest[AssetIds.backdrops.castle].runtimeSize).toBe('cover 1080x500 hero stage');
     expect(AssetManifest[AssetIds.ui.hudBanner].browserUrl).toBe('/assets/ui/ui-banner.png');
     expect(AssetManifest[AssetIds.ui.hudBanner].runtimeSize).toBe('1080x150');
+    expect(AssetManifest[AssetIds.ui.boardBackground].browserUrl).toBe('/assets/ui/board-background.png');
+    expect(AssetManifest[AssetIds.ui.boardBackground].runtimeSize).toBe('1080x1080');
+    expect(AssetManifest[AssetIds.materials.mageTexture].browserUrl).toBe(
+      '/assets/rigs/knight1.fbm/knight_texture_test.png',
+    );
   });
 
   it('maps the temporary mage rig to the dropped FBX player model', () => {

@@ -36,6 +36,10 @@ export const AssetIds = {
   },
   ui: {
     hudBanner: 'ui.hudBanner',
+    boardBackground: 'ui.boardBackground',
+  },
+  materials: {
+    mageTexture: 'material.mageTexture',
   },
   sounds: {
     tileMatch: 'sound.tileMatch',

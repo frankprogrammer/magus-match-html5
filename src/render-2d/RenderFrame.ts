@@ -150,7 +150,7 @@ function drawHud(renderer: GameRenderer, hudState: HudRenderState): void {
 function drawBoard(renderer: GameRenderer, boardState: BoardRenderState, elapsedSec: number): void {
   const shake = boardState.shakePixels;
   renderer.pushTranslate(shake, 0);
-  renderer.drawRect('#302340', BOARD_RECT.x, BOARD_RECT.y, BOARD_RECT.width, BOARD_RECT.height);
+  drawBoardBackground(renderer);
 
   const visuals = buildBoardCellVisuals(boardState, elapsedSec).sort(
     (first, second) =>
@@ -173,6 +173,16 @@ function drawBoard(renderer: GameRenderer, boardState: BoardRenderState, elapsed
   drawBoardFrame(renderer);
   drawDamagePopups(renderer, boardState);
   renderer.pop();
+}
+
+function drawBoardBackground(renderer: GameRenderer): void {
+  const boardBackground = { id: AssetIds.ui.boardBackground };
+  if (renderer.hasImage(boardBackground)) {
+    renderer.drawImage(boardBackground, BOARD_RECT.x, BOARD_RECT.y, BOARD_RECT.width, BOARD_RECT.height);
+    return;
+  }
+
+  renderer.drawRect('#302340', BOARD_RECT.x, BOARD_RECT.y, BOARD_RECT.width, BOARD_RECT.height);
 }
 
 function drawEmptyCell(renderer: GameRenderer, coord: CellCoord, assetId: string): void {
@@ -211,7 +221,6 @@ function drawCell(renderer: GameRenderer, visual: BoardCellVisual): void {
   }
 
   renderer.pushAlpha(visual.alpha);
-  renderer.drawRect('#171225', visual.x, visual.y, visual.width, visual.height);
 
   const imageRef = { id: visual.assetId };
   if (renderer.hasImage(imageRef)) {

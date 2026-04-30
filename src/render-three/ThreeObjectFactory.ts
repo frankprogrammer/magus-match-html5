@@ -6,9 +6,10 @@ import { resolveBrowserAssetUrl } from "../platform-browser/BrowserAssetUrl";
 import { HeroStageTemplateIds } from "../world-3d/HeroStageTemplates";
 import {
   addBoneProxyRig,
+  applyMageTextureToMeshes,
   applyFallbackMaterialToUnmaterialedMeshes,
-  applyVisibleMageMaterialToMeshes,
   createMageLoopClip,
+  ensureMageMeshesVisibleWithoutOverridingTextures,
   hasRenderableGeometry,
   normalizeModelToActorBounds,
 } from "./ThreeModelUtils";
@@ -24,6 +25,8 @@ export class ThreeObjectFactory {
   private mageTemplate: THREE.Group | null = null;
   private mageTemplateVersion = 0;
   private mageLoadStarted = false;
+  private mageTexture: THREE.Texture | null = null;
+  private mageTextureLoadStarted = false;
   private mageBoneOnlyWarningShown = false;
 
   constructor() {
@@ -81,6 +84,7 @@ export class ThreeObjectFactory {
       this.dispose(this.mageTemplate);
       this.mageTemplate = null;
     }
+    this.mageTexture = null;
   }
 
   private createMage(): THREE.Object3D {
@@ -108,7 +112,8 @@ export class ThreeObjectFactory {
     loader.load(
       mageUrl,
       (loaded) => {
-        if (!hasRenderableGeometry(loaded)) {
+        const loadedHadRenderableGeometry = hasRenderableGeometry(loaded);
+        if (!loadedHadRenderableGeometry) {
           const proxyAdded = addBoneProxyRig(loaded);
           if (!this.mageBoneOnlyWarningShown) {
             console.warn(
@@ -125,7 +130,7 @@ export class ThreeObjectFactory {
         }
 
         applyFallbackMaterialToUnmaterialedMeshes(loaded);
-        applyVisibleMageMaterialToMeshes(loaded);
+        ensureMageMeshesVisibleWithoutOverridingTextures(loaded);
         this.mageTemplate = normalizeModelToActorBounds(
           loaded,
           MAGE_TARGET_HEIGHT,
@@ -137,6 +142,10 @@ export class ThreeObjectFactory {
         );
         this.mageTemplate.animations =
           mageLoopClip != null ? [mageLoopClip] : [];
+        if (loadedHadRenderableGeometry) {
+          this.applyMageTextureToTemplateIfReady();
+          this.startMageTextureLoad();
+        }
         this.mageTemplateVersion += 1;
       },
       undefined,
@@ -144,6 +153,43 @@ export class ThreeObjectFactory {
         console.warn(`Failed to load mage FBX from ${mageUrl}`, error);
       },
     );
+  }
+
+  private startMageTextureLoad(): void {
+    if (this.mageTextureLoadStarted || typeof window === "undefined") {
+      return;
+    }
+
+    const entry = getAssetManifestEntry(AssetIds.materials.mageTexture);
+    if (entry == null) {
+      return;
+    }
+
+    this.mageTextureLoadStarted = true;
+    const textureUrl = resolveBrowserAssetUrl(entry.browserUrl);
+    new THREE.TextureLoader().load(
+      textureUrl,
+      (texture) => {
+        texture.colorSpace = THREE.SRGBColorSpace;
+        this.mageTexture = texture;
+        if (this.applyMageTextureToTemplateIfReady()) {
+          this.mageTemplateVersion += 1;
+        }
+      },
+      undefined,
+      (error) => {
+        console.warn(`Failed to load mage texture from ${textureUrl}`, error);
+      },
+    );
+  }
+
+  private applyMageTextureToTemplateIfReady(): boolean {
+    if (this.mageTemplate == null || this.mageTexture == null) {
+      return false;
+    }
+
+    applyMageTextureToMeshes(this.mageTemplate, this.mageTexture);
+    return true;
   }
 }
 

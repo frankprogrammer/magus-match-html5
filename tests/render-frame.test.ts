@@ -104,6 +104,9 @@ describe('buildBoardCellVisuals', () => {
 
     expect(renderer.calls).toContain('image:tile.fire');
     expect(renderer.calls).not.toContain('text:F');
+    expect(renderer.calls).not.toContain(
+      `rect:#171225:${BOARD_RECT.x},${BOARD_RECT.y},${BOARD_RECT.cellSize},${BOARD_RECT.cellSize}`,
+    );
   });
 
   it('draws the HUD banner image across the middle UI band when available', () => {
@@ -115,6 +118,38 @@ describe('buildBoardCellVisuals', () => {
     expect(renderer.calls).not.toContain('rect:#1f1830:0,490,1080,150');
     expect(renderer.calls).toContain(`image:${AssetIds.ui.hudBanner}:0,490,1080,150`);
     expect(renderer.calls).toContain('text:Level 1:56,490,190,150');
+  });
+
+  it('draws the board background image behind cells when available', () => {
+    const renderer = new FakeRenderer(new Set([AssetIds.ui.boardBackground, 'tile.fire']));
+
+    renderFrame(renderer, oneTileState('tile.fire'), hudState(), 0);
+
+    const backgroundIndex = renderer.calls.indexOf(
+      `image:${AssetIds.ui.boardBackground}:${BOARD_RECT.x},${BOARD_RECT.y},${BOARD_RECT.width},${BOARD_RECT.height}`,
+    );
+    const clipIndex = renderer.calls.indexOf(
+      `clip:${BOARD_RECT.x},${BOARD_RECT.y},${BOARD_RECT.width},${BOARD_RECT.height}`,
+    );
+    const tileIndex = renderer.calls.indexOf('image:tile.fire');
+
+    expect(backgroundIndex).toBeGreaterThan(-1);
+    expect(backgroundIndex).toBeLessThan(clipIndex);
+    expect(tileIndex).toBeGreaterThan(clipIndex);
+    expect(renderer.calls).not.toContain(
+      `rect:#302340:${BOARD_RECT.x},${BOARD_RECT.y},${BOARD_RECT.width},${BOARD_RECT.height}`,
+    );
+  });
+
+  it('falls back to the flat board fill when the board background image is unavailable', () => {
+    const renderer = new FakeRenderer(new Set(['tile.fire']));
+
+    renderFrame(renderer, oneTileState('tile.fire'), hudState(), 0);
+
+    expect(renderer.calls).toContain(
+      `rect:#302340:${BOARD_RECT.x},${BOARD_RECT.y},${BOARD_RECT.width},${BOARD_RECT.height}`,
+    );
+    expect(renderer.calls).not.toContain(`image:${AssetIds.ui.boardBackground}`);
   });
 
   it('draws padded white HUD text with dynamic fitting and no mute label', () => {
@@ -167,6 +202,27 @@ describe('buildBoardCellVisuals', () => {
     expect(renderer.calls).not.toContain('image:tile.fire');
     expect(renderer.calls).toContain('rect:#eb5757');
     expect(renderer.calls).toContain('text:F');
+  });
+
+  it('does not draw board-color backing rectangles for animated tile images', () => {
+    const renderer = new FakeRenderer(new Set(['tile.fire']));
+    const state = oneTileState('tile.fire');
+    state.boardCells = [
+      {
+        ...state.boardCells[0],
+        renderX: BOARD_RECT.x,
+        renderY: BOARD_RECT.y - BOARD_RECT.cellSize,
+      },
+    ];
+
+    renderFrame(renderer, state, hudState(), 0);
+
+    expect(renderer.calls).toContain(
+      `image:tile.fire:${BOARD_RECT.x + 8},${BOARD_RECT.y - BOARD_RECT.cellSize + 8},119,119`,
+    );
+    expect(renderer.calls).not.toContain(
+      `rect:#171225:${BOARD_RECT.x},${BOARD_RECT.y - BOARD_RECT.cellSize},${BOARD_RECT.cellSize},${BOARD_RECT.cellSize}`,
+    );
   });
 
   it('clips the tile layer to the board rect and draws the frame above it', () => {

@@ -4,6 +4,7 @@ import {
   createTrialMonsterHealthBarObjects,
   healthBarTintForRatio,
   MagusMatchGameApp,
+  MAGE_WORLD_SCALE,
   phaseToCinematicState,
 } from '../src/core/GameApp';
 import { HeroStageTemplateIds } from '../src/world-3d/HeroStageTemplates';
@@ -124,7 +125,7 @@ describe('HeroWorldState', () => {
     expect(healthBarTintForRatio(0.24)).toBe('#eb5757');
   });
 
-  it('uses the reduced mage world scale for temporary FBX proxy models', () => {
+  it('uses a readable uniform mage world scale for normalized FBX models', () => {
     const journeyMage = new MagusMatchGameApp(123, { debugLevelType: 'JOURNEY' })
       .getHeroWorldState()
       .objects.find((object) => object.templateId === HeroStageTemplateIds.mage);
@@ -132,7 +133,8 @@ describe('HeroWorldState', () => {
       .getHeroWorldState()
       .objects.find((object) => object.templateId === HeroStageTemplateIds.mage);
 
-    expect(journeyMage?.transform.scale).toEqual({ x: 0.042, y: 0.075, z: 0.042 });
-    expect(trialMage?.transform.scale).toEqual({ x: 0.04, y: 0.068, z: 0.04 });
+    expect(journeyMage?.transform.scale).toEqual(MAGE_WORLD_SCALE);
+    expect(trialMage?.transform.scale).toEqual(MAGE_WORLD_SCALE);
+    expect(MAGE_WORLD_SCALE).toEqual({ x: 1, y: 1, z: 1 });
   });
 });

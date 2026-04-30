@@ -80,6 +80,8 @@ export interface MagusMatchGameAppOptions {
   debugStartLevel?: number;
 }
 
+export const MAGE_WORLD_SCALE: TransformState['scale'] = { x: 1, y: 1, z: 1 };
+
 interface RuntimeBoardVisualCue extends Omit<BoardVisualCueState, 'value'> {
   remainingSec: number;
   durationSec: number;
@@ -896,7 +898,7 @@ export class MagusMatchGameApp implements GameApp {
     objects.push(
         createWorldObject('actor-mage', HeroStageTemplateIds.mage, {
           position: heroPositionForCell(this.journeyRuntime.mageCell, 0.35),
-          scale: { x: 0.042, y: 0.075, z: 0.042 },
+          scale: MAGE_WORLD_SCALE,
           renderOrder: 4,
           animationId: phaseToMageAnimation(this.phase),
         }),
@@ -925,7 +927,7 @@ export class MagusMatchGameApp implements GameApp {
       const objects: WorldObjectState[] = [
         createWorldObject('actor-mage', HeroStageTemplateIds.mage, {
           position: getTrialMageWorldPosition(this.currentLevel),
-          scale: { x: 0.04, y: 0.068, z: 0.04 },
+          scale: MAGE_WORLD_SCALE,
           renderOrder: 5,
           animationId: phaseToMageAnimation(this.phase),
         }),

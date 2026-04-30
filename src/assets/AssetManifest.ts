@@ -32,7 +32,11 @@ const CASTLE_BACKDROP_NOTES =
 const RIG_NOTES = 'Transparent PNG source parts now; later exported as a 2048x2048 atlas plus skeletal JSON.';
 const TEMP_FBX_MAGE_NOTES =
   'Temporary browser hero-stage FBX model. Auto-normalized in Three.js to bottom-center pivot and 1.45 world-unit height. Loops animation frames 0-60.';
+const TEMP_FBX_MAGE_TEXTURE_NOTES =
+  'Temporary browser hero-stage texture recovered from the FBX .fbm export folder and applied to the mage mesh when the FBX material does not load a map.';
 const UI_BANNER_NOTES = 'Runtime 1080x150 PNG for the fixed middle HUD band; drawn full-width behind HUD text.';
+const BOARD_BACKGROUND_NOTES =
+  'Runtime 1080x1080 PNG for the board base; drawn behind board cells with flat-color fallback.';
 
 export const AssetManifest: Record<string, AssetManifestEntry> = {
   [AssetIds.tiles.fire]: texture(
@@ -153,6 +157,13 @@ export const AssetManifest: Record<string, AssetManifestEntry> = {
     'temporary FBX stand-in, auto-normalized to 1.45 world units',
     TEMP_FBX_MAGE_NOTES,
   ),
+  [AssetIds.materials.mageTexture]: material(
+    AssetIds.materials.mageTexture,
+    '/assets/rigs/knight1.fbm/knight_texture_test.png',
+    'Assets/Textures/Rigs/Mage/knight_texture_test.png',
+    'prompt.rig.mage',
+    TEMP_FBX_MAGE_TEXTURE_NOTES,
+  ),
   [AssetIds.rigs.prince]: rig(
     AssetIds.rigs.prince,
     '/assets/rigs/prince/prince-parts-source.png',
@@ -219,6 +230,13 @@ export const AssetManifest: Record<string, AssetManifestEntry> = {
     'Assets/Textures/UI/ui-banner.png',
     UI_BANNER_NOTES,
     '1080x150',
+  ),
+  [AssetIds.ui.boardBackground]: ui(
+    AssetIds.ui.boardBackground,
+    '/assets/ui/board-background.png',
+    'Assets/Textures/UI/board-background.png',
+    BOARD_BACKGROUND_NOTES,
+    '1080x1080',
   ),
   ...Object.fromEntries(
     Object.values(SoundManifest).map((entry) => [entry.id, audio(entry)]),
@@ -326,6 +344,28 @@ function ui(
     unitScale: 1,
     pivot: 'center',
     collision: 'none',
+    notes,
+  };
+}
+
+function material(
+  id: string,
+  browserUrl: string,
+  futureMhsPath: string,
+  artPromptId: ArtPromptId,
+  notes: string,
+): AssetManifestEntry {
+  return {
+    id,
+    kind: 'material',
+    browserUrl,
+    futureMhsPath,
+    sourceFormat: 'png',
+    runtimeSize: 'runtime FBX diffuse texture',
+    unitScale: 1,
+    pivot: 'center',
+    collision: 'none',
+    artPromptId,
     notes,
   };
 }

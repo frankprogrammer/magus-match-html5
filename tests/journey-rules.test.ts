@@ -209,6 +209,28 @@ describe('Journey rules', () => {
     });
   });
 
+  it('chains Journey power-ups with one spent move and converts LAND in chained footprints', () => {
+    const level = testLevel({ moveBudget: 20, goalCell: { col: 7, row: 7 } });
+    const board = createBoardFromTileTypes([
+      ['ROCKET_H', 'FIRE', 'TNT', 'ICE'],
+      ['EARTH', 'LAND', 'FIRE', 'ICE'],
+    ]);
+    board[0][0].isPath = true;
+    const runtime = createJourneyRuntime(level);
+
+    const result = processJourneyPowerUpActivation(board, runtime, level, { col: 0, row: 0 }, new SeededRng(21));
+
+    expect(result.valid).toBe(true);
+    expect(result.runtime.movesRemaining).toBe(19);
+    expect(result.convertedPathCells).toContainEqual({ col: 1, row: 1 });
+    expect(result.animationTrace?.cascadeSteps[0].clearedTiles).not.toContainEqual(
+      expect.objectContaining({ coord: { col: 2, row: 0 } }),
+    );
+    expect(result.animationTrace?.cascadeSteps[1].clearedTiles).toContainEqual(
+      expect.objectContaining({ coord: { col: 2, row: 0 } }),
+    );
+  });
+
   it('ignores non-power-up Journey taps', () => {
     const level = testLevel({ moveBudget: 20, goalCell: { col: 7, row: 7 } });
     const board = createBoardFromTileTypes([['FIRE', 'ICE', 'EARTH']]);

@@ -2,9 +2,10 @@ import type { CellCoord } from '../core/Layout';
 import { BOARD_SIZE } from '../core/Layout';
 import { ROCKET_SWEEP_CLEAR_STAGGER_MS, TNT_EXPLOSION_RING_DELAY_MS } from '../data/tuning';
 import type { Board } from './Board';
-import { getCell, isInBounds, sortCoords, uniqueCoords } from './Board';
+import { cloneBoard, coordKey, getCell, isInBounds, sortCoords, uniqueCoords } from './Board';
 import {
   STANDARD_TILE_TYPES,
+  isPowerUpTileType,
   isStandardTileType,
   type MatchableTileType,
   type PowerUpTileType,
@@ -31,6 +32,24 @@ export interface PowerUpDetonation {
   lightballTargetType?: MatchableTileType;
 }
 
+export interface PowerUpChainDetonation {
+  detonation: PowerUpDetonation;
+  activationDelayMs: number;
+}
+
+export interface PowerUpChainResolution {
+  detonations: readonly PowerUpChainDetonation[];
+  clearedCells: readonly CellCoord[];
+  clearTimings: readonly PowerUpClearTiming[];
+}
+
+interface QueuedPowerUpActivation {
+  coord: CellCoord;
+  powerUpType: PowerUpTileType;
+  activationDelayMs: number;
+  lightballTargetType?: MatchableTileType;
+}
+
 export function isRocketPowerUpTileType(type: unknown): type is RocketPowerUpTileType {
   return type === 'ROCKET_H' || type === 'ROCKET_V';
 }
@@ -44,6 +63,10 @@ export function selectLightballTapTargetType(board: Board, origin: CellCoord): S
     return null;
   }
 
+  return selectLightballTargetType(board, origin);
+}
+
+function selectLightballTargetType(board: Board, origin: CellCoord): StandardTileType | null {
   const adjacentCandidates = new Set<StandardTileType>();
   for (const coord of orthogonalNeighbors(origin)) {
     const type = getCell(board, coord)?.tile?.type;
@@ -83,6 +106,113 @@ export function detonatePowerUp(
     throw new Error('Cannot detonate a cell that does not contain a power-up tile.');
   }
 
+  return detonatePowerUpType(board, origin, powerUpType, options);
+}
+
+export function resolvePowerUpChain(
+  board: Board,
+  origin: CellCoord,
+  options: PowerUpDetonationOptions = {},
+): PowerUpChainResolution {
+  const originType = getCell(board, origin)?.tile?.type;
+  if (originType == null || !isPowerUpTileType(originType)) {
+    throw new Error('Cannot resolve a power-up chain from a cell that does not contain a power-up tile.');
+  }
+
+  const workingBoard = cloneBoard(board);
+  const queue: QueuedPowerUpActivation[] = [{
+    coord: origin,
+    powerUpType: originType,
+    activationDelayMs: 0,
+    lightballTargetType: options.lightballTargetType,
+  }];
+  const queuedKeys = new Set<string>([coordKey(origin)]);
+  const activatedKeys = new Set<string>();
+  const detonations: PowerUpChainDetonation[] = [];
+
+  while (queue.length > 0) {
+    queue.sort(compareQueuedPowerUps);
+    const activation = queue.shift()!;
+    const activationKey = coordKey(activation.coord);
+    queuedKeys.delete(activationKey);
+    if (activatedKeys.has(activationKey)) {
+      continue;
+    }
+
+    activatedKeys.add(activationKey);
+    const selectedLightballTargetType = activation.powerUpType === 'LIGHTBALL'
+      ? activation.lightballTargetType ?? selectLightballTargetType(workingBoard, activation.coord)
+      : activation.lightballTargetType;
+    const lightballTargetType = selectedLightballTargetType ?? undefined;
+    const rawDetonation = detonatePowerUpType(
+      workingBoard,
+      activation.coord,
+      activation.powerUpType,
+      { lightballTargetType },
+    );
+    const childKeys = new Set<string>();
+
+    for (const timing of rawDetonation.clearTimings) {
+      const key = coordKey(timing.coord);
+      if (key === activationKey || activatedKeys.has(key) || queuedKeys.has(key)) {
+        continue;
+      }
+
+      const childType = getCell(workingBoard, timing.coord)?.tile?.type;
+      if (childType == null || !isPowerUpTileType(childType)) {
+        continue;
+      }
+
+      queue.push({
+        coord: timing.coord,
+        powerUpType: childType,
+        activationDelayMs: activation.activationDelayMs + timing.clearDelayMs,
+      });
+      queuedKeys.add(key);
+      childKeys.add(key);
+    }
+
+    const clearTimings = rawDetonation.clearTimings.filter((timing) => !childKeys.has(coordKey(timing.coord)));
+    const detonation: PowerUpDetonation = {
+      ...rawDetonation,
+      clearedCells: sortCoords(clearTimings.map((timing) => timing.coord)),
+      clearTimings,
+      lightballTargetType,
+    };
+
+    detonations.push({
+      detonation,
+      activationDelayMs: activation.activationDelayMs,
+    });
+
+    for (const coord of detonation.clearedCells) {
+      const cell = getCell(workingBoard, coord);
+      if (cell != null) {
+        cell.tile = null;
+      }
+    }
+  }
+
+  const absoluteTimings = detonations.flatMap((entry) =>
+    entry.detonation.clearTimings.map((timing) => ({
+      coord: timing.coord,
+      clearDelayMs: entry.activationDelayMs + timing.clearDelayMs,
+    })),
+  );
+
+  return {
+    detonations,
+    clearedCells: uniqueCoords(detonations.flatMap((entry) => entry.detonation.clearedCells)),
+    clearTimings: absoluteTimings,
+  };
+}
+
+function detonatePowerUpType(
+  board: Board,
+  origin: CellCoord,
+  powerUpType: PowerUpTileType,
+  options: PowerUpDetonationOptions = {},
+): PowerUpDetonation {
   switch (powerUpType) {
     case 'ROCKET_H':
       return rocketDetonation(board, origin, powerUpType);
@@ -90,15 +220,26 @@ export function detonatePowerUp(
       return rocketDetonation(board, origin, powerUpType);
     case 'TNT':
       return tntDetonation(board, origin, powerUpType);
-    case 'LIGHTBALL':
+    case 'LIGHTBALL': {
+      const clearedCells = lightballCells(board, origin, options.lightballTargetType);
       return {
         powerUpType,
         origin,
-        clearedCells: lightballCells(board, origin, options.lightballTargetType),
-        clearTimings: [],
+        clearedCells,
+        clearTimings: clearedCells.map((coord) => ({ coord, clearDelayMs: 0 })),
         lightballTargetType: options.lightballTargetType,
       };
+    }
   }
+}
+
+function compareQueuedPowerUps(first: QueuedPowerUpActivation, second: QueuedPowerUpActivation): number {
+  return (
+    first.activationDelayMs - second.activationDelayMs ||
+    first.coord.row - second.coord.row ||
+    first.coord.col - second.coord.col ||
+    first.powerUpType.localeCompare(second.powerUpType)
+  );
 }
 
 export function getTntBlastClearTimings(board: Board, origin: CellCoord): PowerUpClearTiming[] {

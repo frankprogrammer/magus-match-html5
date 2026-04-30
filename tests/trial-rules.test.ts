@@ -333,6 +333,39 @@ describe('TrialRules', () => {
     });
   });
 
+  it('chains Trial power-ups with multiple damage sources and sequential animation steps', () => {
+    const board = createBoardFromTileTypes([
+      ['ROCKET_H', 'FIRE', 'TNT', 'ICE'],
+      ['EARTH', 'LIGHTNING', 'FIRE', 'ICE'],
+    ]);
+    const level = testTrialLevel(
+      [
+        monster({ monsterId: 'a', maxHp: 300 }),
+        monster({ monsterId: 'b', maxHp: 300 }),
+        monster({ monsterId: 'c', maxHp: 300 }),
+        monster({ monsterId: 'd', maxHp: 300 }),
+        monster({ monsterId: 'e', maxHp: 300 }),
+        monster({ monsterId: 'f', maxHp: 300 }),
+        monster({ monsterId: 'g', maxHp: 300 }),
+        monster({ monsterId: 'h', maxHp: 300 }),
+      ],
+      board,
+    );
+    const runtime = createTrialRuntime(level);
+
+    const result = processTrialPowerUpActivation(board, runtime, level, { col: 0, row: 0 }, new SeededRng(50));
+
+    expect(result.valid).toBe(true);
+    expect(result.scoringStats.validSwapCount).toBe(1);
+    expect(result.damageEvents.length).toBeGreaterThanOrEqual(8);
+    expect(result.animationTrace?.cascadeSteps[0].clearedTiles).not.toContainEqual(
+      expect.objectContaining({ coord: { col: 2, row: 0 } }),
+    );
+    expect(result.animationTrace?.cascadeSteps[1].clearedTiles).toContainEqual(
+      expect.objectContaining({ coord: { col: 2, row: 0 } }),
+    );
+  });
+
   it('ignores non-power-up Trial taps', () => {
     const board = createBoardFromTileTypes([['FIRE', 'ICE', 'EARTH']]);
     const level = testTrialLevel([monster({ monsterId: 'a', maxHp: 50 })], board);

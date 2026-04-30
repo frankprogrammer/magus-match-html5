@@ -16,8 +16,8 @@ import { validateSwap } from '../board/BoardRules';
 import { resolveCascades, settleBoardWithVoidAwareRefill, type CascadeResult } from '../board/Cascade';
 import type { MatchGroup } from '../board/MatchDetection';
 import {
-  detonatePowerUp,
   isTapActivatablePowerUpTileType,
+  resolvePowerUpChain,
   selectLightballTapTargetType,
   type PowerUpDetonation,
 } from '../board/PowerUps';
@@ -102,7 +102,7 @@ interface PowerUpActivation {
 
 interface TrialPowerUpBoardResolution {
   cascadeResult: CascadeResult;
-  detonation: PowerUpDetonation;
+  detonations: readonly PowerUpDetonation[];
   animationTrace?: BoardAnimationTrace;
 }
 
@@ -193,7 +193,11 @@ export function processTrialSwap(
       },
       powerUpActivation.targetType,
     );
-    damageSources.push(powerUpDamageSource(level, powerUpResolution.detonation, powerUpActivation.targetType));
+    damageSources.push(
+      ...powerUpResolution.detonations.map((detonation, index) =>
+        powerUpDamageSource(level, detonation, index === 0 ? powerUpActivation.targetType : undefined),
+      ),
+    );
     cascadeResult = powerUpResolution.cascadeResult;
     animationTrace = powerUpResolution.animationTrace;
   } else {
@@ -246,7 +250,9 @@ export function processTrialPowerUpActivation(
     swappedCells: null,
   }, tapActivation.targetType);
   const damageSources = [
-    powerUpDamageSource(level, powerUpResolution.detonation, tapActivation.targetType),
+    ...powerUpResolution.detonations.map((detonation, index) =>
+      powerUpDamageSource(level, detonation, index === 0 ? tapActivation.targetType : undefined),
+    ),
     ...cascadeDamageSources(level, powerUpResolution.cascadeResult),
   ];
   const damageApplication = applyDamageSources(runtime, level, damageSources);
@@ -415,8 +421,9 @@ function powerUpDamageSource(
   detonation: PowerUpDetonation,
   targetType?: MatchableTileType,
 ): TrialDamageSource {
+  const schoolTargetType = targetType ?? detonation.lightballTargetType;
   return {
-    schoolId: targetType != null && isStandardTileType(targetType) ? spellSchoolForTileType(targetType) : 'fire',
+    schoolId: schoolTargetType != null && isStandardTileType(schoolTargetType) ? spellSchoolForTileType(schoolTargetType) : 'fire',
     damage: level.trial.baseDamage * powerUpDamageMultiplier(detonation.powerUpType),
     shotCount: powerUpShotCount(detonation),
   };
@@ -470,22 +477,35 @@ function resolveTrialPowerUpBoard(
   lightballTargetType?: MatchableTileType,
 ): TrialPowerUpBoardResolution {
   const workingBoard = cloneBoard(board);
-  const detonation = detonatePowerUp(workingBoard, origin, { lightballTargetType });
-  const beforeClearBoard = cloneBoard(workingBoard);
-  clearDetonatedCells(workingBoard, detonation);
-  const beforeGravityBoard = cloneBoard(workingBoard);
+  const chain = resolvePowerUpChain(workingBoard, origin, { lightballTargetType });
+  const chainStepInputs: {
+    beforeClearBoard: Board;
+    beforeGravityBoard: Board;
+    detonation: PowerUpDetonation;
+  }[] = [];
+
+  for (const entry of chain.detonations) {
+    const beforeClearBoard = cloneBoard(workingBoard);
+    clearDetonatedCells(workingBoard, entry.detonation);
+    const beforeGravityBoard = cloneBoard(workingBoard);
+    chainStepInputs.push({ beforeClearBoard, beforeGravityBoard, detonation: entry.detonation });
+  }
+
   const refillResult = settleBoardWithVoidAwareRefill(workingBoard, rng, nextTileId);
   const finalDetonationBoard = cloneBoard(workingBoard);
-  const initialStep = buildBoardAnimationCascadeStep(
-    0,
-    beforeClearBoard,
-    beforeGravityBoard,
-    refillResult.afterGravityBoard,
-    finalDetonationBoard,
-    detonation.clearedCells,
-    clearDelayMap(detonation),
-    refillResult.refillTiles,
-  );
+  const chainSteps = chainStepInputs.map((input, index) => {
+    const isFinalChainStep = index === chainStepInputs.length - 1;
+    return buildBoardAnimationCascadeStep(
+      index,
+      input.beforeClearBoard,
+      input.beforeGravityBoard,
+      isFinalChainStep ? refillResult.afterGravityBoard : input.beforeGravityBoard,
+      isFinalChainStep ? finalDetonationBoard : input.beforeGravityBoard,
+      input.detonation.clearedCells,
+      clearDelayMap(input.detonation),
+      isFinalChainStep ? refillResult.refillTiles : [],
+    );
+  });
   const cascadeResult = resolveCascades(workingBoard, rng, {
     preferredSpawnCell: origin,
     nextTileId,
@@ -494,14 +514,14 @@ function resolveTrialPowerUpBoard(
 
   return {
     cascadeResult,
-    detonation,
+    detonations: chain.detonations.map((entry) => entry.detonation),
     animationTrace: createBoardAnimationTrace(
       animation,
       [
-        initialStep,
+        ...chainSteps,
         ...(cascadeResult.animationTrace?.cascadeSteps.map((step, index) => ({
           ...step,
-          stepIndex: index + 1,
+          stepIndex: index + chainSteps.length,
         })) ?? []),
       ],
       cascadeResult.board,

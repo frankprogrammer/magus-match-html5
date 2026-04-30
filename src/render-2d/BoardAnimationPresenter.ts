@@ -23,7 +23,23 @@ import {
   TILE_MATCH_SCALE_DOWN_MS,
   TILE_SWAP_RETARGET_MS,
 } from '../data/tuning';
-import type { BoardCellVisualState, BoardRenderState } from './BoardRenderState';
+import type {
+  BoardBurstRingVisualState,
+  BoardCellVisualState,
+  BoardParticleVisualState,
+  BoardRenderState,
+} from './BoardRenderState';
+
+const MATCH_PARTICLES_PER_TILE = 12;
+const MATCH_PARTICLE_DURATION_MS = 260;
+const MATCH_PARTICLE_MIN_DISTANCE_PX = 24;
+const MATCH_PARTICLE_MAX_DISTANCE_PX = 62;
+const MATCH_PARTICLE_START_RADIUS_PX = 12;
+const MATCH_PARTICLE_END_RADIUS_PX = 2.25;
+const MATCH_BURST_RING_DURATION_MS = 220;
+const MATCH_BURST_RING_MAX_RADIUS_PX = 86;
+const MATCH_BURST_RING_START_LINE_WIDTH_PX = 7;
+const MATCH_BURST_RING_END_LINE_WIDTH_PX = 1;
 
 interface VisualSample {
   renderX: number;
@@ -78,10 +94,14 @@ export class BoardAnimationPresenter {
     const trace = this.activeAnimation.trace;
     const stepTimings = getBoardAnimationStepTimings(trace);
     const boardCells = sampleTraceCells(trace, stepTimings, elapsedMs, this.activeAnimation.retargetStarts);
+    const particles = sampleTraceParticles(trace, stepTimings, elapsedMs);
+    const burstRings = sampleTraceBurstRings(trace, stepTimings, elapsedMs);
 
     return {
       ...authoritativeState,
       boardCells,
+      particles,
+      burstRings,
     };
   }
 
@@ -127,6 +147,112 @@ function sampleTraceCells(
     retargetStarts,
     trace.kind === 'levelIntro',
   );
+}
+
+function sampleTraceParticles(
+  trace: BoardAnimationTrace,
+  stepTimings: readonly BoardAnimationStepTiming[],
+  elapsedMs: number,
+): BoardParticleVisualState[] {
+  if (trace.kind === 'levelIntro') {
+    return [];
+  }
+
+  const activeStep = stepTimings.find((timing) => elapsedMs < timing.fallStartMs);
+  if (activeStep == null) {
+    return [];
+  }
+
+  const stepElapsedMs = elapsedMs - activeStep.popStartMs;
+  if (stepElapsedMs < 0) {
+    return [];
+  }
+
+  return activeStep.step.clearedTiles.flatMap((tile) => sampleClearedTileParticles(tile, stepElapsedMs));
+}
+
+function sampleTraceBurstRings(
+  trace: BoardAnimationTrace,
+  stepTimings: readonly BoardAnimationStepTiming[],
+  elapsedMs: number,
+): BoardBurstRingVisualState[] {
+  if (trace.kind === 'levelIntro') {
+    return [];
+  }
+
+  const activeStep = stepTimings.find((timing) => elapsedMs < timing.fallStartMs);
+  if (activeStep == null) {
+    return [];
+  }
+
+  const stepElapsedMs = elapsedMs - activeStep.popStartMs;
+  if (stepElapsedMs < 0) {
+    return [];
+  }
+
+  return activeStep.step.clearedTiles
+    .filter((tile) => particleColorForTileType(tile.tileType) != null)
+    .map((tile) => sampleClearedTileBurstRing(tile, stepElapsedMs))
+    .filter((ring): ring is BoardBurstRingVisualState => ring != null);
+}
+
+function sampleClearedTileParticles(
+  tile: BoardAnimationCascadeStep['clearedTiles'][number],
+  stepElapsedMs: number,
+): BoardParticleVisualState[] {
+  const color = particleColorForTileType(tile.tileType);
+  if (color == null) {
+    return [];
+  }
+
+  const localElapsedMs = stepElapsedMs - (tile.clearDelayMs ?? 0);
+  if (localElapsedMs < 0 || localElapsedMs > MATCH_PARTICLE_DURATION_MS) {
+    return [];
+  }
+
+  const progress = clamp01(localElapsedMs / MATCH_PARTICLE_DURATION_MS);
+  const centerX = BOARD_RECT.x + tile.coord.col * BOARD_RECT.cellSize + BOARD_RECT.cellSize / 2;
+  const centerY = BOARD_RECT.y + tile.coord.row * BOARD_RECT.cellSize + BOARD_RECT.cellSize / 2;
+
+  return Array.from({ length: MATCH_PARTICLES_PER_TILE }, (_, index) => {
+    const randomA = deterministicUnit(`${tile.tileId}:${index}:a`);
+    const randomB = deterministicUnit(`${tile.tileId}:${index}:b`);
+    const angle = randomA * Math.PI * 2;
+    const distance = lerp(MATCH_PARTICLE_MIN_DISTANCE_PX, MATCH_PARTICLE_MAX_DISTANCE_PX, randomB) * easeOutCubic(progress);
+    const radius = lerp(MATCH_PARTICLE_START_RADIUS_PX, MATCH_PARTICLE_END_RADIUS_PX, progress);
+    return {
+      particleId: `${tile.tileId}-pop-${index}`,
+      x: centerX + Math.cos(angle) * distance,
+      y: centerY + Math.sin(angle) * distance,
+      radius,
+      color,
+      alpha: 1 - progress,
+      zIndex: 20,
+    };
+  });
+}
+
+function sampleClearedTileBurstRing(
+  tile: BoardAnimationCascadeStep['clearedTiles'][number],
+  stepElapsedMs: number,
+): BoardBurstRingVisualState | null {
+  const localElapsedMs = stepElapsedMs - (tile.clearDelayMs ?? 0);
+  if (localElapsedMs < 0 || localElapsedMs > MATCH_BURST_RING_DURATION_MS) {
+    return null;
+  }
+
+  const progress = clamp01(localElapsedMs / MATCH_BURST_RING_DURATION_MS);
+  const eased = easeOutCubic(progress);
+  return {
+    ringId: `${tile.tileId}-burst-ring`,
+    x: BOARD_RECT.x + tile.coord.col * BOARD_RECT.cellSize + BOARD_RECT.cellSize / 2,
+    y: BOARD_RECT.y + tile.coord.row * BOARD_RECT.cellSize + BOARD_RECT.cellSize / 2,
+    radius: MATCH_BURST_RING_MAX_RADIUS_PX * eased,
+    lineWidth: lerp(MATCH_BURST_RING_START_LINE_WIDTH_PX, MATCH_BURST_RING_END_LINE_WIDTH_PX, progress),
+    color: 'rgba(255, 255, 255, 0.85)',
+    alpha: 0.42 * Math.pow(1 - progress, 1.4),
+    zIndex: 15,
+  };
 }
 
 function sampleSwapCells(
@@ -382,4 +508,33 @@ function assetIdForTileType(type: TileType): string {
     case 'LIGHTBALL':
       return AssetIds.powerUps.lightball;
   }
+}
+
+function particleColorForTileType(type: TileType): string | null {
+  switch (type) {
+    case 'FIRE':
+      return '#eb5757';
+    case 'ICE':
+      return '#38d5ff';
+    case 'LIGHTNING':
+      return '#f2c94c';
+    case 'EARTH':
+      return '#27ae60';
+    case 'LAND':
+    case 'ROCKET_H':
+    case 'ROCKET_V':
+    case 'TNT':
+    case 'LIGHTBALL':
+      return null;
+  }
+}
+
+function deterministicUnit(value: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return (hash >>> 0) / 4294967296;
 }

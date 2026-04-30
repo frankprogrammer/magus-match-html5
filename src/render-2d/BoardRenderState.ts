@@ -16,6 +16,27 @@ export interface BoardCellVisualState {
   isGhost?: boolean;
 }
 
+export interface BoardParticleVisualState {
+  particleId: string;
+  x: number;
+  y: number;
+  radius: number;
+  color: string;
+  alpha: number;
+  zIndex: number;
+}
+
+export interface BoardBurstRingVisualState {
+  ringId: string;
+  x: number;
+  y: number;
+  radius: number;
+  lineWidth: number;
+  color: string;
+  alpha: number;
+  zIndex: number;
+}
+
 export type BoardVisualCueKind = 'matchFlash' | 'pathGlow' | 'powerPulse' | 'damagePopup';
 
 export interface BoardVisualCueState {
@@ -34,6 +55,8 @@ export interface BoardRenderState {
   logicalWidth: number;
   logicalHeight: number;
   boardCells: readonly BoardCellVisualState[];
+  particles?: readonly BoardParticleVisualState[];
+  burstRings?: readonly BoardBurstRingVisualState[];
   emptyCells?: readonly BoardEmptyCellVisualState[];
   pathCells: readonly CellCoord[];
   mageCell: CellCoord | null;

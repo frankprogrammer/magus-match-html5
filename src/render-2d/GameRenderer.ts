@@ -23,6 +23,14 @@ export interface GameRenderer {
 
   drawRect(color: string, x: number, y: number, width: number, height: number): void;
   drawEllipse(color: string, centerX: number, centerY: number, radiusX: number, radiusY: number): void;
+  drawRing(
+    color: string,
+    centerX: number,
+    centerY: number,
+    radiusX: number,
+    radiusY: number,
+    lineWidth: number,
+  ): void;
   hasImage(image: DrawImageRef): boolean;
   drawImage(image: DrawImageRef, x: number, y: number, width: number, height: number): void;
   drawText(text: string, x: number, y: number, width: number, height: number, style: TextStyle): void;

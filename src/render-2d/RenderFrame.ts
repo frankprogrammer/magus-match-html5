@@ -166,6 +166,8 @@ function drawBoard(renderer: GameRenderer, boardState: BoardRenderState, elapsed
   for (const visual of visuals) {
     drawCell(renderer, visual);
   }
+  drawBurstRings(renderer, boardState);
+  drawParticles(renderer, boardState);
   renderer.pop();
 
   drawBoardFrame(renderer);
@@ -255,6 +257,32 @@ function drawCell(renderer: GameRenderer, visual: BoardCellVisual): void {
     });
   }
   renderer.pop();
+}
+
+function drawParticles(renderer: GameRenderer, boardState: BoardRenderState): void {
+  const particles = [...(boardState.particles ?? [])].sort((first, second) => first.zIndex - second.zIndex);
+  for (const particle of particles) {
+    if (particle.alpha <= 0 || particle.radius <= 0) {
+      continue;
+    }
+
+    renderer.pushAlpha(particle.alpha);
+    renderer.drawEllipse(particle.color, particle.x, particle.y, particle.radius, particle.radius);
+    renderer.pop();
+  }
+}
+
+function drawBurstRings(renderer: GameRenderer, boardState: BoardRenderState): void {
+  const rings = [...(boardState.burstRings ?? [])].sort((first, second) => first.zIndex - second.zIndex);
+  for (const ring of rings) {
+    if (ring.alpha <= 0 || ring.radius <= 0 || ring.lineWidth <= 0) {
+      continue;
+    }
+
+    renderer.pushAlpha(ring.alpha);
+    renderer.drawRing(ring.color, ring.x, ring.y, ring.radius, ring.radius, ring.lineWidth);
+    renderer.pop();
+  }
 }
 
 function drawDamagePopups(renderer: GameRenderer, boardState: BoardRenderState): void {

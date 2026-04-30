@@ -63,6 +63,21 @@ export class Canvas2DRenderer implements GameRenderer {
     this.ctx.fill();
   }
 
+  drawRing(
+    color: string,
+    centerX: number,
+    centerY: number,
+    radiusX: number,
+    radiusY: number,
+    lineWidth: number,
+  ): void {
+    this.ctx.strokeStyle = color;
+    this.ctx.lineWidth = lineWidth;
+    this.ctx.beginPath();
+    this.ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, Math.PI * 2);
+    this.ctx.stroke();
+  }
+
   hasImage(image: DrawImageRef): boolean {
     return this.images[image.id] != null;
   }

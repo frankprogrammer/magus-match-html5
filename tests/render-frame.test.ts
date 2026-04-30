@@ -189,6 +189,54 @@ describe('buildBoardCellVisuals', () => {
     expect(frameIndex).toBeGreaterThan(clippedLayerPopIndex);
   });
 
+  it('draws particles inside the clipped board layer after tiles and before the frame', () => {
+    const renderer = new FakeRenderer(new Set());
+    const state = oneTileState('tile.fire');
+    state.burstRings = [
+      {
+        ringId: 'ring-0',
+        x: BOARD_RECT.x + 40,
+        y: BOARD_RECT.y + 40,
+        radius: 40,
+        lineWidth: 6,
+        color: 'rgba(255, 255, 255, 0.85)',
+        alpha: 0.8,
+        zIndex: 15,
+      },
+    ];
+    state.particles = [
+      {
+        particleId: 'particle-0',
+        x: BOARD_RECT.x + 40,
+        y: BOARD_RECT.y + 40,
+        radius: 8,
+        color: '#eb5757',
+        alpha: 0.75,
+        zIndex: 20,
+      },
+    ];
+
+    renderFrame(renderer, state, hudState(), 0);
+
+    const clipIndex = renderer.calls.indexOf(
+      `clip:${BOARD_RECT.x},${BOARD_RECT.y},${BOARD_RECT.width},${BOARD_RECT.height}`,
+    );
+    const tileIndex = renderer.calls.indexOf('rect:#eb5757');
+    const ringIndex = renderer.calls.indexOf('ring:rgba(255, 255, 255, 0.85)');
+    const particleIndex = renderer.calls.indexOf('ellipse:#eb5757');
+    const clippedLayerPopIndex = renderer.calls.indexOf('pop', particleIndex);
+    const frameIndex = renderer.calls.indexOf(
+      `rect:#c8a24b:${BOARD_RECT.x - 8},${BOARD_RECT.y - 8},${BOARD_RECT.width + 16},8`,
+    );
+
+    expect(ringIndex).toBeGreaterThan(tileIndex);
+    expect(particleIndex).toBeGreaterThan(ringIndex);
+    expect(particleIndex).toBeGreaterThan(tileIndex);
+    expect(particleIndex).toBeGreaterThan(clipIndex);
+    expect(clippedLayerPopIndex).toBeGreaterThan(particleIndex);
+    expect(frameIndex).toBeGreaterThan(clippedLayerPopIndex);
+  });
+
   it('applies transient visual cues to cells and damage popups', () => {
     const renderer = new FakeRenderer(new Set());
     const state = oneTileState('tile.fire');
@@ -283,6 +331,10 @@ class FakeRenderer implements GameRenderer {
 
   drawEllipse(color: string): void {
     this.calls.push(`ellipse:${color}`);
+  }
+
+  drawRing(color: string): void {
+    this.calls.push(`ring:${color}`);
   }
 
   hasImage(image: DrawImageRef): boolean {

@@ -66,6 +66,84 @@ describe('BoardAnimationPresenter', () => {
     expect(delayed?.alpha).toBe(1);
   });
 
+  it('emits deterministic colored particles for standard tile pops', () => {
+    const presenter = new BoardAnimationPresenter();
+    const trace = particleColorTrace();
+    const state = boardState(trace);
+
+    presenter.present(state, 0);
+    const popping = presenter.present(state, 0.14);
+    const repeated = presenter.present(state, 0.14);
+    const early = new BoardAnimationPresenter();
+    early.present(state, 0);
+    const earlyPop = early.present(state, 0.121);
+
+    expect(popping.particles?.map((particle) => particle.color).sort()).toEqual([
+      ...Array(12).fill('#27ae60'),
+      ...Array(12).fill('#38d5ff'),
+      ...Array(12).fill('#eb5757'),
+      ...Array(12).fill('#f2c94c'),
+    ].sort());
+    expect(popping.particles).toEqual(repeated.particles);
+    expect(earlyPop.particles?.[0]?.radius).toBeLessThanOrEqual(12);
+    expect(earlyPop.particles?.[0]?.radius).toBeGreaterThan(11);
+    expect(popping.burstRings).toHaveLength(4);
+    expect(popping.burstRings?.every((ring) => ring.color === 'rgba(255, 255, 255, 0.85)')).toBe(true);
+    expect(popping.burstRings?.every((ring) => ring.radius > 0)).toBe(true);
+  });
+
+  it('expands and fades the shockwave ring as it moves outward', () => {
+    const trace = particleColorTrace();
+    const state = boardState(trace);
+    const presenter = new BoardAnimationPresenter();
+
+    presenter.present(state, 0);
+    const earlyRing = presenter.present(state, 0.13).burstRings?.[0];
+    const laterRing = presenter.present(state, 0.25).burstRings?.[0];
+
+    expect(earlyRing?.alpha).toBeLessThanOrEqual(0.42);
+    expect(laterRing?.radius).toBeGreaterThan(earlyRing?.radius ?? 0);
+    expect(laterRing?.alpha).toBeLessThan(earlyRing?.alpha ?? 1);
+    expect(laterRing?.lineWidth).toBeLessThan(earlyRing?.lineWidth ?? 99);
+  });
+
+  it('respects delayed clears and omits particles outside active pop timing', () => {
+    const presenter = new BoardAnimationPresenter();
+    const trace = orderedClearTrace();
+    const state = boardState(trace);
+
+    presenter.present(state, 0);
+    const beforeDelayedPop = presenter.present(state, 0.14);
+    expect(beforeDelayedPop.particles ?? []).toHaveLength(0);
+    expect(beforeDelayedPop.burstRings ?? []).toHaveLength(0);
+
+    const duringDelayedPop = presenter.present(state, 0.23);
+    expect(duringDelayedPop.particles?.every((particle) => particle.color === '#eb5757')).toBe(true);
+    expect(duringDelayedPop.particles).toHaveLength(12);
+    expect(duringDelayedPop.burstRings).toHaveLength(1);
+    expect(duringDelayedPop.burstRings?.[0]?.alpha).toBeLessThanOrEqual(0.42);
+
+    const afterParticleWindow = presenter.present(state, 0.5);
+    expect(afterParticleWindow.particles ?? []).toHaveLength(0);
+    expect(afterParticleWindow.burstRings ?? []).toHaveLength(0);
+  });
+
+  it('does not emit particles for level intro or nonstandard tile clears', () => {
+    const presenter = new BoardAnimationPresenter();
+    const introBoard = createBoardFromTileTypes([['FIRE']]);
+    const introTrace = createLevelIntroBoardAnimationTrace(introBoard, 31);
+    const nonstandardTrace = nonstandardClearTrace();
+
+    presenter.present(boardState(introTrace), 0);
+    expect(presenter.present(boardState(introTrace), 0.1).particles ?? []).toHaveLength(0);
+    expect(presenter.present(boardState(introTrace), 0.1).burstRings ?? []).toHaveLength(0);
+
+    const secondPresenter = new BoardAnimationPresenter();
+    secondPresenter.present(boardState(nonstandardTrace), 0);
+    expect(secondPresenter.present(boardState(nonstandardTrace), 0.14).particles ?? []).toHaveLength(0);
+    expect(secondPresenter.present(boardState(nonstandardTrace), 0.14).burstRings ?? []).toHaveLength(0);
+  });
+
   it('retargets shared tiles from their current animated positions when a new trace arrives', () => {
     const presenter = new BoardAnimationPresenter();
     const firstTrace = movementTrace(1, 0, 4);
@@ -410,6 +488,64 @@ function orderedClearTrace(): BoardAnimationTrace {
     finalSnapshot: {
       cells: [],
     },
+  };
+}
+
+function particleColorTrace(): BoardAnimationTrace {
+  const cells = [
+    snapshotCell('fire', 'FIRE', 0, 0),
+    snapshotCell('ice', 'ICE', 1, 0),
+    snapshotCell('lightning', 'LIGHTNING', 2, 0),
+    snapshotCell('earth', 'EARTH', 3, 0),
+  ];
+  return {
+    kind: 'resolution',
+    revisionId: 26,
+    swappedCells: null,
+    preSwapSnapshot: { cells },
+    postSwapSnapshot: { cells },
+    cascadeSteps: [
+      {
+        stepIndex: 0,
+        beforeClearSnapshot: { cells },
+        beforeGravitySnapshot: { cells: [] },
+        afterGravitySnapshot: { cells: [] },
+        finalSnapshot: { cells: [] },
+        clearedTiles: cells,
+        fallingTiles: [],
+        refillTiles: [],
+      },
+    ],
+    finalSnapshot: { cells: [] },
+  };
+}
+
+function nonstandardClearTrace(): BoardAnimationTrace {
+  const cells = [
+    snapshotCell('land', 'LAND', 0, 0),
+    snapshotCell('rocket', 'ROCKET_H', 1, 0),
+    snapshotCell('tnt', 'TNT', 2, 0),
+    snapshotCell('lightball', 'LIGHTBALL', 3, 0),
+  ];
+  return {
+    kind: 'resolution',
+    revisionId: 27,
+    swappedCells: null,
+    preSwapSnapshot: { cells },
+    postSwapSnapshot: { cells },
+    cascadeSteps: [
+      {
+        stepIndex: 0,
+        beforeClearSnapshot: { cells },
+        beforeGravitySnapshot: { cells: [] },
+        afterGravitySnapshot: { cells: [] },
+        finalSnapshot: { cells: [] },
+        clearedTiles: cells,
+        fallingTiles: [],
+        refillTiles: [],
+      },
+    ],
+    finalSnapshot: { cells: [] },
   };
 }
 

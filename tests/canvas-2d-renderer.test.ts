@@ -29,14 +29,28 @@ describe('Canvas2DRenderer', () => {
 
     expect(ctx.fillTextCalls[0]?.font).toBe('bold 34px Inter, Arial, sans-serif');
   });
+
+  it('draws rings with stroke style and line width', () => {
+    const ctx = new FakeCanvasContext();
+    const renderer = new Canvas2DRenderer(ctx.asCanvasContext(), {}, 1080, 1920);
+
+    renderer.drawRing('#ffffff', 10, 20, 30, 40, 6);
+
+    expect(ctx.strokeStyle).toBe('#ffffff');
+    expect(ctx.lineWidth).toBe(6);
+    expect(ctx.strokeCount).toBe(1);
+  });
 });
 
 class FakeCanvasContext {
   font = '';
   fillStyle = '';
+  strokeStyle = '';
+  lineWidth = 1;
   textAlign = '';
   textBaseline = '';
   globalAlpha = 1;
+  strokeCount = 0;
   readonly fillTextCalls: Array<{ text: string; font: string; maxWidth?: number }> = [];
 
   asCanvasContext(): CanvasRenderingContext2D {
@@ -64,5 +78,8 @@ class FakeCanvasContext {
   fillRect(): void {}
   ellipse(): void {}
   fill(): void {}
+  stroke(): void {
+    this.strokeCount += 1;
+  }
   drawImage(): void {}
 }

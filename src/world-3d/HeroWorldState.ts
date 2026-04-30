@@ -12,9 +12,12 @@ export interface CameraState {
 export interface ProjectileState {
   projectileId: string;
   schoolId: 'fire' | 'ice' | 'lightning' | 'earth';
+  effectKind: 'match' | 'bomb';
   from: Vec3Data;
   to: Vec3Data;
+  activationDelaySec: number;
   remainingSec: number;
+  durationSec: number;
 }
 
 export interface HeroWorldState {

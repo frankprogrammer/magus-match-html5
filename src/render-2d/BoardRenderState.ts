@@ -37,6 +37,29 @@ export interface BoardBurstRingVisualState {
   zIndex: number;
 }
 
+export interface BoardTntCloudPuffVisualState {
+  puffId: string;
+  x: number;
+  y: number;
+  radiusX: number;
+  radiusY: number;
+  color: string;
+  alpha: number;
+  zIndex: number;
+}
+
+export interface BoardTntDebrisTrailVisualState {
+  trailId: string;
+  x: number;
+  y: number;
+  angleDeg: number;
+  length: number;
+  width: number;
+  color: string;
+  alpha: number;
+  zIndex: number;
+}
+
 export type BoardVisualCueKind = 'matchFlash' | 'pathGlow' | 'powerPulse' | 'damagePopup';
 
 export interface BoardVisualCueState {
@@ -57,6 +80,8 @@ export interface BoardRenderState {
   boardCells: readonly BoardCellVisualState[];
   particles?: readonly BoardParticleVisualState[];
   burstRings?: readonly BoardBurstRingVisualState[];
+  tntCloudPuffs?: readonly BoardTntCloudPuffVisualState[];
+  tntDebrisTrails?: readonly BoardTntDebrisTrailVisualState[];
   emptyCells?: readonly BoardEmptyCellVisualState[];
   pathCells: readonly CellCoord[];
   mageCell: CellCoord | null;

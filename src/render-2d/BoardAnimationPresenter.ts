@@ -28,6 +28,8 @@ import type {
   BoardCellVisualState,
   BoardParticleVisualState,
   BoardRenderState,
+  BoardTntCloudPuffVisualState,
+  BoardTntDebrisTrailVisualState,
 } from './BoardRenderState';
 
 const MATCH_PARTICLES_PER_TILE = 12;
@@ -40,6 +42,10 @@ const MATCH_BURST_RING_DURATION_MS = 220;
 const MATCH_BURST_RING_MAX_RADIUS_PX = 86;
 const MATCH_BURST_RING_START_LINE_WIDTH_PX = 7;
 const MATCH_BURST_RING_END_LINE_WIDTH_PX = 1;
+const TNT_CLOUD_DURATION_MS = 420;
+const TNT_CLOUD_PUFF_COUNT = 18;
+const TNT_DEBRIS_DURATION_MS = 360;
+const TNT_DEBRIS_TRAIL_COUNT = 8;
 
 interface VisualSample {
   renderX: number;
@@ -96,12 +102,16 @@ export class BoardAnimationPresenter {
     const boardCells = sampleTraceCells(trace, stepTimings, elapsedMs, this.activeAnimation.retargetStarts);
     const particles = sampleTraceParticles(trace, stepTimings, elapsedMs);
     const burstRings = sampleTraceBurstRings(trace, stepTimings, elapsedMs);
+    const tntCloudPuffs = sampleTraceTntCloudPuffs(trace, stepTimings, elapsedMs);
+    const tntDebrisTrails = sampleTraceTntDebrisTrails(trace, stepTimings, elapsedMs);
 
     return {
       ...authoritativeState,
       boardCells,
       particles,
       burstRings,
+      tntCloudPuffs,
+      tntDebrisTrails,
     };
   }
 
@@ -196,6 +206,50 @@ function sampleTraceBurstRings(
     .filter((ring): ring is BoardBurstRingVisualState => ring != null);
 }
 
+function sampleTraceTntCloudPuffs(
+  trace: BoardAnimationTrace,
+  stepTimings: readonly BoardAnimationStepTiming[],
+  elapsedMs: number,
+): BoardTntCloudPuffVisualState[] {
+  if (trace.kind === 'levelIntro') {
+    return [];
+  }
+
+  const activeStep = stepTimings.find((timing) => elapsedMs < timing.fallStartMs);
+  if (activeStep == null) {
+    return [];
+  }
+
+  const stepElapsedMs = elapsedMs - activeStep.popStartMs;
+  if (stepElapsedMs < 0) {
+    return [];
+  }
+
+  return activeStep.step.clearedTiles.flatMap((tile) => sampleTntCloudPuffs(tile, stepElapsedMs));
+}
+
+function sampleTraceTntDebrisTrails(
+  trace: BoardAnimationTrace,
+  stepTimings: readonly BoardAnimationStepTiming[],
+  elapsedMs: number,
+): BoardTntDebrisTrailVisualState[] {
+  if (trace.kind === 'levelIntro') {
+    return [];
+  }
+
+  const activeStep = stepTimings.find((timing) => elapsedMs < timing.fallStartMs);
+  if (activeStep == null) {
+    return [];
+  }
+
+  const stepElapsedMs = elapsedMs - activeStep.popStartMs;
+  if (stepElapsedMs < 0) {
+    return [];
+  }
+
+  return activeStep.step.clearedTiles.flatMap((tile) => sampleTntDebrisTrails(tile, stepElapsedMs));
+}
+
 function sampleClearedTileParticles(
   tile: BoardAnimationCascadeStep['clearedTiles'][number],
   stepElapsedMs: number,
@@ -253,6 +307,81 @@ function sampleClearedTileBurstRing(
     alpha: 0.42 * Math.pow(1 - progress, 1.4),
     zIndex: 15,
   };
+}
+
+function sampleTntCloudPuffs(
+  tile: BoardAnimationCascadeStep['clearedTiles'][number],
+  stepElapsedMs: number,
+): BoardTntCloudPuffVisualState[] {
+  if (tile.tileType !== 'TNT') {
+    return [];
+  }
+
+  const localElapsedMs = stepElapsedMs - (tile.clearDelayMs ?? 0);
+  if (localElapsedMs < 0 || localElapsedMs > TNT_CLOUD_DURATION_MS) {
+    return [];
+  }
+
+  const progress = clamp01(localElapsedMs / TNT_CLOUD_DURATION_MS);
+  const eased = easeOutCubic(progress);
+  const centerX = BOARD_RECT.x + tile.coord.col * BOARD_RECT.cellSize + BOARD_RECT.cellSize / 2;
+  const centerY = BOARD_RECT.y + tile.coord.row * BOARD_RECT.cellSize + BOARD_RECT.cellSize / 2;
+
+  return Array.from({ length: TNT_CLOUD_PUFF_COUNT }, (_, index) => {
+    const angle = deterministicUnit(`${tile.tileId}:tnt-cloud:${index}:angle`) * Math.PI * 2;
+    const distance = lerp(8, 94, deterministicUnit(`${tile.tileId}:tnt-cloud:${index}:distance`)) * eased;
+    const radius = lerp(18, 72, deterministicUnit(`${tile.tileId}:tnt-cloud:${index}:radius`)) * (0.38 + eased * 0.92);
+    const squash = lerp(0.75, 1.22, deterministicUnit(`${tile.tileId}:tnt-cloud:${index}:squash`));
+    return {
+      puffId: `${tile.tileId}-tnt-cloud-${index}`,
+      x: centerX + Math.cos(angle) * distance,
+      y: centerY + Math.sin(angle) * distance * 0.82,
+      radiusX: radius * squash,
+      radiusY: radius / squash,
+      color: tntCloudColor(index),
+      alpha: 0.72 * Math.pow(1 - progress, 1.35),
+      zIndex: 24 + index / 100,
+    };
+  });
+}
+
+function sampleTntDebrisTrails(
+  tile: BoardAnimationCascadeStep['clearedTiles'][number],
+  stepElapsedMs: number,
+): BoardTntDebrisTrailVisualState[] {
+  if (tile.tileType !== 'TNT') {
+    return [];
+  }
+
+  const localElapsedMs = stepElapsedMs - (tile.clearDelayMs ?? 0);
+  if (localElapsedMs < 0 || localElapsedMs > TNT_DEBRIS_DURATION_MS) {
+    return [];
+  }
+
+  const progress = clamp01(localElapsedMs / TNT_DEBRIS_DURATION_MS);
+  const eased = easeOutCubic(progress);
+  const centerX = BOARD_RECT.x + tile.coord.col * BOARD_RECT.cellSize + BOARD_RECT.cellSize / 2;
+  const centerY = BOARD_RECT.y + tile.coord.row * BOARD_RECT.cellSize + BOARD_RECT.cellSize / 2;
+
+  return Array.from({ length: TNT_DEBRIS_TRAIL_COUNT }, (_, index) => {
+    const jitterDeg = lerp(-10, 10, deterministicUnit(`${tile.tileId}:tnt-debris:${index}:jitter`));
+    const angleDeg = index * (360 / TNT_DEBRIS_TRAIL_COUNT) + jitterDeg;
+    const angle = (angleDeg * Math.PI) / 180;
+    const travel = lerp(90, 220, deterministicUnit(`${tile.tileId}:tnt-debris:${index}:travel`)) * eased;
+    const length = lerp(20, 64, deterministicUnit(`${tile.tileId}:tnt-debris:${index}:length`)) * (0.35 + eased * 0.65);
+    const startDistance = Math.max(0, travel - length);
+    return {
+      trailId: `${tile.tileId}-tnt-debris-${index}`,
+      x: centerX + Math.cos(angle) * startDistance,
+      y: centerY + Math.sin(angle) * startDistance,
+      angleDeg,
+      length,
+      width: lerp(18, 5, progress),
+      color: tntDebrisColor(index),
+      alpha: 0.95 * Math.pow(1 - progress, 1.15),
+      zIndex: 28 + index / 100,
+    };
+  });
 }
 
 function sampleSwapCells(
@@ -527,6 +656,14 @@ function particleColorForTileType(type: TileType): string | null {
     case 'LIGHTBALL':
       return null;
   }
+}
+
+function tntCloudColor(index: number): string {
+  return ['#d6d2c8', '#9b958d', '#6f6a67', '#f0c16a', '#d67a37'][index % 5];
+}
+
+function tntDebrisColor(index: number): string {
+  return ['#f7efe0', '#f2994a', '#c76b32', '#5f5650'][index % 4];
 }
 
 function deterministicUnit(value: string): number {

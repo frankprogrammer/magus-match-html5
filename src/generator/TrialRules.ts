@@ -5,6 +5,7 @@ import {
   type BoardAnimationTrace,
   type BoardAnimationTraceOptions,
 } from '../board/BoardAnimationTrace';
+import { getBoardAnimationStepTimings } from '../board/BoardAnimationTiming';
 import {
   cloneBoard,
   coordKey,
@@ -19,6 +20,7 @@ import {
   isTapActivatablePowerUpTileType,
   resolvePowerUpChain,
   selectLightballTapTargetType,
+  type PowerUpChainDetonation,
   type PowerUpDetonation,
   type PowerUpChainResolution,
 } from '../board/PowerUps';
@@ -34,12 +36,14 @@ import {
 import type { CellCoord } from '../core/Layout';
 import type { SeededRng } from '../core/Rng';
 import type { LevelResult, Vec3Data } from '../core/Types';
-import { SPELL_PROJECTILE_VISUAL_MS } from '../data/tuning';
+import { SPELL_BOMB_PROJECTILE_VISUAL_MS, SPELL_MATCH_PROJECTILE_VISUAL_MS } from '../data/tuning';
 import { createSwapScoringStats, EMPTY_SWAP_SCORING_STATS, type SwapScoringStats } from '../run/Scoring';
 import { getTrialMonsterContactRadius } from './TrialGenerator';
 import type { GeneratedTrialLevel, TrialMonsterKind, TrialMonsterManifestEntry } from './TrialGenerator';
 
 export type SpellSchoolId = 'fire' | 'ice' | 'lightning' | 'earth';
+
+const TRIAL_DEFEAT_TIMER_EPSILON_SEC = 0.000001;
 
 export interface ActiveTrialMonster {
   monsterId: string;
@@ -51,14 +55,18 @@ export interface ActiveTrialMonster {
   spawnTimeMs: number;
   walkSpeed: number;
   scoreValue: number;
+  defeatDelaySec?: number;
 }
 
 export interface TrialProjectileRuntimeState {
   projectileId: string;
   schoolId: SpellSchoolId;
+  effectKind: 'match' | 'bomb';
   from: Vec3Data;
   to: Vec3Data;
+  activationDelaySec: number;
   remainingSec: number;
+  durationSec: number;
 }
 
 export interface TrialRuntimeState {
@@ -91,8 +99,12 @@ export interface TrialSwapResult {
 
 interface TrialDamageSource {
   schoolId: SpellSchoolId;
+  effectKind: TrialProjectileRuntimeState['effectKind'];
   damage: number;
   shotCount: number;
+  visualShotCount: number;
+  activationDelaySec: number;
+  durationSec: number;
 }
 
 interface PowerUpActivation {
@@ -103,7 +115,7 @@ interface PowerUpActivation {
 
 interface TrialPowerUpBoardResolution {
   cascadeResult: CascadeResult;
-  detonations: readonly PowerUpDetonation[];
+  detonations: readonly PowerUpChainDetonation[];
   animationTrace?: BoardAnimationTrace;
 }
 
@@ -133,15 +145,20 @@ export function updateTrialRuntime(
   }
 
   const elapsedMs = runtime.elapsedMs + Math.max(0, dtSec) * 1000;
-  const projectiles = expireProjectiles(runtime, dtSec).projectiles;
+  const elapsedSec = Math.max(0, dtSec);
+  const visualRuntime = expireProjectiles(runtime, elapsedSec);
+  const defeatRuntime = advancePendingDefeats(visualRuntime, elapsedSec);
   const movedRuntime = {
-    ...runtime,
+    ...defeatRuntime,
     elapsedMs,
-    projectiles,
-    monsters: runtime.monsters.map((monster) => ({
-      ...monster,
-      x: monster.x - monster.walkSpeed * Math.max(0, dtSec),
-    })),
+    monsters: defeatRuntime.monsters.map((monster) =>
+      monster.hp > 0
+        ? {
+            ...monster,
+            x: monster.x - monster.walkSpeed * elapsedSec,
+          }
+        : monster,
+    ),
   };
   const spawnedRuntime = spawnDueMonsters(movedRuntime, level);
   const result = getTrialResult(spawnedRuntime, level);
@@ -150,6 +167,10 @@ export function updateTrialRuntime(
     ...spawnedRuntime,
     result,
   };
+}
+
+export function updateTrialVisuals(runtime: TrialRuntimeState, dtSec: number): TrialRuntimeState {
+  return expireProjectiles(runtime, dtSec);
 }
 
 export function processTrialSwap(
@@ -194,9 +215,10 @@ export function processTrialSwap(
       },
       powerUpActivation.targetType,
     );
+    const chainStepPopStartSec = getTraceStepPopStartSec(powerUpResolution.animationTrace, 0);
     damageSources.push(
-      ...powerUpResolution.detonations.map((detonation, index) =>
-        powerUpDamageSource(level, detonation, index === 0 ? powerUpActivation.targetType : undefined),
+      ...powerUpResolution.detonations.map((entry, index) =>
+        powerUpDamageSource(level, entry, chainStepPopStartSec, index === 0 ? powerUpActivation.targetType : undefined),
       ),
     );
     cascadeResult = powerUpResolution.cascadeResult;
@@ -215,7 +237,7 @@ export function processTrialSwap(
     animationTrace = cascadeResult.animationTrace;
   }
 
-  damageSources.push(...cascadeDamageSources(level, cascadeResult));
+  damageSources.push(...cascadeDamageSources(level, cascadeResult, animationTrace, powerUpActivation == null ? 0 : 1));
   const damageApplication = applyDamageSources(runtime, level, damageSources);
   const matchCount = cascadeResult.steps.reduce((sum, step) => sum + step.matches.length, 0);
   const powerUpsCreated = cascadeResult.steps.reduce((sum, step) => sum + step.spawnedPowerUps.length, 0);
@@ -250,11 +272,12 @@ export function processTrialPowerUpActivation(
     postSwapBoard: board,
     swappedCells: null,
   }, tapActivation.targetType);
+  const chainStepPopStartSec = getTraceStepPopStartSec(powerUpResolution.animationTrace, 0);
   const damageSources = [
-    ...powerUpResolution.detonations.map((detonation, index) =>
-      powerUpDamageSource(level, detonation, index === 0 ? tapActivation.targetType : undefined),
+    ...powerUpResolution.detonations.map((entry, index) =>
+      powerUpDamageSource(level, entry, chainStepPopStartSec, index === 0 ? tapActivation.targetType : undefined),
     ),
-    ...cascadeDamageSources(level, powerUpResolution.cascadeResult),
+    ...cascadeDamageSources(level, powerUpResolution.cascadeResult, powerUpResolution.animationTrace, 1),
   ];
   const damageApplication = applyDamageSources(runtime, level, damageSources);
   const matchCount = 1 + powerUpResolution.cascadeResult.steps.reduce((sum, step) => sum + step.matches.length, 0);
@@ -336,6 +359,15 @@ export function getTrialMageWorldPosition(level: GeneratedTrialLevel): Vec3Data 
   };
 }
 
+export function getTrialSpellOriginWorldPosition(level: GeneratedTrialLevel): Vec3Data {
+  const magePosition = getTrialMageWorldPosition(level);
+  return {
+    x: magePosition.x + 0.55,
+    y: magePosition.y + 0.95,
+    z: magePosition.z + 0.05,
+  };
+}
+
 function applyDamageSources(
   runtime: TrialRuntimeState,
   level: GeneratedTrialLevel,
@@ -360,26 +392,22 @@ function applyDamageSources(
       const damage = Math.min(target.hp, source.damage);
       const nextHp = Math.max(0, target.hp - source.damage);
       const defeated = nextHp <= 0;
-      const projectile = createProjectile(nextRuntime, level, source.schoolId, target);
-      const monsters = nextRuntime.monsters
-        .map((monster) =>
-          monster.monsterId === target.monsterId
-            ? {
-                ...monster,
-                hp: nextHp,
-              }
-            : monster,
-        )
-        .filter((monster) => monster.hp > 0);
+      const projectile = shotIndex < source.visualShotCount ? createProjectile(nextRuntime, level, source, target) : null;
+      const monsters = nextRuntime.monsters.map((monster) =>
+        monster.monsterId === target.monsterId
+          ? {
+              ...monster,
+              hp: nextHp,
+              defeatDelaySec: defeated ? source.activationDelaySec + source.durationSec : monster.defeatDelaySec,
+            }
+          : monster,
+      );
 
       nextRuntime = {
         ...nextRuntime,
         monsters,
-        projectiles: [...nextRuntime.projectiles, projectile],
-        nextProjectileIndex: nextRuntime.nextProjectileIndex + 1,
-        defeatedMonsterIds: defeated
-          ? [...nextRuntime.defeatedMonsterIds, target.monsterId]
-          : nextRuntime.defeatedMonsterIds,
+        projectiles: projectile == null ? nextRuntime.projectiles : [...nextRuntime.projectiles, projectile],
+        nextProjectileIndex: projectile == null ? nextRuntime.nextProjectileIndex : nextRuntime.nextProjectileIndex + 1,
       };
 
       scoreDelta += Math.round(damage * 2) + (defeated ? target.scoreValue : 0);
@@ -405,28 +433,50 @@ function applyDamageSources(
 function cascadeDamageSources(
   level: GeneratedTrialLevel,
   cascadeResult: CascadeResult,
+  animationTrace: BoardAnimationTrace | undefined,
+  animationStepOffset: number,
 ): TrialDamageSource[] {
+  const stepTimings = animationTrace == null ? [] : getBoardAnimationStepTimings(animationTrace);
   return cascadeResult.steps.flatMap((step, cascadeIndex) =>
     step.matches
       .filter((match) => isStandardTileType(match.tileType))
       .map((match) => ({
         schoolId: spellSchoolForTileType(match.tileType as StandardTileType),
+        effectKind: 'match' as const,
         damage: level.trial.baseDamage * (damageMultiplierForMatch(match) + cascadeIndex * 0.25),
         shotCount: 1,
+        visualShotCount: 1,
+        activationDelaySec: (stepTimings[cascadeIndex + animationStepOffset]?.popStartMs ?? 0) / 1000,
+        durationSec: SPELL_MATCH_PROJECTILE_VISUAL_MS / 1000,
       })),
   );
 }
 
+function getTraceStepPopStartSec(trace: BoardAnimationTrace | undefined, stepIndex: number): number {
+  if (trace == null) {
+    return 0;
+  }
+
+  return (getBoardAnimationStepTimings(trace)[stepIndex]?.popStartMs ?? 0) / 1000;
+}
+
 function powerUpDamageSource(
   level: GeneratedTrialLevel,
-  detonation: PowerUpDetonation,
+  entry: PowerUpChainDetonation,
+  chainStepPopStartSec: number,
   targetType?: MatchableTileType,
 ): TrialDamageSource {
+  const detonation = entry.detonation;
   const schoolTargetType = targetType ?? detonation.lightballTargetType;
+  const isBomb = detonation.powerUpType === 'TNT';
   return {
     schoolId: schoolTargetType != null && isStandardTileType(schoolTargetType) ? spellSchoolForTileType(schoolTargetType) : 'fire',
+    effectKind: isBomb ? 'bomb' : 'match',
     damage: level.trial.baseDamage * powerUpDamageMultiplier(detonation.powerUpType),
     shotCount: powerUpShotCount(detonation),
+    visualShotCount: isBomb ? 1 : powerUpShotCount(detonation),
+    activationDelaySec: chainStepPopStartSec + entry.activationDelayMs / 1000,
+    durationSec: (isBomb ? SPELL_BOMB_PROJECTILE_VISUAL_MS : SPELL_MATCH_PROJECTILE_VISUAL_MS) / 1000,
   };
 }
 
@@ -457,15 +507,18 @@ function powerUpShotCount(detonation: PowerUpDetonation): number {
 function createProjectile(
   runtime: TrialRuntimeState,
   level: GeneratedTrialLevel,
-  schoolId: SpellSchoolId,
+  source: TrialDamageSource,
   target: ActiveTrialMonster,
 ): TrialProjectileRuntimeState {
   return {
     projectileId: `trial-${runtime.nextProjectileIndex}`,
-    schoolId,
-    from: getTrialMageWorldPosition(level),
+    schoolId: source.schoolId,
+    effectKind: source.effectKind,
+    from: getTrialSpellOriginWorldPosition(level),
     to: getTrialMonsterWorldPosition(level, target),
-    remainingSec: SPELL_PROJECTILE_VISUAL_MS / 1000,
+    activationDelaySec: source.activationDelaySec,
+    remainingSec: source.durationSec,
+    durationSec: source.durationSec,
   };
 }
 
@@ -506,7 +559,7 @@ function resolveTrialPowerUpBoard(
 
   return {
     cascadeResult,
-    detonations: chain.detonations.map((entry) => entry.detonation),
+    detonations: chain.detonations,
     animationTrace: createBoardAnimationTrace(
       animation,
       [
@@ -585,7 +638,7 @@ function getTapPowerUpActivation(board: Board, origin: CellCoord): { targetType?
 }
 
 function spawnDueMonsters(runtime: TrialRuntimeState, level: GeneratedTrialLevel): TrialRuntimeState {
-  if (runtime.monsters.some((monster) => monster.hp > 0)) {
+  if (runtime.monsters.length > 0) {
     return runtime;
   }
 
@@ -629,16 +682,68 @@ function expireProjectiles(runtime: TrialRuntimeState, dtSec: number): TrialRunt
   return {
     ...runtime,
     projectiles: runtime.projectiles
-      .map((projectile) => ({
-        ...projectile,
-        remainingSec: projectile.remainingSec - elapsed,
-      }))
-      .filter((projectile) => projectile.remainingSec > 0),
+      .map((projectile) => advanceProjectile(projectile, elapsed))
+      .filter((projectile) => projectile.activationDelaySec > 0 || projectile.remainingSec > 0),
+  };
+}
+
+function advancePendingDefeats(runtime: TrialRuntimeState, dtSec: number): TrialRuntimeState {
+  const elapsed = Math.max(0, dtSec);
+  const defeatedMonsterIds = [...runtime.defeatedMonsterIds];
+  const monsters = runtime.monsters
+    .map((monster) => {
+      if (monster.hp > 0) {
+        return monster;
+      }
+
+      const defeatDelaySec = (monster.defeatDelaySec ?? 0) - elapsed;
+      return {
+        ...monster,
+        defeatDelaySec,
+      };
+    })
+    .filter((monster) => {
+      if (monster.hp > 0 || (monster.defeatDelaySec ?? 0) > TRIAL_DEFEAT_TIMER_EPSILON_SEC) {
+        return true;
+      }
+
+      if (!defeatedMonsterIds.includes(monster.monsterId)) {
+        defeatedMonsterIds.push(monster.monsterId);
+      }
+      return false;
+    });
+
+  return {
+    ...runtime,
+    monsters,
+    defeatedMonsterIds,
+  };
+}
+
+function advanceProjectile(projectile: TrialProjectileRuntimeState, elapsedSec: number): TrialProjectileRuntimeState {
+  let remainingElapsedSec = elapsedSec;
+  let activationDelaySec = projectile.activationDelaySec;
+  let remainingSec = projectile.remainingSec;
+
+  if (activationDelaySec > 0) {
+    const consumedDelaySec = Math.min(activationDelaySec, remainingElapsedSec);
+    activationDelaySec -= consumedDelaySec;
+    remainingElapsedSec -= consumedDelaySec;
+  }
+
+  if (activationDelaySec <= 0 && remainingElapsedSec > 0) {
+    remainingSec -= remainingElapsedSec;
+  }
+
+  return {
+    ...projectile,
+    activationDelaySec: Math.max(0, activationDelaySec),
+    remainingSec,
   };
 }
 
 function getTrialResult(runtime: TrialRuntimeState, level: GeneratedTrialLevel): LevelResult {
-  if (runtime.monsters.some((monster) => hasTrialMonsterReachedMage(level, monster))) {
+  if (runtime.monsters.some((monster) => monster.hp > 0 && hasTrialMonsterReachedMage(level, monster))) {
     return 'lost';
   }
 

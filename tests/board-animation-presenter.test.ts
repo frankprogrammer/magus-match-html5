@@ -128,6 +128,32 @@ describe('BoardAnimationPresenter', () => {
     expect(afterParticleWindow.burstRings ?? []).toHaveLength(0);
   });
 
+  it('emits delayed TNT cloud puffs and eight deterministic debris trails', () => {
+    const presenter = new BoardAnimationPresenter();
+    const trace = delayedTntTrace();
+    const state = boardState(trace);
+
+    presenter.present(state, 0);
+    const beforeTnt = presenter.present(state, 0.2);
+    const duringTnt = presenter.present(state, 0.23);
+    const repeated = presenter.present(state, 0.23);
+    const laterTnt = presenter.present(state, 0.34);
+    const afterTnt = presenter.present(state, 0.7);
+
+    expect(beforeTnt.tntCloudPuffs ?? []).toHaveLength(0);
+    expect(beforeTnt.tntDebrisTrails ?? []).toHaveLength(0);
+    expect(duringTnt.tntCloudPuffs).toHaveLength(18);
+    expect(duringTnt.tntDebrisTrails).toHaveLength(8);
+    expect(duringTnt.tntCloudPuffs).toEqual(repeated.tntCloudPuffs);
+    expect(duringTnt.tntDebrisTrails).toEqual(repeated.tntDebrisTrails);
+    expect(laterTnt.tntCloudPuffs?.[0]?.radiusX).toBeGreaterThan(duringTnt.tntCloudPuffs?.[0]?.radiusX ?? 0);
+    expect(laterTnt.tntCloudPuffs?.[0]?.alpha).toBeLessThan(duringTnt.tntCloudPuffs?.[0]?.alpha ?? 1);
+    expect(laterTnt.tntDebrisTrails?.[0]?.length).toBeGreaterThan(duringTnt.tntDebrisTrails?.[0]?.length ?? 0);
+    expect(laterTnt.tntDebrisTrails?.[0]?.alpha).toBeLessThan(duringTnt.tntDebrisTrails?.[0]?.alpha ?? 1);
+    expect(afterTnt.tntCloudPuffs ?? []).toHaveLength(0);
+    expect(afterTnt.tntDebrisTrails ?? []).toHaveLength(0);
+  });
+
   it('does not emit particles for level intro or nonstandard tile clears', () => {
     const presenter = new BoardAnimationPresenter();
     const introBoard = createBoardFromTileTypes([['FIRE']]);
@@ -137,6 +163,8 @@ describe('BoardAnimationPresenter', () => {
     presenter.present(boardState(introTrace), 0);
     expect(presenter.present(boardState(introTrace), 0.1).particles ?? []).toHaveLength(0);
     expect(presenter.present(boardState(introTrace), 0.1).burstRings ?? []).toHaveLength(0);
+    expect(presenter.present(boardState(introTrace), 0.1).tntCloudPuffs ?? []).toHaveLength(0);
+    expect(presenter.present(boardState(introTrace), 0.1).tntDebrisTrails ?? []).toHaveLength(0);
 
     const secondPresenter = new BoardAnimationPresenter();
     secondPresenter.present(boardState(nonstandardTrace), 0);
@@ -488,6 +516,30 @@ function orderedClearTrace(): BoardAnimationTrace {
     finalSnapshot: {
       cells: [],
     },
+  };
+}
+
+function delayedTntTrace(): BoardAnimationTrace {
+  const cells = [snapshotCell('tnt', 'TNT', 2, 0)];
+  return {
+    kind: 'resolution',
+    revisionId: 28,
+    swappedCells: null,
+    preSwapSnapshot: { cells },
+    postSwapSnapshot: { cells },
+    cascadeSteps: [
+      {
+        stepIndex: 0,
+        beforeClearSnapshot: { cells },
+        beforeGravitySnapshot: { cells: [] },
+        afterGravitySnapshot: { cells: [] },
+        finalSnapshot: { cells: [] },
+        clearedTiles: [{ ...cells[0], clearDelayMs: 90 }],
+        fallingTiles: [],
+        refillTiles: [],
+      },
+    ],
+    finalSnapshot: { cells: [] },
   };
 }
 

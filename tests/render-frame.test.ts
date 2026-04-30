@@ -293,6 +293,68 @@ describe('buildBoardCellVisuals', () => {
     expect(frameIndex).toBeGreaterThan(clippedLayerPopIndex);
   });
 
+  it('draws TNT cloud and debris inside the clipped board layer before match particles', () => {
+    const renderer = new FakeRenderer(new Set());
+    const state = oneTileState('tile.fire');
+    state.tntCloudPuffs = [
+      {
+        puffId: 'puff-0',
+        x: BOARD_RECT.x + 40,
+        y: BOARD_RECT.y + 40,
+        radiusX: 80,
+        radiusY: 56,
+        color: '#9b958d',
+        alpha: 0.8,
+        zIndex: 24,
+      },
+    ];
+    state.tntDebrisTrails = [
+      {
+        trailId: 'trail-0',
+        x: BOARD_RECT.x + 40,
+        y: BOARD_RECT.y + 40,
+        angleDeg: 45,
+        length: 120,
+        width: 12,
+        color: '#f2994a',
+        alpha: 0.9,
+        zIndex: 28,
+      },
+    ];
+    state.particles = [
+      {
+        particleId: 'particle-0',
+        x: BOARD_RECT.x + 40,
+        y: BOARD_RECT.y + 40,
+        radius: 8,
+        color: '#eb5757',
+        alpha: 0.75,
+        zIndex: 20,
+      },
+    ];
+
+    renderFrame(renderer, state, hudState(), 0);
+
+    const clipIndex = renderer.calls.indexOf(
+      `clip:${BOARD_RECT.x},${BOARD_RECT.y},${BOARD_RECT.width},${BOARD_RECT.height}`,
+    );
+    const tileIndex = renderer.calls.indexOf('rect:#eb5757');
+    const cloudIndex = renderer.calls.indexOf('ellipse:#9b958d');
+    const debrisIndex = renderer.calls.indexOf('rect:#f2994a');
+    const particleIndex = renderer.calls.indexOf('ellipse:#eb5757');
+    const clippedLayerPopIndex = renderer.calls.indexOf('pop', particleIndex);
+    const frameIndex = renderer.calls.indexOf(
+      `rect:#c8a24b:${BOARD_RECT.x - 8},${BOARD_RECT.y - 8},${BOARD_RECT.width + 16},8`,
+    );
+
+    expect(cloudIndex).toBeGreaterThan(tileIndex);
+    expect(debrisIndex).toBeGreaterThan(cloudIndex);
+    expect(particleIndex).toBeGreaterThan(debrisIndex);
+    expect(cloudIndex).toBeGreaterThan(clipIndex);
+    expect(clippedLayerPopIndex).toBeGreaterThan(particleIndex);
+    expect(frameIndex).toBeGreaterThan(clippedLayerPopIndex);
+  });
+
   it('applies transient visual cues to cells and damage popups', () => {
     const renderer = new FakeRenderer(new Set());
     const state = oneTileState('tile.fire');

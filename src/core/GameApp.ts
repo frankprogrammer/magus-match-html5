@@ -50,6 +50,7 @@ import {
   processTrialPowerUpActivation,
   processTrialSwap,
   updateTrialRuntime,
+  updateTrialVisuals,
 } from "../generator/TrialRules";
 import type {
   BoardRenderState,
@@ -178,6 +179,7 @@ export class MagusMatchGameApp implements GameApp {
     }
 
     if (this.phase === "WIN" || this.phase === "LOSE") {
+      this.updateTrialVisualTimers(clampedDtSec);
       this.transitionTimerSec += clampedDtSec;
       if (
         this.transitionTimerSec >= LEVEL_TRANSITION_HOLD_SEC &&
@@ -449,6 +451,14 @@ export class MagusMatchGameApp implements GameApp {
     } else if (nextRuntime.result === "lost") {
       this.beginLevelResult("loss");
     }
+  }
+
+  private updateTrialVisualTimers(dtSec: number): void {
+    if (this.currentLevel?.type !== "TRIAL" || this.trialRuntime == null) {
+      return;
+    }
+
+    this.trialRuntime = updateTrialVisuals(this.trialRuntime, dtSec);
   }
 
   private handleTap(x: number, y: number): void {

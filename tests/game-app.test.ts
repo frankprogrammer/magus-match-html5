@@ -8,6 +8,7 @@ import { GAME_OVER_TRY_AGAIN_BUTTON_RECT, HUD_MUTE_TOGGLE_RECT, TITLE_PLAY_BUTTO
 import { MagusMatchGameApp } from '../src/core/GameApp';
 import type { GameEvent } from '../src/core/GameEvents';
 import { CAMERA_SHAKE_MAX, CAMERA_SHAKE_MIN } from '../src/data/tuning';
+import type { TrialRuntimeState } from '../src/generator/TrialRules';
 import { LEVEL_TRANSITION_HOLD_SEC } from '../src/run/RunProgression';
 import { BoardAnimationPresenter } from '../src/render-2d/BoardAnimationPresenter';
 
@@ -78,6 +79,80 @@ describe('MagusMatchGameApp', () => {
     expect(app.getRunStateForDebug().score).toBeGreaterThan(0);
     expect(app.getHeroWorldState().levelType).toBe('TRIAL');
     expect(app.getHeroWorldState().activeProjectiles.length).toBeGreaterThan(0);
+  });
+
+  it('continues Trial projectile visual timers during win transitions', () => {
+    const app = new MagusMatchGameApp(667, { debugLevelType: 'TRIAL' });
+    tap(app, TITLE_PLAY_BUTTON_RECT);
+    const runtime = app.getTrialRuntimeForDebug();
+    const level = app.getCurrentLevelForDebug();
+    if (runtime == null || level?.type !== 'TRIAL') {
+      throw new Error('Expected generated Trial level.');
+    }
+
+    setTrialRuntimeForDebug(app, {
+      ...runtime,
+      result: 'won',
+      monsters: [],
+      projectiles: [
+        {
+          projectileId: 'delayed-win-shot',
+          schoolId: 'fire',
+          effectKind: 'match',
+          from: { x: level.trial.mageX, y: level.trial.laneY, z: 0.55 },
+          to: { x: level.trial.mageX + 1, y: level.trial.laneY, z: 0.35 },
+          activationDelaySec: 0.12,
+          remainingSec: 0.1,
+          durationSec: 0.1,
+        },
+      ],
+    });
+    beginLevelResultForDebug(app, 'win');
+
+    app.update(0.05, []);
+    expect(app.getHeroWorldState().activeProjectiles[0]?.activationDelaySec).toBeCloseTo(0.07);
+    expect(app.getHeroWorldState().activeProjectiles[0]?.remainingSec).toBeCloseTo(0.1);
+
+    app.update(0.18, []);
+    expect(app.getHeroWorldState().activeProjectiles).toHaveLength(0);
+  });
+
+  it('delays Trial win transition until the final defeated monster disappears', () => {
+    const app = new MagusMatchGameApp(666, { debugLevelType: 'TRIAL' });
+    const firstMove = findValidMoves(app.getBoardForDebug())[0];
+
+    tap(app, TITLE_PLAY_BUTTON_RECT);
+    const runtime = app.getTrialRuntimeForDebug();
+    const level = app.getCurrentLevelForDebug();
+    if (runtime == null || level?.type !== 'TRIAL') {
+      throw new Error('Expected generated Trial level.');
+    }
+
+    const activeMonster = runtime.monsters[0];
+    setTrialRuntimeForDebug(app, {
+      ...runtime,
+      nextSpawnIndex: level.trial.waveManifest.length,
+      monsters: [{ ...activeMonster, monsterId: 'final-monster', hp: 1, maxHp: 1 }],
+      defeatedMonsterIds: level.trial.waveManifest
+        .slice(1)
+        .map((entry) => entry.monsterId),
+    });
+
+    app.update(0, [{ type: 'swap', from: firstMove.from, to: firstMove.to }]);
+
+    const defeatedRuntime = app.getTrialRuntimeForDebug();
+    const defeatDelaySec = defeatedRuntime?.monsters[0]?.defeatDelaySec;
+    expect(app.getHudState().phase).toBe('IDLE');
+    expect(defeatedRuntime?.monsters[0]).toMatchObject({ monsterId: 'final-monster', hp: 0 });
+    expect(defeatDelaySec).toBeGreaterThan(0);
+
+    app.update((defeatDelaySec ?? 0) - 0.001, []);
+    expect(app.getHudState().phase).toBe('IDLE');
+    expect(app.getTrialRuntimeForDebug()?.monsters).toHaveLength(1);
+
+    app.update(0.001, []);
+    expect(app.getHudState().phase).toBe('WIN');
+    expect(app.getTrialRuntimeForDebug()?.monsters).toHaveLength(0);
   });
 
   it('can start directly at a debug run level', () => {
@@ -322,6 +397,10 @@ function captureTraceForDebug(app: MagusMatchGameApp, trace: BoardAnimationTrace
 
 function beginLevelResultForDebug(app: MagusMatchGameApp, result: 'win' | 'loss'): void {
   (app as unknown as { beginLevelResult: (result: 'win' | 'loss') => void }).beginLevelResult(result);
+}
+
+function setTrialRuntimeForDebug(app: MagusMatchGameApp, runtime: TrialRuntimeState): void {
+  (app as unknown as { trialRuntime: TrialRuntimeState }).trialRuntime = runtime;
 }
 
 function expectBoardTileIdsUnique(board: Board): void {

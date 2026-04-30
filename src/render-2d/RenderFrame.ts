@@ -166,6 +166,8 @@ function drawBoard(renderer: GameRenderer, boardState: BoardRenderState, elapsed
   for (const visual of visuals) {
     drawCell(renderer, visual);
   }
+  drawTntCloudPuffs(renderer, boardState);
+  drawTntDebrisTrails(renderer, boardState);
   drawBurstRings(renderer, boardState);
   drawParticles(renderer, boardState);
   renderer.pop();
@@ -277,6 +279,35 @@ function drawParticles(renderer: GameRenderer, boardState: BoardRenderState): vo
 
     renderer.pushAlpha(particle.alpha);
     renderer.drawEllipse(particle.color, particle.x, particle.y, particle.radius, particle.radius);
+    renderer.pop();
+  }
+}
+
+function drawTntCloudPuffs(renderer: GameRenderer, boardState: BoardRenderState): void {
+  const puffs = [...(boardState.tntCloudPuffs ?? [])].sort((first, second) => first.zIndex - second.zIndex);
+  for (const puff of puffs) {
+    if (puff.alpha <= 0 || puff.radiusX <= 0 || puff.radiusY <= 0) {
+      continue;
+    }
+
+    renderer.pushAlpha(puff.alpha);
+    renderer.drawEllipse(puff.color, puff.x, puff.y, puff.radiusX, puff.radiusY);
+    renderer.pop();
+  }
+}
+
+function drawTntDebrisTrails(renderer: GameRenderer, boardState: BoardRenderState): void {
+  const trails = [...(boardState.tntDebrisTrails ?? [])].sort((first, second) => first.zIndex - second.zIndex);
+  for (const trail of trails) {
+    if (trail.alpha <= 0 || trail.length <= 0 || trail.width <= 0) {
+      continue;
+    }
+
+    renderer.pushAlpha(trail.alpha);
+    renderer.pushRotate(trail.angleDeg, trail.x, trail.y);
+    renderer.drawRect(trail.color, trail.x, trail.y - trail.width / 2, trail.length, trail.width);
+    renderer.drawEllipse(trail.color, trail.x + trail.length, trail.y, trail.width * 0.55, trail.width * 0.55);
+    renderer.pop();
     renderer.pop();
   }
 }

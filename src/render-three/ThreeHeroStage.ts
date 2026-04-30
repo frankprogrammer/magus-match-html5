@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import type { HeroWorldState, ProjectileState } from '../world-3d/HeroWorldState';
-import { HeroStageTemplateIds } from '../world-3d/HeroStageTemplates';
 import type { WorldObjectState } from '../world-3d/WorldObjectState';
 import { orthographicBoundsForAspect, ThreeCameraController } from './ThreeCameraController';
 import { ThreeObjectFactory } from './ThreeObjectFactory';
@@ -12,6 +11,7 @@ export class ThreeHeroStage {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly factory = new ThreeObjectFactory();
   private readonly objectCache = new ThreeObjectCache();
+  private readonly projectileCache = new Map<string, THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial>>();
   private readonly cameraController = new ThreeCameraController();
   private readonly animationMixers = new Map<string, THREE.AnimationMixer>();
   private elapsedSec = 0;
@@ -33,7 +33,8 @@ export class ThreeHeroStage {
   render(state: HeroWorldState, dtSec: number): void {
     this.elapsedSec += Math.max(0, dtSec);
     this.syncCamera(state);
-    this.syncObjects([...state.objects, ...projectilesToObjects(state.activeProjectiles)]);
+    this.syncObjects(state.objects);
+    this.syncProjectiles(state.activeProjectiles);
     this.updateAnimationMixers(dtSec);
     this.renderer.render(this.scene, this.camera);
   }
@@ -50,8 +51,13 @@ export class ThreeHeroStage {
       this.scene.remove(object);
       this.factory.dispose(object);
     }
+    for (const [, projectile] of this.projectileCache.entries()) {
+      this.scene.remove(projectile);
+      disposeProjectileSystem(projectile);
+    }
     this.animationMixers.clear();
     this.objectCache.clear();
+    this.projectileCache.clear();
     this.factory.disposeCachedResources();
     this.renderer.dispose();
     this.renderer.domElement.remove();
@@ -59,6 +65,44 @@ export class ThreeHeroStage {
 
   private syncCamera(state: HeroWorldState): void {
     this.cameraController.apply(this.camera, state.camera, orthographicAspect(this.camera));
+  }
+
+  private syncProjectiles(projectiles: readonly ProjectileState[]): void {
+    const seen = new Set<string>();
+
+    for (const projectileState of projectiles) {
+      if (!isProjectileVisible(projectileState)) {
+        continue;
+      }
+
+      const objectId = `projectile-${projectileState.projectileId}`;
+      seen.add(objectId);
+      const projectile = this.getOrCreateProjectile(objectId, projectileState);
+      applyProjectileState(projectile, projectileState);
+    }
+
+    for (const [objectId, projectile] of [...this.projectileCache.entries()]) {
+      if (!seen.has(objectId)) {
+        this.scene.remove(projectile);
+        disposeProjectileSystem(projectile);
+        this.projectileCache.delete(objectId);
+      }
+    }
+  }
+
+  private getOrCreateProjectile(
+    objectId: string,
+    projectileState: ProjectileState,
+  ): THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial> {
+    const existing = this.projectileCache.get(objectId);
+    if (existing != null) {
+      return existing;
+    }
+
+    const projectile = createProjectileParticleSystem(projectileState);
+    this.projectileCache.set(objectId, projectile);
+    this.scene.add(projectile);
+    return projectile;
   }
 
   private syncObjects(objects: readonly WorldObjectState[]): void {
@@ -199,38 +243,152 @@ function applyMaterialOverrides(
   }
 }
 
-function projectilesToObjects(projectiles: readonly ProjectileState[]): WorldObjectState[] {
-  return projectiles.map((projectile) => ({
-    objectId: `projectile-${projectile.projectileId}`,
-    templateId: HeroStageTemplateIds.projectilePlaceholder,
-    transform: {
-      position: {
-        x: (projectile.from.x + projectile.to.x) / 2,
-        y: (projectile.from.y + projectile.to.y) / 2,
-        z: (projectile.from.z + projectile.to.z) / 2,
-      },
-      rotation: { x: 0, y: 0, z: 0, w: 1 },
-      scale: { x: 0.1, y: 0.1, z: 1 },
-    },
-    visible: projectile.remainingSec > 0,
-    lifetime: 'oneShot',
-    replication: 'localCosmetic',
-    renderLayer: 'heroStage',
-    renderOrder: 10,
-    tintHex: projectileColor(projectile.schoolId),
-    opacity: Math.min(1, Math.max(0.15, projectile.remainingSec / 0.08)),
-  }));
-}
-
-function projectileColor(schoolId: ProjectileState['schoolId']): string {
+export function projectileColor(schoolId: ProjectileState['schoolId']): string {
   switch (schoolId) {
     case 'fire':
       return '#eb5757';
     case 'ice':
-      return '#2d9cdb';
+      return '#38d5ff';
     case 'lightning':
       return '#f2c94c';
     case 'earth':
       return '#27ae60';
   }
+}
+
+function isProjectileVisible(projectile: ProjectileState): boolean {
+  return projectile.activationDelaySec <= 0 && projectile.remainingSec > 0;
+}
+
+function createProjectileParticleSystem(
+  projectile: ProjectileState,
+): THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial> {
+  const particleCount = projectileParticleCount(projectile.effectKind);
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(particleCount * 3), 3));
+  const material = new THREE.PointsMaterial({
+    color: projectileColor(projectile.schoolId),
+    size: projectilePointSize(projectile.effectKind),
+    transparent: true,
+    opacity: 1,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    sizeAttenuation: false,
+  });
+  const points = new THREE.Points(geometry, material);
+  points.frustumCulled = false;
+  points.renderOrder = projectile.effectKind === 'bomb' ? 32 : 30;
+  return points;
+}
+
+function applyProjectileState(
+  points: THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial>,
+  projectile: ProjectileState,
+): void {
+  const positions = points.geometry.getAttribute('position') as THREE.BufferAttribute;
+  const progress = projectileProgress(projectile);
+  const direction = projectileDirection(projectile);
+  const spread = projectileSpread(projectile.effectKind, progress);
+
+  for (let index = 0; index < positions.count; index += 1) {
+    const alongSeed = deterministicUnit(`${projectile.projectileId}:along:${index}`);
+    const angleSeed = deterministicUnit(`${projectile.projectileId}:angle:${index}`);
+    const radiusSeed = deterministicUnit(`${projectile.projectileId}:radius:${index}`);
+    const particleProgress = clamp01(progress * projectileTravelScale(projectile.effectKind) - alongSeed * projectileTrail(projectile.effectKind));
+    const eased = easeOutCubic(particleProgress);
+    const angle = angleSeed * Math.PI * 2;
+    const radius = Math.sqrt(radiusSeed) * Math.sin(particleProgress * Math.PI);
+    const horizontalRadius = spread.horizontal * radius;
+    const verticalRadius = spread.vertical * radius;
+    const x = projectile.from.x + direction.dx * eased + direction.perpX * Math.cos(angle) * horizontalRadius;
+    const y =
+      projectile.from.y +
+      direction.dy * eased +
+      direction.perpY * Math.cos(angle) * horizontalRadius +
+      Math.sin(angle) * verticalRadius;
+    const z = projectile.from.z + direction.dz * eased + Math.sin(angle) * spread.depth * radius;
+    positions.setXYZ(index, x, y, z);
+  }
+
+  positions.needsUpdate = true;
+  points.material.color.set(projectileColor(projectile.schoolId));
+  points.material.opacity = projectileOpacity(projectile.effectKind, progress);
+  points.material.size = projectilePointSize(projectile.effectKind);
+}
+
+function disposeProjectileSystem(points: THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial>): void {
+  points.geometry.dispose();
+  points.material.dispose();
+}
+
+function projectileParticleCount(effectKind: ProjectileState['effectKind']): number {
+  return effectKind === 'bomb' ? 220 : 96;
+}
+
+function projectilePointSize(effectKind: ProjectileState['effectKind']): number {
+  return effectKind === 'bomb' ? 14 : 7;
+}
+
+function projectileSpread(
+  effectKind: ProjectileState['effectKind'],
+  progress: number,
+): { horizontal: number; vertical: number; depth: number } {
+  const base = (effectKind === 'bomb' ? 0.68 : 0.2) * (0.45 + easeOutCubic(progress) * 0.55);
+  return {
+    horizontal: base,
+    vertical: base * 1.8,
+    depth: base * 0.45,
+  };
+}
+
+function projectileTrail(effectKind: ProjectileState['effectKind']): number {
+  return effectKind === 'bomb' ? 0.52 : 0.34;
+}
+
+function projectileTravelScale(effectKind: ProjectileState['effectKind']): number {
+  return 1 + projectileTrail(effectKind);
+}
+
+function projectileOpacity(effectKind: ProjectileState['effectKind'], progress: number): number {
+  const fadeIn = clamp01(progress / 0.16);
+  const fadeOut = clamp01((1 - progress) / (effectKind === 'bomb' ? 0.32 : 0.42));
+  return (effectKind === 'bomb' ? 0.98 : 0.86) * Math.min(fadeIn, fadeOut);
+}
+
+function projectileProgress(projectile: ProjectileState): number {
+  return clamp01(1 - projectile.remainingSec / Math.max(0.001, projectile.durationSec));
+}
+
+function projectileDirection(projectile: ProjectileState): {
+  dx: number;
+  dy: number;
+  dz: number;
+  perpX: number;
+  perpY: number;
+} {
+  const dx = projectile.to.x - projectile.from.x;
+  const dy = projectile.to.y - projectile.from.y;
+  const dz = projectile.to.z - projectile.from.z;
+  const planarLength = Math.hypot(dx, dy);
+  const perpX = planarLength > 0 ? -dy / planarLength : 1;
+  const perpY = planarLength > 0 ? dx / planarLength : 0;
+  return { dx, dy, dz, perpX, perpY };
+}
+
+function deterministicUnit(value: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return (hash >>> 0) / 4294967296;
+}
+
+function easeOutCubic(value: number): number {
+  return 1 - Math.pow(1 - clamp01(value), 3);
+}
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
 }

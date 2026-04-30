@@ -3,6 +3,7 @@ import { AssetIds } from '../src/assets/AssetIds';
 import type { Board } from '../src/board/Board';
 import type { BoardAnimationSnapshot, BoardAnimationTrace } from '../src/board/BoardAnimationTrace';
 import { getBoardAnimationTraceDurationMs } from '../src/board/BoardAnimationTiming';
+import { findStandardMatchHints } from '../src/board/BoardHints';
 import { findValidMoves, validateSwap } from '../src/board/BoardRules';
 import {
   GAME_OVER_TRY_AGAIN_BUTTON_RECT,
@@ -12,7 +13,13 @@ import {
 } from '../src/core/Layout';
 import { MagusMatchGameApp } from '../src/core/GameApp';
 import type { GameEvent } from '../src/core/GameEvents';
-import { CAMERA_SHAKE_MAX, CAMERA_SHAKE_MIN } from '../src/data/tuning';
+import {
+  CAMERA_SHAKE_MAX,
+  CAMERA_SHAKE_MIN,
+  MATCH_HINT_ACTIVE_SEC,
+  MATCH_HINT_IDLE_DELAY_SEC,
+  MATCH_HINT_PAUSE_SEC,
+} from '../src/data/tuning';
 import type { TrialRuntimeState } from '../src/generator/TrialRules';
 import { LEVEL_TRANSITION_HOLD_SEC } from '../src/run/RunProgression';
 import { BoardAnimationPresenter } from '../src/render-2d/BoardAnimationPresenter';
@@ -84,6 +91,52 @@ describe('MagusMatchGameApp', () => {
     expect(app.getRunStateForDebug().score).toBeGreaterThan(0);
     expect(app.getHeroWorldState().levelType).toBe('TRIAL');
     expect(app.getHeroWorldState().activeProjectiles.length).toBeGreaterThan(0);
+  });
+
+  it('shows a standard match hint after the idle delay', () => {
+    const app = new MagusMatchGameApp(4088670725, { debugLevelType: 'TRIAL', debugStartLevel: 4 });
+    tap(app, TITLE_PLAY_BUTTON_RECT);
+
+    expect(app.getBoardRenderState().matchHint).toBeNull();
+
+    app.update(MATCH_HINT_IDLE_DELAY_SEC - 0.01, []);
+    expect(app.getBoardRenderState().matchHint).toBeNull();
+
+    app.update(0.01, []);
+    const expectedHint = findStandardMatchHints(app.getBoardForDebug())[0];
+    expect(app.getBoardRenderState().matchHint).toMatchObject({
+      flashCells: expectedHint.flashCells,
+      movingCell: expectedHint.movingCell,
+      direction: expectedHint.direction,
+      progress: 0,
+    });
+  });
+
+  it('pauses and cycles match hints after each active hint window', () => {
+    const app = new MagusMatchGameApp(4088670725, { debugLevelType: 'TRIAL', debugStartLevel: 4 });
+    tap(app, TITLE_PLAY_BUTTON_RECT);
+    const hints = findStandardMatchHints(app.getBoardForDebug());
+
+    app.update(MATCH_HINT_IDLE_DELAY_SEC + 0.2, []);
+    expect(app.getBoardRenderState().matchHint?.movingCell).toEqual(hints[0].movingCell);
+
+    app.update(MATCH_HINT_ACTIVE_SEC, []);
+    expect(app.getBoardRenderState().matchHint).toBeNull();
+
+    app.update(MATCH_HINT_PAUSE_SEC, []);
+    expect(app.getBoardRenderState().matchHint?.movingCell).toEqual(hints[1 % hints.length].movingCell);
+  });
+
+  it('resets match hints after player board actions', () => {
+    const app = new MagusMatchGameApp(4088670725, { debugLevelType: 'TRIAL', debugStartLevel: 4 });
+    tap(app, TITLE_PLAY_BUTTON_RECT);
+    app.update(MATCH_HINT_IDLE_DELAY_SEC, []);
+    expect(app.getBoardRenderState().matchHint).not.toBeNull();
+
+    const hint = findStandardMatchHints(app.getBoardForDebug())[0];
+    app.update(0, [{ type: 'swap', from: hint.from, to: hint.to }]);
+
+    expect(app.getBoardRenderState().matchHint).toBeNull();
   });
 
   it('continues Trial projectile visual timers during win transitions', () => {

@@ -2,6 +2,7 @@ import type { Board } from '../board/Board';
 import {
   buildBoardAnimationCascadeStep,
   createBoardAnimationTrace,
+  createInvalidSwapAnimationTrace,
   type BoardAnimationTrace,
   type BoardAnimationTraceOptions,
 } from '../board/BoardAnimationTrace';
@@ -187,6 +188,10 @@ export function processTrialSwap(
 
   const validation = validateSwap(board, from, to);
   if (!validation.valid) {
+    if (validation.reason === 'noMatch') {
+      return invalidTrialSwap(board, runtime, createInvalidSwapAnimationTrace(board, from, to, 0));
+    }
+
     return invalidTrialSwap(board, runtime);
   }
 
@@ -802,7 +807,11 @@ function zForMonsterKind(kind: TrialMonsterKind): number {
   }
 }
 
-function invalidTrialSwap(board: Board, runtime: TrialRuntimeState): TrialSwapResult {
+function invalidTrialSwap(
+  board: Board,
+  runtime: TrialRuntimeState,
+  animationTrace?: BoardAnimationTrace,
+): TrialSwapResult {
   return {
     valid: false,
     board,
@@ -810,6 +819,6 @@ function invalidTrialSwap(board: Board, runtime: TrialRuntimeState): TrialSwapRe
     scoreDelta: 0,
     damageEvents: [],
     scoringStats: EMPTY_SWAP_SCORING_STATS,
-    animationTrace: undefined,
+    animationTrace,
   };
 }

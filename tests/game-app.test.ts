@@ -3,8 +3,13 @@ import { AssetIds } from '../src/assets/AssetIds';
 import type { Board } from '../src/board/Board';
 import type { BoardAnimationSnapshot, BoardAnimationTrace } from '../src/board/BoardAnimationTrace';
 import { getBoardAnimationTraceDurationMs } from '../src/board/BoardAnimationTiming';
-import { findValidMoves } from '../src/board/BoardRules';
-import { GAME_OVER_TRY_AGAIN_BUTTON_RECT, HUD_MUTE_TOGGLE_RECT, TITLE_PLAY_BUTTON_RECT } from '../src/core/Layout';
+import { findValidMoves, validateSwap } from '../src/board/BoardRules';
+import {
+  GAME_OVER_TRY_AGAIN_BUTTON_RECT,
+  HUD_MUTE_TOGGLE_RECT,
+  TITLE_PLAY_BUTTON_RECT,
+  type CellCoord,
+} from '../src/core/Layout';
 import { MagusMatchGameApp } from '../src/core/GameApp';
 import type { GameEvent } from '../src/core/GameEvents';
 import { CAMERA_SHAKE_MAX, CAMERA_SHAKE_MIN } from '../src/data/tuning';
@@ -247,6 +252,61 @@ describe('MagusMatchGameApp', () => {
     expect(app.getBoardRenderState().animationTrace?.revisionId).toBeGreaterThan(firstTrace?.revisionId ?? 0);
   });
 
+  it('animates no-match Trial swaps without changing gameplay state', () => {
+    const app = new MagusMatchGameApp(4088670725, { debugLevelType: 'TRIAL', debugStartLevel: 4 });
+
+    tap(app, TITLE_PLAY_BUTTON_RECT);
+    app.drainEvents();
+    const noMatch = findNoMatchSwap(app.getBoardForDebug());
+    const initialScore = app.getRunStateForDebug().score;
+    const initialStats = app.getLevelStatsForDebug();
+    const initialBoardSignature = boardTileSignature(app.getBoardForDebug());
+
+    app.update(0, [{ type: 'swap', from: noMatch.from, to: noMatch.to }]);
+
+    expect(app.getBoardRenderState().animationTrace?.kind).toBe('invalidSwap');
+    expect(boardTileSignature(app.getBoardForDebug())).toBe(initialBoardSignature);
+    expect(app.getRunStateForDebug().score).toBe(initialScore);
+    expect(app.getLevelStatsForDebug()).toEqual(initialStats);
+    expect(app.getHeroWorldState().activeProjectiles).toHaveLength(0);
+    expect(app.drainEvents().filter((event) => event.type === 'scoreChanged')).toHaveLength(0);
+  });
+
+  it('animates the exact level 4 top-row invalid swap regression without gameplay changes', () => {
+    const app = new MagusMatchGameApp(4088670725, { debugLevelType: 'TRIAL', debugStartLevel: 4 });
+
+    tap(app, TITLE_PLAY_BUTTON_RECT);
+    app.drainEvents();
+    const initialScore = app.getRunStateForDebug().score;
+    const initialStats = app.getLevelStatsForDebug();
+    const initialBoardSignature = boardTileSignature(app.getBoardForDebug());
+
+    app.update(0, [{ type: 'swap', from: { col: 0, row: 0 }, to: { col: 1, row: 0 } }]);
+
+    expect(app.getBoardRenderState().animationTrace?.kind).toBe('invalidSwap');
+    expect(boardTileSignature(app.getBoardForDebug())).toBe(initialBoardSignature);
+    expect(app.getRunStateForDebug().score).toBe(initialScore);
+    expect(app.getLevelStatsForDebug()).toEqual(initialStats);
+    expect(app.getHeroWorldState().activeProjectiles).toHaveLength(0);
+  });
+
+  it('accepts a valid Trial swap during an active invalid-swap bounce-back', () => {
+    const app = new MagusMatchGameApp(4088670725, { debugLevelType: 'TRIAL', debugStartLevel: 4 });
+
+    tap(app, TITLE_PLAY_BUTTON_RECT);
+    app.drainEvents();
+    const noMatch = findNoMatchSwap(app.getBoardForDebug());
+    app.update(0, [{ type: 'swap', from: noMatch.from, to: noMatch.to }]);
+    const invalidRevision = app.getBoardRenderState().animationTrace?.revisionId ?? 0;
+
+    const validMove = findValidMoves(app.getBoardForDebug())[0];
+    app.update(0.01, [{ type: 'swap', from: validMove.from, to: validMove.to }]);
+
+    expect(app.getRunStateForDebug().score).toBeGreaterThan(0);
+    expect(app.getBoardRenderState().animationTrace?.kind).toBe('resolution');
+    expect(app.getBoardRenderState().animationTrace?.revisionId).toBeGreaterThan(invalidRevision);
+  });
+
   it('keeps Trial tile IDs unique across the reported two-swap cascade regression', () => {
     const app = new MagusMatchGameApp(1643426079, { debugLevelType: 'TRIAL' });
     tap(app, TITLE_PLAY_BUTTON_RECT);
@@ -401,6 +461,42 @@ function beginLevelResultForDebug(app: MagusMatchGameApp, result: 'win' | 'loss'
 
 function setTrialRuntimeForDebug(app: MagusMatchGameApp, runtime: TrialRuntimeState): void {
   (app as unknown as { trialRuntime: TrialRuntimeState }).trialRuntime = runtime;
+}
+
+function findNoMatchSwap(board: Board): { from: CellCoord; to: CellCoord } {
+  for (let row = 0; row < board.length; row += 1) {
+    for (let col = 0; col < board[row].length; col += 1) {
+      const from = { col, row };
+      const candidates = [
+        { col: col + 1, row },
+        { col, row: row + 1 },
+      ];
+      for (const to of candidates) {
+        if (to.row >= board.length || to.col >= board[to.row].length) {
+          continue;
+        }
+        if (validateSwap(board, from, to).reason === 'noMatch') {
+          return { from, to };
+        }
+      }
+    }
+  }
+  throw new Error('Expected at least one adjacent no-match swap.');
+}
+
+function boardTileSignature(board: Board): string {
+  return board
+    .map((row) =>
+      row
+        .map((cell) => {
+          if (cell.isVoid) {
+            return 'void';
+          }
+          return cell.tile == null ? 'empty' : `${cell.tile.id}:${cell.tile.type}`;
+        })
+        .join(','),
+    )
+    .join('|');
 }
 
 function expectBoardTileIdsUnique(board: Board): void {

@@ -1,7 +1,7 @@
 import type { CellCoord } from '../core/Layout';
 import { BOARD_SIZE } from '../core/Layout';
 import type { Board } from './Board';
-import { coordKey, getAllPlayableCoords, uniqueCoords } from './Board';
+import { cloneBoard, coordKey, getAllPlayableCoords, swapTilesInPlace, uniqueCoords } from './Board';
 import type { TileType } from './TileTypes';
 
 export interface BoardAnimationSnapshotCell {
@@ -48,7 +48,7 @@ export interface BoardAnimationCascadeStep {
   refillTiles: readonly BoardAnimationRefill[];
 }
 
-export type BoardAnimationTraceKind = 'resolution' | 'levelIntro';
+export type BoardAnimationTraceKind = 'resolution' | 'levelIntro' | 'invalidSwap';
 
 export interface BoardAnimationTrace {
   kind: BoardAnimationTraceKind;
@@ -139,6 +139,27 @@ export function createLevelIntroBoardAnimationTrace(board: Board, revisionId: nu
       },
     ],
     finalSnapshot,
+  };
+}
+
+export function createInvalidSwapAnimationTrace(
+  board: Board,
+  from: CellCoord,
+  to: CellCoord,
+  revisionId: number,
+): BoardAnimationTrace {
+  const swappedBoard = cloneBoard(board);
+  swapTilesInPlace(swappedBoard, from, to);
+  const originalSnapshot = snapshotBoard(board);
+
+  return {
+    kind: 'invalidSwap',
+    revisionId,
+    swappedCells: { from, to },
+    preSwapSnapshot: originalSnapshot,
+    postSwapSnapshot: snapshotBoard(swappedBoard),
+    cascadeSteps: [],
+    finalSnapshot: originalSnapshot,
   };
 }
 

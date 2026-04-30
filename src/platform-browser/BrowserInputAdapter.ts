@@ -1,6 +1,7 @@
 import type { CellCoord, LogicalPoint } from '../core/Layout';
 import {
   BOARD_RECT,
+  BOARD_SIZE,
   LOGICAL_HEIGHT,
   LOGICAL_WIDTH,
   logicalPointToBoardCell,
@@ -19,6 +20,8 @@ export interface ClientPoint {
   clientX: number;
   clientY: number;
 }
+
+export const SWAP_DRAG_THRESHOLD_PX = BOARD_RECT.cellSize * 0.35;
 
 export function clientToLogicalPoint(
   point: ClientPoint,
@@ -78,10 +81,14 @@ export class BrowserInputAdapter {
   private commands: GameInputCommand[] = [];
   private dragStartCell: CellCoord | null = null;
   private dragStartPoint: LogicalPoint | null = null;
+  private activePointerId: number | null = null;
+  private dragConsumed = false;
 
   constructor(private readonly stageElement: HTMLElement) {
     this.stageElement.addEventListener('pointerdown', this.onPointerDown);
+    this.stageElement.addEventListener('pointermove', this.onPointerMove);
     this.stageElement.addEventListener('pointerup', this.onPointerUp);
+    this.stageElement.addEventListener('pointercancel', this.onPointerCancel);
   }
 
   drainCommands(): GameInputCommand[] {
@@ -92,7 +99,9 @@ export class BrowserInputAdapter {
 
   dispose(): void {
     this.stageElement.removeEventListener('pointerdown', this.onPointerDown);
+    this.stageElement.removeEventListener('pointermove', this.onPointerMove);
     this.stageElement.removeEventListener('pointerup', this.onPointerUp);
+    this.stageElement.removeEventListener('pointercancel', this.onPointerCancel);
   }
 
   private readonly onPointerDown = (event: PointerEvent): void => {
@@ -100,18 +109,49 @@ export class BrowserInputAdapter {
     this.commands.push({ type: 'dragStart', x: logicalPoint.x, y: logicalPoint.y });
     this.dragStartPoint = logicalPoint;
     this.dragStartCell = logicalPointToBoardCell(logicalPoint);
+    this.activePointerId = event.pointerId;
+    this.dragConsumed = false;
+    this.stageElement.setPointerCapture?.(event.pointerId);
+  };
+
+  private readonly onPointerMove = (event: PointerEvent): void => {
+    if (this.activePointerId !== event.pointerId || this.dragConsumed) {
+      return;
+    }
+
+    const swap = this.getThresholdSwap(this.eventToLogicalPoint(event));
+    if (swap == null) {
+      return;
+    }
+
+    event.preventDefault();
+    this.commands.push({ type: 'swap', from: swap.from, to: swap.to });
+    this.dragConsumed = true;
   };
 
   private readonly onPointerUp = (event: PointerEvent): void => {
+    if (this.activePointerId !== event.pointerId) {
+      return;
+    }
+
     const logicalPoint = this.eventToLogicalPoint(event);
     this.commands.push({ type: 'dragEnd', x: logicalPoint.x, y: logicalPoint.y });
     const isTap = isTapGesture(this.dragStartPoint, logicalPoint);
-    if (isTap) {
+
+    const endCell = logicalPointToBoardCell(logicalPoint);
+    if (!this.dragConsumed) {
+      const thresholdSwap = this.getThresholdSwap(logicalPoint);
+      if (thresholdSwap != null) {
+        this.commands.push({ type: 'swap', from: thresholdSwap.from, to: thresholdSwap.to });
+        this.dragConsumed = true;
+      }
+    }
+
+    if (isTap && !this.dragConsumed) {
       this.commands.push({ type: 'tap', x: logicalPoint.x, y: logicalPoint.y });
     }
 
-    const endCell = logicalPointToBoardCell(logicalPoint);
-    if (this.dragStartCell != null && endCell != null && !isTap) {
+    if (this.dragStartCell != null && endCell != null && !isTap && !this.dragConsumed) {
       const dCol = endCell.col - this.dragStartCell.col;
       const dRow = endCell.row - this.dragStartCell.row;
       if (Math.abs(dCol) + Math.abs(dRow) === 1) {
@@ -119,12 +159,49 @@ export class BrowserInputAdapter {
       }
     }
 
-    this.dragStartCell = null;
-    this.dragStartPoint = null;
+    this.finishPointer(event.pointerId);
+  };
+
+  private readonly onPointerCancel = (event: PointerEvent): void => {
+    if (this.activePointerId === event.pointerId) {
+      this.finishPointer(event.pointerId);
+    }
   };
 
   private eventToLogicalPoint(event: PointerEvent): LogicalPoint {
     return clientToLogicalPoint(event, this.stageElement.getBoundingClientRect());
+  }
+
+  private getThresholdSwap(currentPoint: LogicalPoint): { from: CellCoord; to: CellCoord } | null {
+    if (this.dragStartCell == null || this.dragStartPoint == null) {
+      return null;
+    }
+
+    const deltaX = currentPoint.x - this.dragStartPoint.x;
+    const deltaY = currentPoint.y - this.dragStartPoint.y;
+    const absX = Math.abs(deltaX);
+    const absY = Math.abs(deltaY);
+    if (Math.max(absX, absY) < SWAP_DRAG_THRESHOLD_PX) {
+      return null;
+    }
+
+    const to =
+      absX >= absY
+        ? { col: this.dragStartCell.col + Math.sign(deltaX), row: this.dragStartCell.row }
+        : { col: this.dragStartCell.col, row: this.dragStartCell.row + Math.sign(deltaY) };
+    if (!isBoardCoord(to)) {
+      return null;
+    }
+
+    return { from: this.dragStartCell, to };
+  }
+
+  private finishPointer(pointerId: number): void {
+    this.stageElement.releasePointerCapture?.(pointerId);
+    this.dragStartCell = null;
+    this.dragStartPoint = null;
+    this.activePointerId = null;
+    this.dragConsumed = false;
   }
 }
 
@@ -136,4 +213,8 @@ function isTapGesture(start: LogicalPoint | null, end: LogicalPoint): boolean {
   }
 
   return Math.hypot(end.x - start.x, end.y - start.y) < 16;
+}
+
+function isBoardCoord(coord: CellCoord): boolean {
+  return coord.col >= 0 && coord.row >= 0 && coord.col < BOARD_SIZE && coord.row < BOARD_SIZE;
 }

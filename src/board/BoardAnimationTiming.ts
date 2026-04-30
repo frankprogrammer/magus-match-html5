@@ -6,6 +6,9 @@ import type {
 } from './BoardAnimationTrace';
 import {
   CASCADE_ROW_STAGGER_MS,
+  INVALID_SWAP_FORWARD_MS,
+  INVALID_SWAP_HOLD_MS,
+  INVALID_SWAP_RETURN_MS,
   TILE_FALL_DURATION_PER_ROW_MS,
   TILE_FALL_MAX_MS,
   TILE_FALL_MIN_MS,
@@ -23,6 +26,10 @@ export interface BoardAnimationStepTiming {
 }
 
 export function getBoardAnimationTraceDurationMs(trace: BoardAnimationTrace): number {
+  if (trace.kind === 'invalidSwap') {
+    return INVALID_SWAP_FORWARD_MS + INVALID_SWAP_HOLD_MS + INVALID_SWAP_RETURN_MS;
+  }
+
   const stepTimings = getBoardAnimationStepTimings(trace);
   return stepTimings.length === 0 ? TILE_SWAP_RETARGET_MS : stepTimings[stepTimings.length - 1].endMs;
 }

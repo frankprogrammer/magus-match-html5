@@ -6,6 +6,7 @@ import {
 } from '../src/board/BoardAnimationTrace';
 import { getBoardAnimationTraceDurationMs } from '../src/board/BoardAnimationTiming';
 import { createBoardFromTileTypes } from '../src/board/Board';
+import { AssetIds } from '../src/assets/AssetIds';
 import { BOARD_RECT } from '../src/core/Layout';
 import { BoardAnimationPresenter } from '../src/render-2d/BoardAnimationPresenter';
 import type { BoardCellVisualState, BoardRenderState } from '../src/render-2d/BoardRenderState';
@@ -137,7 +138,7 @@ describe('BoardAnimationPresenter', () => {
     expect(afterParticleWindow.burstRings ?? []).toHaveLength(0);
   });
 
-  it('emits delayed TNT cloud puffs and eight deterministic debris trails', () => {
+  it('emits delayed TNT sprite frames from the explosion spritesheet', () => {
     const presenter = new BoardAnimationPresenter();
     const trace = delayedTntTrace();
     const state = boardState(trace);
@@ -149,18 +150,61 @@ describe('BoardAnimationPresenter', () => {
     const laterTnt = presenter.present(state, 0.34);
     const afterTnt = presenter.present(state, 0.7);
 
-    expect(beforeTnt.tntCloudPuffs ?? []).toHaveLength(0);
-    expect(beforeTnt.tntDebrisTrails ?? []).toHaveLength(0);
-    expect(duringTnt.tntCloudPuffs).toHaveLength(18);
-    expect(duringTnt.tntDebrisTrails).toHaveLength(8);
-    expect(duringTnt.tntCloudPuffs).toEqual(repeated.tntCloudPuffs);
-    expect(duringTnt.tntDebrisTrails).toEqual(repeated.tntDebrisTrails);
-    expect(laterTnt.tntCloudPuffs?.[0]?.radiusX).toBeGreaterThan(duringTnt.tntCloudPuffs?.[0]?.radiusX ?? 0);
-    expect(laterTnt.tntCloudPuffs?.[0]?.alpha).toBeLessThan(duringTnt.tntCloudPuffs?.[0]?.alpha ?? 1);
-    expect(laterTnt.tntDebrisTrails?.[0]?.length).toBeGreaterThan(duringTnt.tntDebrisTrails?.[0]?.length ?? 0);
-    expect(laterTnt.tntDebrisTrails?.[0]?.alpha).toBeLessThan(duringTnt.tntDebrisTrails?.[0]?.alpha ?? 1);
-    expect(afterTnt.tntCloudPuffs ?? []).toHaveLength(0);
-    expect(afterTnt.tntDebrisTrails ?? []).toHaveLength(0);
+    expect(beforeTnt.tntExplosionSprites ?? []).toHaveLength(0);
+    expect(duringTnt.tntExplosionSprites).toHaveLength(1);
+    expect(duringTnt.tntExplosionSprites).toEqual(repeated.tntExplosionSprites);
+    expect(duringTnt.tntExplosionSprites?.[0]).toMatchObject({
+      assetId: AssetIds.spritesheets.tntExplosion,
+      frameIndex: 0,
+      sourceX: 0,
+      sourceY: 0,
+      sourceWidth: 128,
+      sourceHeight: 128,
+      width: 270,
+      height: 270,
+    });
+    expect(laterTnt.tntExplosionSprites?.[0]).toMatchObject({
+      frameIndex: 3,
+      sourceX: 384,
+      sourceY: 0,
+    });
+    expect(afterTnt.tntExplosionSprites ?? []).toHaveLength(0);
+  });
+
+  it('emits horizontal rocket wave visuals along the row in delayed sweep timing', () => {
+    const presenter = new BoardAnimationPresenter();
+    const trace = orderedClearTrace();
+    const state = boardState(trace);
+
+    presenter.present(state, 0);
+    const originWave = presenter.present(state, 0.14);
+    const delayedWave = presenter.present(state, 0.23);
+    const repeated = presenter.present(state, 0.23);
+    const afterWave = presenter.present(state, 0.62);
+
+    expect(originWave.rocketWavePuffs?.length).toBeGreaterThan(0);
+    expect(originWave.rocketWaveTrails?.length).toBeGreaterThan(0);
+    expect(originWave.rocketWavePuffs?.every((puff) => puff.y > BOARD_RECT.y && puff.y < BOARD_RECT.y + BOARD_RECT.cellSize)).toBe(true);
+    expect(originWave.rocketWavePuffs?.some((puff) => puff.x > BOARD_RECT.x + BOARD_RECT.cellSize)).toBe(false);
+    expect(delayedWave.rocketWavePuffs?.some((puff) => puff.x > BOARD_RECT.x + BOARD_RECT.cellSize)).toBe(true);
+    expect(delayedWave.rocketWaveTrails?.every((trail) => Math.abs(trail.angleDeg) < 13 || Math.abs(Math.abs(trail.angleDeg) - 180) < 13)).toBe(true);
+    expect(delayedWave.rocketWavePuffs).toEqual(repeated.rocketWavePuffs);
+    expect(delayedWave.rocketWaveTrails).toEqual(repeated.rocketWaveTrails);
+    expect(afterWave.rocketWavePuffs ?? []).toHaveLength(0);
+    expect(afterWave.rocketWaveTrails ?? []).toHaveLength(0);
+  });
+
+  it('emits vertical rocket wave visuals along the column', () => {
+    const presenter = new BoardAnimationPresenter();
+    const trace = verticalRocketClearTrace();
+    const state = boardState(trace);
+
+    presenter.present(state, 0);
+    const wave = presenter.present(state, 0.23);
+
+    expect(wave.rocketWavePuffs?.some((puff) => puff.y > BOARD_RECT.y + BOARD_RECT.cellSize)).toBe(true);
+    expect(wave.rocketWavePuffs?.every((puff) => puff.x > BOARD_RECT.x && puff.x < BOARD_RECT.x + BOARD_RECT.cellSize)).toBe(true);
+    expect(wave.rocketWaveTrails?.every((trail) => Math.abs(Math.abs(trail.angleDeg) - 90) < 13)).toBe(true);
   });
 
   it('does not emit particles for level intro or nonstandard tile clears', () => {
@@ -172,8 +216,9 @@ describe('BoardAnimationPresenter', () => {
     presenter.present(boardState(introTrace), 0);
     expect(presenter.present(boardState(introTrace), 0.1).particles ?? []).toHaveLength(0);
     expect(presenter.present(boardState(introTrace), 0.1).burstRings ?? []).toHaveLength(0);
-    expect(presenter.present(boardState(introTrace), 0.1).tntCloudPuffs ?? []).toHaveLength(0);
-    expect(presenter.present(boardState(introTrace), 0.1).tntDebrisTrails ?? []).toHaveLength(0);
+    expect(presenter.present(boardState(introTrace), 0.1).tntExplosionSprites ?? []).toHaveLength(0);
+    expect(presenter.present(boardState(introTrace), 0.1).rocketWavePuffs ?? []).toHaveLength(0);
+    expect(presenter.present(boardState(introTrace), 0.1).rocketWaveTrails ?? []).toHaveLength(0);
 
     const secondPresenter = new BoardAnimationPresenter();
     secondPresenter.present(boardState(nonstandardTrace), 0);
@@ -550,6 +595,46 @@ function orderedClearTrace(): BoardAnimationTrace {
         clearedTiles: [
           snapshotCell('origin', 'ROCKET_H', 0, 0),
           { ...snapshotCell('delayed', 'FIRE', 1, 0), clearDelayMs: 90 },
+        ],
+        fallingTiles: [],
+        refillTiles: [],
+      },
+    ],
+    finalSnapshot: {
+      cells: [],
+    },
+  };
+}
+
+function verticalRocketClearTrace(): BoardAnimationTrace {
+  return {
+    kind: 'resolution',
+    revisionId: 41,
+    swappedCells: null,
+    preSwapSnapshot: {
+      cells: [snapshotCell('origin', 'ROCKET_V', 0, 0), snapshotCell('delayed', 'ICE', 0, 1)],
+    },
+    postSwapSnapshot: {
+      cells: [snapshotCell('origin', 'ROCKET_V', 0, 0), snapshotCell('delayed', 'ICE', 0, 1)],
+    },
+    cascadeSteps: [
+      {
+        stepIndex: 0,
+        beforeClearSnapshot: {
+          cells: [snapshotCell('origin', 'ROCKET_V', 0, 0), snapshotCell('delayed', 'ICE', 0, 1)],
+        },
+        beforeGravitySnapshot: {
+          cells: [],
+        },
+        afterGravitySnapshot: {
+          cells: [],
+        },
+        finalSnapshot: {
+          cells: [],
+        },
+        clearedTiles: [
+          snapshotCell('origin', 'ROCKET_V', 0, 0),
+          { ...snapshotCell('delayed', 'ICE', 0, 1), clearDelayMs: 90 },
         ],
         fallingTiles: [],
         refillTiles: [],

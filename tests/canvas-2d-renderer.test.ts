@@ -41,6 +41,26 @@ describe('Canvas2DRenderer', () => {
     expect(ctx.strokeCount).toBe(1);
   });
 
+  it('draws image frames with a source rectangle', () => {
+    const ctx = new FakeCanvasContext();
+    const image = {} as HTMLImageElement;
+    const renderer = new Canvas2DRenderer(ctx.asCanvasContext(), { 'sprite.tnt': image }, 1080, 1920);
+
+    renderer.drawImageFrame({ id: 'sprite.tnt' }, 128, 0, 128, 128, 10, 20, 270, 270);
+
+    expect(ctx.drawImageCalls[0]).toMatchObject({
+      image,
+      sx: 128,
+      sy: 0,
+      sWidth: 128,
+      sHeight: 128,
+      x: 10,
+      y: 20,
+      width: 270,
+      height: 270,
+    });
+  });
+
   it('draws image alpha mask fills through an offscreen canvas', () => {
     const ctx = new FakeCanvasContext();
     const maskCtx = new FakeCanvasContext();

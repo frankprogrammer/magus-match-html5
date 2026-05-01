@@ -366,32 +366,24 @@ describe('buildBoardCellVisuals', () => {
     expect(frameIndex).toBeGreaterThan(clippedLayerPopIndex);
   });
 
-  it('draws TNT cloud and debris inside the clipped board layer before match particles', () => {
-    const renderer = new FakeRenderer(new Set());
+  it('draws TNT explosion sprites inside the clipped board layer before match particles', () => {
+    const renderer = new FakeRenderer(new Set([AssetIds.spritesheets.tntExplosion]));
     const state = oneTileState('tile.fire');
-    state.tntCloudPuffs = [
+    state.tntExplosionSprites = [
       {
-        puffId: 'puff-0',
-        x: BOARD_RECT.x + 40,
-        y: BOARD_RECT.y + 40,
-        radiusX: 80,
-        radiusY: 56,
-        color: '#9b958d',
-        alpha: 0.8,
+        spriteId: 'tnt-sprite-0',
+        assetId: AssetIds.spritesheets.tntExplosion,
+        sourceX: 128,
+        sourceY: 0,
+        sourceWidth: 128,
+        sourceHeight: 128,
+        x: BOARD_RECT.x + 10,
+        y: BOARD_RECT.y + 10,
+        width: 270,
+        height: 270,
+        frameIndex: 1,
+        alpha: 1,
         zIndex: 24,
-      },
-    ];
-    state.tntDebrisTrails = [
-      {
-        trailId: 'trail-0',
-        x: BOARD_RECT.x + 40,
-        y: BOARD_RECT.y + 40,
-        angleDeg: 45,
-        length: 120,
-        width: 12,
-        color: '#f2994a',
-        alpha: 0.9,
-        zIndex: 28,
       },
     ];
     state.particles = [
@@ -412,19 +404,101 @@ describe('buildBoardCellVisuals', () => {
       `clip:${BOARD_RECT.x},${BOARD_RECT.y},${BOARD_RECT.width},${BOARD_RECT.height}`,
     );
     const tileIndex = renderer.calls.indexOf('rect:#eb5757');
-    const cloudIndex = renderer.calls.indexOf('ellipse:#9b958d');
-    const debrisIndex = renderer.calls.indexOf('rect:#f2994a');
+    const spriteIndex = renderer.calls.indexOf(
+      `imageFrame:${AssetIds.spritesheets.tntExplosion}:128,0,128,128:${BOARD_RECT.x + 10},${BOARD_RECT.y + 10},270,270`,
+    );
     const particleIndex = renderer.calls.indexOf('ellipse:#eb5757');
     const clippedLayerPopIndex = renderer.calls.indexOf('pop', particleIndex);
     const frameIndex = renderer.calls.indexOf(
       `rect:#c8a24b:${BOARD_RECT.x - 8},${BOARD_RECT.y - 8},${BOARD_RECT.width + 16},8`,
     );
 
-    expect(cloudIndex).toBeGreaterThan(tileIndex);
-    expect(debrisIndex).toBeGreaterThan(cloudIndex);
-    expect(particleIndex).toBeGreaterThan(debrisIndex);
-    expect(cloudIndex).toBeGreaterThan(clipIndex);
+    expect(spriteIndex).toBeGreaterThan(tileIndex);
+    expect(particleIndex).toBeGreaterThan(spriteIndex);
+    expect(spriteIndex).toBeGreaterThan(clipIndex);
     expect(clippedLayerPopIndex).toBeGreaterThan(particleIndex);
+    expect(frameIndex).toBeGreaterThan(clippedLayerPopIndex);
+  });
+
+  it('draws rocket wave puffs and trails inside the clipped board layer after TNT effects', () => {
+    const renderer = new FakeRenderer(new Set([AssetIds.spritesheets.tntExplosion]));
+    const state = oneTileState('tile.fire');
+    state.tntExplosionSprites = [
+      {
+        spriteId: 'tnt-sprite-0',
+        assetId: AssetIds.spritesheets.tntExplosion,
+        sourceX: 0,
+        sourceY: 0,
+        sourceWidth: 128,
+        sourceHeight: 128,
+        x: BOARD_RECT.x + 10,
+        y: BOARD_RECT.y + 10,
+        width: 270,
+        height: 270,
+        frameIndex: 0,
+        alpha: 1,
+        zIndex: 24,
+      },
+    ];
+    state.rocketWavePuffs = [
+      {
+        puffId: 'rocket-puff-0',
+        x: BOARD_RECT.x + 50,
+        y: BOARD_RECT.y + 50,
+        radiusX: 90,
+        radiusY: 48,
+        color: '#f8c95d',
+        alpha: 0.8,
+        zIndex: 26,
+      },
+    ];
+    state.rocketWaveTrails = [
+      {
+        trailId: 'rocket-trail-0',
+        x: BOARD_RECT.x + 50,
+        y: BOARD_RECT.y + 50,
+        angleDeg: 0,
+        length: 140,
+        width: 16,
+        color: '#ffd36a',
+        alpha: 0.9,
+        zIndex: 29,
+      },
+    ];
+    state.particles = [
+      {
+        particleId: 'particle-0',
+        x: BOARD_RECT.x + 40,
+        y: BOARD_RECT.y + 40,
+        radius: 8,
+        color: '#eb5757',
+        alpha: 0.75,
+        zIndex: 20,
+      },
+    ];
+
+    renderFrame(renderer, state, hudState(), 0);
+
+    const clipIndex = renderer.calls.indexOf(
+      `clip:${BOARD_RECT.x},${BOARD_RECT.y},${BOARD_RECT.width},${BOARD_RECT.height}`,
+    );
+    const tileIndex = renderer.calls.indexOf('rect:#eb5757');
+    const tntIndex = renderer.calls.indexOf(
+      `imageFrame:${AssetIds.spritesheets.tntExplosion}:0,0,128,128:${BOARD_RECT.x + 10},${BOARD_RECT.y + 10},270,270`,
+    );
+    const rocketPuffIndex = renderer.calls.indexOf('ellipse:#f8c95d');
+    const rocketTrailIndex = renderer.calls.indexOf('rect:#ffd36a');
+    const particleIndex = renderer.calls.indexOf('ellipse:#eb5757');
+    const clippedLayerPopIndex = renderer.calls.indexOf('pop', particleIndex);
+    const frameIndex = renderer.calls.indexOf(
+      `rect:#c8a24b:${BOARD_RECT.x - 8},${BOARD_RECT.y - 8},${BOARD_RECT.width + 16},8`,
+    );
+
+    expect(rocketPuffIndex).toBeGreaterThan(tntIndex);
+    expect(rocketTrailIndex).toBeGreaterThan(rocketPuffIndex);
+    expect(particleIndex).toBeGreaterThan(rocketTrailIndex);
+    expect(rocketPuffIndex).toBeGreaterThan(tileIndex);
+    expect(rocketPuffIndex).toBeGreaterThan(clipIndex);
     expect(frameIndex).toBeGreaterThan(clippedLayerPopIndex);
   });
 
@@ -535,6 +609,21 @@ class FakeRenderer implements GameRenderer {
   drawImage(image: DrawImageRef, x: number, y: number, width: number, height: number): void {
     this.calls.push(`image:${image.id}`);
     this.calls.push(`image:${image.id}:${x},${y},${width},${height}`);
+  }
+
+  drawImageFrame(
+    image: DrawImageRef,
+    sourceX: number,
+    sourceY: number,
+    sourceWidth: number,
+    sourceHeight: number,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+  ): void {
+    this.calls.push(`imageFrame:${image.id}`);
+    this.calls.push(`imageFrame:${image.id}:${sourceX},${sourceY},${sourceWidth},${sourceHeight}:${x},${y},${width},${height}`);
   }
 
   drawImageAlphaMaskFill(

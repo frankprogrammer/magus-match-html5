@@ -196,8 +196,9 @@ function drawBoard(renderer: GameRenderer, boardState: BoardRenderState, elapsed
   for (const visual of visuals) {
     drawCell(renderer, visual);
   }
-  drawTntCloudPuffs(renderer, boardState);
-  drawTntDebrisTrails(renderer, boardState);
+  drawTntExplosionSprites(renderer, boardState);
+  drawRocketWavePuffs(renderer, boardState);
+  drawRocketWaveTrails(renderer, boardState);
   drawBurstRings(renderer, boardState);
   drawParticles(renderer, boardState);
   renderer.pop();
@@ -318,8 +319,36 @@ function drawParticles(renderer: GameRenderer, boardState: BoardRenderState): vo
   }
 }
 
-function drawTntCloudPuffs(renderer: GameRenderer, boardState: BoardRenderState): void {
-  const puffs = [...(boardState.tntCloudPuffs ?? [])].sort((first, second) => first.zIndex - second.zIndex);
+function drawTntExplosionSprites(renderer: GameRenderer, boardState: BoardRenderState): void {
+  const sprites = [...(boardState.tntExplosionSprites ?? [])].sort((first, second) => first.zIndex - second.zIndex);
+  for (const sprite of sprites) {
+    if (sprite.alpha <= 0 || sprite.width <= 0 || sprite.height <= 0) {
+      continue;
+    }
+
+    const imageRef = { id: sprite.assetId };
+    if (!renderer.hasImage(imageRef)) {
+      continue;
+    }
+
+    renderer.pushAlpha(sprite.alpha);
+    renderer.drawImageFrame(
+      imageRef,
+      sprite.sourceX,
+      sprite.sourceY,
+      sprite.sourceWidth,
+      sprite.sourceHeight,
+      sprite.x,
+      sprite.y,
+      sprite.width,
+      sprite.height,
+    );
+    renderer.pop();
+  }
+}
+
+function drawRocketWavePuffs(renderer: GameRenderer, boardState: BoardRenderState): void {
+  const puffs = [...(boardState.rocketWavePuffs ?? [])].sort((first, second) => first.zIndex - second.zIndex);
   for (const puff of puffs) {
     if (puff.alpha <= 0 || puff.radiusX <= 0 || puff.radiusY <= 0) {
       continue;
@@ -331,8 +360,8 @@ function drawTntCloudPuffs(renderer: GameRenderer, boardState: BoardRenderState)
   }
 }
 
-function drawTntDebrisTrails(renderer: GameRenderer, boardState: BoardRenderState): void {
-  const trails = [...(boardState.tntDebrisTrails ?? [])].sort((first, second) => first.zIndex - second.zIndex);
+function drawRocketWaveTrails(renderer: GameRenderer, boardState: BoardRenderState): void {
+  const trails = [...(boardState.rocketWaveTrails ?? [])].sort((first, second) => first.zIndex - second.zIndex);
   for (const trail of trails) {
     if (trail.alpha <= 0 || trail.length <= 0 || trail.width <= 0) {
       continue;

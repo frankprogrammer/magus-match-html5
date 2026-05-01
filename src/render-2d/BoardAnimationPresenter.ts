@@ -31,8 +31,9 @@ import type {
   BoardCellVisualState,
   BoardParticleVisualState,
   BoardRenderState,
-  BoardTntCloudPuffVisualState,
-  BoardTntDebrisTrailVisualState,
+  BoardRocketWavePuffVisualState,
+  BoardRocketWaveTrailVisualState,
+  BoardTntExplosionSpriteVisualState,
 } from './BoardRenderState';
 
 const MATCH_PARTICLES_PER_TILE = 12;
@@ -45,10 +46,17 @@ const MATCH_BURST_RING_DURATION_MS = 220;
 const MATCH_BURST_RING_MAX_RADIUS_PX = 86;
 const MATCH_BURST_RING_START_LINE_WIDTH_PX = 7;
 const MATCH_BURST_RING_END_LINE_WIDTH_PX = 1;
-const TNT_CLOUD_DURATION_MS = 420;
-const TNT_CLOUD_PUFF_COUNT = 18;
-const TNT_DEBRIS_DURATION_MS = 360;
-const TNT_DEBRIS_TRAIL_COUNT = 8;
+const TNT_EXPLOSION_SPRITE_FRAME_SIZE_PX = 128;
+const TNT_EXPLOSION_SPRITE_COLUMNS = 4;
+const TNT_EXPLOSION_SPRITE_FRAME_COUNT = 8;
+const TNT_EXPLOSION_SPRITE_FPS = 30;
+const TNT_EXPLOSION_SPRITE_FRAME_MS = 1000 / TNT_EXPLOSION_SPRITE_FPS;
+const TNT_EXPLOSION_SPRITE_DURATION_MS = TNT_EXPLOSION_SPRITE_FRAME_COUNT * TNT_EXPLOSION_SPRITE_FRAME_MS;
+const TNT_EXPLOSION_SPRITE_RENDER_SIZE_PX = 270;
+const ROCKET_WAVE_PUFF_DURATION_MS = 220;
+const ROCKET_WAVE_TRAIL_DURATION_MS = 180;
+const ROCKET_WAVE_PUFFS_PER_CELL = 7;
+const ROCKET_WAVE_TRAILS_PER_CELL = 3;
 
 interface VisualSample {
   renderX: number;
@@ -105,16 +113,18 @@ export class BoardAnimationPresenter {
     const boardCells = sampleTraceCells(trace, stepTimings, elapsedMs, this.activeAnimation.retargetStarts);
     const particles = sampleTraceParticles(trace, stepTimings, elapsedMs);
     const burstRings = sampleTraceBurstRings(trace, stepTimings, elapsedMs);
-    const tntCloudPuffs = sampleTraceTntCloudPuffs(trace, stepTimings, elapsedMs);
-    const tntDebrisTrails = sampleTraceTntDebrisTrails(trace, stepTimings, elapsedMs);
+    const tntExplosionSprites = sampleTraceTntExplosionSprites(trace, stepTimings, elapsedMs);
+    const rocketWavePuffs = sampleTraceRocketWavePuffs(trace, stepTimings, elapsedMs);
+    const rocketWaveTrails = sampleTraceRocketWaveTrails(trace, stepTimings, elapsedMs);
 
     return {
       ...authoritativeState,
       boardCells,
       particles,
       burstRings,
-      tntCloudPuffs,
-      tntDebrisTrails,
+      tntExplosionSprites,
+      rocketWavePuffs,
+      rocketWaveTrails,
     };
   }
 
@@ -213,11 +223,11 @@ function sampleTraceBurstRings(
     .filter((ring): ring is BoardBurstRingVisualState => ring != null);
 }
 
-function sampleTraceTntCloudPuffs(
+function sampleTraceTntExplosionSprites(
   trace: BoardAnimationTrace,
   stepTimings: readonly BoardAnimationStepTiming[],
   elapsedMs: number,
-): BoardTntCloudPuffVisualState[] {
+): BoardTntExplosionSpriteVisualState[] {
   if (trace.kind === 'levelIntro') {
     return [];
   }
@@ -232,14 +242,16 @@ function sampleTraceTntCloudPuffs(
     return [];
   }
 
-  return activeStep.step.clearedTiles.flatMap((tile) => sampleTntCloudPuffs(tile, stepElapsedMs));
+  return activeStep.step.clearedTiles
+    .map((tile) => sampleTntExplosionSprite(tile, stepElapsedMs))
+    .filter((sprite): sprite is BoardTntExplosionSpriteVisualState => sprite != null);
 }
 
-function sampleTraceTntDebrisTrails(
+function sampleTraceRocketWavePuffs(
   trace: BoardAnimationTrace,
   stepTimings: readonly BoardAnimationStepTiming[],
   elapsedMs: number,
-): BoardTntDebrisTrailVisualState[] {
+): BoardRocketWavePuffVisualState[] {
   if (trace.kind === 'levelIntro') {
     return [];
   }
@@ -254,7 +266,33 @@ function sampleTraceTntDebrisTrails(
     return [];
   }
 
-  return activeStep.step.clearedTiles.flatMap((tile) => sampleTntDebrisTrails(tile, stepElapsedMs));
+  return activeStep.step.clearedTiles.flatMap((tile) =>
+    sampleRocketWavePuffs(tile, activeStep.step.clearedTiles, stepElapsedMs),
+  );
+}
+
+function sampleTraceRocketWaveTrails(
+  trace: BoardAnimationTrace,
+  stepTimings: readonly BoardAnimationStepTiming[],
+  elapsedMs: number,
+): BoardRocketWaveTrailVisualState[] {
+  if (trace.kind === 'levelIntro') {
+    return [];
+  }
+
+  const activeStep = stepTimings.find((timing) => elapsedMs < timing.fallStartMs);
+  if (activeStep == null) {
+    return [];
+  }
+
+  const stepElapsedMs = elapsedMs - activeStep.popStartMs;
+  if (stepElapsedMs < 0) {
+    return [];
+  }
+
+  return activeStep.step.clearedTiles.flatMap((tile) =>
+    sampleRocketWaveTrails(tile, activeStep.step.clearedTiles, stepElapsedMs),
+  );
 }
 
 function sampleClearedTileParticles(
@@ -316,79 +354,161 @@ function sampleClearedTileBurstRing(
   };
 }
 
-function sampleTntCloudPuffs(
+function sampleTntExplosionSprite(
   tile: BoardAnimationCascadeStep['clearedTiles'][number],
   stepElapsedMs: number,
-): BoardTntCloudPuffVisualState[] {
+): BoardTntExplosionSpriteVisualState | null {
   if (tile.tileType !== 'TNT') {
-    return [];
+    return null;
   }
 
   const localElapsedMs = stepElapsedMs - (tile.clearDelayMs ?? 0);
-  if (localElapsedMs < 0 || localElapsedMs > TNT_CLOUD_DURATION_MS) {
+  if (localElapsedMs < 0 || localElapsedMs >= TNT_EXPLOSION_SPRITE_DURATION_MS) {
+    return null;
+  }
+
+  const frameIndex = Math.min(
+    TNT_EXPLOSION_SPRITE_FRAME_COUNT - 1,
+    Math.floor(localElapsedMs / TNT_EXPLOSION_SPRITE_FRAME_MS),
+  );
+  const sourceCol = frameIndex % TNT_EXPLOSION_SPRITE_COLUMNS;
+  const sourceRow = Math.floor(frameIndex / TNT_EXPLOSION_SPRITE_COLUMNS);
+  const center = cellCenter(tile.coord);
+
+  return {
+    spriteId: `${tile.tileId}-tnt-explosion`,
+    assetId: AssetIds.spritesheets.tntExplosion,
+    sourceX: sourceCol * TNT_EXPLOSION_SPRITE_FRAME_SIZE_PX,
+    sourceY: sourceRow * TNT_EXPLOSION_SPRITE_FRAME_SIZE_PX,
+    sourceWidth: TNT_EXPLOSION_SPRITE_FRAME_SIZE_PX,
+    sourceHeight: TNT_EXPLOSION_SPRITE_FRAME_SIZE_PX,
+    x: center.x - TNT_EXPLOSION_SPRITE_RENDER_SIZE_PX / 2,
+    y: center.y - TNT_EXPLOSION_SPRITE_RENDER_SIZE_PX / 2,
+    width: TNT_EXPLOSION_SPRITE_RENDER_SIZE_PX,
+    height: TNT_EXPLOSION_SPRITE_RENDER_SIZE_PX,
+    frameIndex,
+    alpha: 1,
+    zIndex: 28,
+  };
+}
+
+function sampleRocketWavePuffs(
+  rocket: BoardAnimationCascadeStep['clearedTiles'][number],
+  clearedTiles: readonly BoardAnimationCascadeStep['clearedTiles'][number][],
+  stepElapsedMs: number,
+): BoardRocketWavePuffVisualState[] {
+  if (rocket.tileType !== 'ROCKET_H' && rocket.tileType !== 'ROCKET_V') {
     return [];
   }
 
-  const progress = clamp01(localElapsedMs / TNT_CLOUD_DURATION_MS);
-  const eased = easeOutCubic(progress);
-  const centerX = BOARD_RECT.x + tile.coord.col * BOARD_RECT.cellSize + BOARD_RECT.cellSize / 2;
-  const centerY = BOARD_RECT.y + tile.coord.row * BOARD_RECT.cellSize + BOARD_RECT.cellSize / 2;
+  return rocketSweepTiles(rocket, clearedTiles).flatMap((tile) => {
+    const localElapsedMs = stepElapsedMs - (tile.clearDelayMs ?? 0);
+    if (localElapsedMs < 0 || localElapsedMs > ROCKET_WAVE_PUFF_DURATION_MS) {
+      return [];
+    }
 
-  return Array.from({ length: TNT_CLOUD_PUFF_COUNT }, (_, index) => {
-    const angle = deterministicUnit(`${tile.tileId}:tnt-cloud:${index}:angle`) * Math.PI * 2;
-    const distance = lerp(8, 94, deterministicUnit(`${tile.tileId}:tnt-cloud:${index}:distance`)) * eased;
-    const radius = lerp(18, 72, deterministicUnit(`${tile.tileId}:tnt-cloud:${index}:radius`)) * (0.38 + eased * 0.92);
-    const squash = lerp(0.75, 1.22, deterministicUnit(`${tile.tileId}:tnt-cloud:${index}:squash`));
-    return {
-      puffId: `${tile.tileId}-tnt-cloud-${index}`,
-      x: centerX + Math.cos(angle) * distance,
-      y: centerY + Math.sin(angle) * distance * 0.82,
-      radiusX: radius * squash,
-      radiusY: radius / squash,
-      color: tntCloudColor(index),
-      alpha: 0.72 * Math.pow(1 - progress, 1.35),
-      zIndex: 24 + index / 100,
-    };
+    const progress = clamp01(localElapsedMs / ROCKET_WAVE_PUFF_DURATION_MS);
+    const eased = easeOutCubic(progress);
+    const center = cellCenter(tile.coord);
+    const isHorizontal = rocket.tileType === 'ROCKET_H';
+    const directionSign = rocketDirectionSign(rocket, tile);
+
+    return Array.from({ length: ROCKET_WAVE_PUFFS_PER_CELL }, (_, index) => {
+      const alongJitter = lerp(-34, 34, deterministicUnit(`${rocket.tileId}:${tile.tileId}:rocket-puff:${index}:along`));
+      const crossJitter = lerp(-48, 48, deterministicUnit(`${rocket.tileId}:${tile.tileId}:rocket-puff:${index}:cross`));
+      const radius = lerp(22, 58, deterministicUnit(`${rocket.tileId}:${tile.tileId}:rocket-puff:${index}:radius`)) * (0.45 + eased * 0.7);
+      const squash = lerp(1.25, 2.1, deterministicUnit(`${rocket.tileId}:${tile.tileId}:rocket-puff:${index}:squash`));
+      return {
+        puffId: `${rocket.tileId}-${tile.tileId}-rocket-puff-${index}`,
+        x: center.x + (isHorizontal ? alongJitter + directionSign * eased * 16 : crossJitter),
+        y: center.y + (isHorizontal ? crossJitter : alongJitter + directionSign * eased * 16),
+        radiusX: isHorizontal ? radius * squash : radius * 0.82,
+        radiusY: isHorizontal ? radius * 0.82 : radius * squash,
+        color: rocketWavePuffColor(index),
+        alpha: 0.76 * Math.pow(1 - progress, 1.2),
+        zIndex: 26 + index / 100,
+      };
+    });
   });
 }
 
-function sampleTntDebrisTrails(
-  tile: BoardAnimationCascadeStep['clearedTiles'][number],
+function sampleRocketWaveTrails(
+  rocket: BoardAnimationCascadeStep['clearedTiles'][number],
+  clearedTiles: readonly BoardAnimationCascadeStep['clearedTiles'][number][],
   stepElapsedMs: number,
-): BoardTntDebrisTrailVisualState[] {
-  if (tile.tileType !== 'TNT') {
+): BoardRocketWaveTrailVisualState[] {
+  if (rocket.tileType !== 'ROCKET_H' && rocket.tileType !== 'ROCKET_V') {
     return [];
   }
 
-  const localElapsedMs = stepElapsedMs - (tile.clearDelayMs ?? 0);
-  if (localElapsedMs < 0 || localElapsedMs > TNT_DEBRIS_DURATION_MS) {
-    return [];
-  }
+  return rocketSweepTiles(rocket, clearedTiles).flatMap((tile) => {
+    const localElapsedMs = stepElapsedMs - (tile.clearDelayMs ?? 0);
+    if (localElapsedMs < 0 || localElapsedMs > ROCKET_WAVE_TRAIL_DURATION_MS) {
+      return [];
+    }
 
-  const progress = clamp01(localElapsedMs / TNT_DEBRIS_DURATION_MS);
-  const eased = easeOutCubic(progress);
-  const centerX = BOARD_RECT.x + tile.coord.col * BOARD_RECT.cellSize + BOARD_RECT.cellSize / 2;
-  const centerY = BOARD_RECT.y + tile.coord.row * BOARD_RECT.cellSize + BOARD_RECT.cellSize / 2;
+    const progress = clamp01(localElapsedMs / ROCKET_WAVE_TRAIL_DURATION_MS);
+    const eased = easeOutCubic(progress);
+    const center = cellCenter(tile.coord);
+    const isHorizontal = rocket.tileType === 'ROCKET_H';
+    const directionSign = rocketDirectionSign(rocket, tile);
+    const baseAngle = isHorizontal ? (directionSign >= 0 ? 0 : 180) : (directionSign >= 0 ? 90 : -90);
 
-  return Array.from({ length: TNT_DEBRIS_TRAIL_COUNT }, (_, index) => {
-    const jitterDeg = lerp(-10, 10, deterministicUnit(`${tile.tileId}:tnt-debris:${index}:jitter`));
-    const angleDeg = index * (360 / TNT_DEBRIS_TRAIL_COUNT) + jitterDeg;
-    const angle = (angleDeg * Math.PI) / 180;
-    const travel = lerp(90, 220, deterministicUnit(`${tile.tileId}:tnt-debris:${index}:travel`)) * eased;
-    const length = lerp(20, 64, deterministicUnit(`${tile.tileId}:tnt-debris:${index}:length`)) * (0.35 + eased * 0.65);
-    const startDistance = Math.max(0, travel - length);
-    return {
-      trailId: `${tile.tileId}-tnt-debris-${index}`,
-      x: centerX + Math.cos(angle) * startDistance,
-      y: centerY + Math.sin(angle) * startDistance,
-      angleDeg,
-      length,
-      width: lerp(18, 5, progress),
-      color: tntDebrisColor(index),
-      alpha: 0.95 * Math.pow(1 - progress, 1.15),
-      zIndex: 28 + index / 100,
-    };
+    return Array.from({ length: ROCKET_WAVE_TRAILS_PER_CELL }, (_, index) => {
+      const jitterDeg = lerp(-12, 12, deterministicUnit(`${rocket.tileId}:${tile.tileId}:rocket-trail:${index}:jitter`));
+      const crossJitter = lerp(-34, 34, deterministicUnit(`${rocket.tileId}:${tile.tileId}:rocket-trail:${index}:cross`));
+      const travel = lerp(18, 48, deterministicUnit(`${rocket.tileId}:${tile.tileId}:rocket-trail:${index}:travel`)) * eased;
+      const length = lerp(42, 108, deterministicUnit(`${rocket.tileId}:${tile.tileId}:rocket-trail:${index}:length`)) * (0.35 + eased * 0.65);
+      return {
+        trailId: `${rocket.tileId}-${tile.tileId}-rocket-trail-${index}`,
+        x: center.x + (isHorizontal ? directionSign * travel : crossJitter),
+        y: center.y + (isHorizontal ? crossJitter : directionSign * travel),
+        angleDeg: baseAngle + jitterDeg,
+        length,
+        width: lerp(22, 7, progress),
+        color: rocketWaveTrailColor(index),
+        alpha: 0.9 * Math.pow(1 - progress, 1.1),
+        zIndex: 29 + index / 100,
+      };
+    });
   });
+}
+
+function rocketSweepTiles(
+  rocket: BoardAnimationCascadeStep['clearedTiles'][number],
+  clearedTiles: readonly BoardAnimationCascadeStep['clearedTiles'][number][],
+): BoardAnimationCascadeStep['clearedTiles'][number][] {
+  const activationDelayMs = rocket.clearDelayMs ?? 0;
+  return clearedTiles.filter((tile) => {
+    if (tile.coord.col === rocket.coord.col && tile.coord.row === rocket.coord.row) {
+      return true;
+    }
+
+    if ((tile.clearDelayMs ?? 0) < activationDelayMs) {
+      return false;
+    }
+
+    return rocket.tileType === 'ROCKET_H'
+      ? tile.coord.row === rocket.coord.row
+      : tile.coord.col === rocket.coord.col;
+  });
+}
+
+function rocketDirectionSign(
+  rocket: BoardAnimationCascadeStep['clearedTiles'][number],
+  tile: BoardAnimationCascadeStep['clearedTiles'][number],
+): number {
+  const delta = rocket.tileType === 'ROCKET_H'
+    ? tile.coord.col - rocket.coord.col
+    : tile.coord.row - rocket.coord.row;
+  return delta < 0 ? -1 : 1;
+}
+
+function cellCenter(coord: CellCoord): { x: number; y: number } {
+  return {
+    x: BOARD_RECT.x + coord.col * BOARD_RECT.cellSize + BOARD_RECT.cellSize / 2,
+    y: BOARD_RECT.y + coord.row * BOARD_RECT.cellSize + BOARD_RECT.cellSize / 2,
+  };
 }
 
 function sampleSwapCells(
@@ -703,12 +823,12 @@ function particleColorForTileType(type: TileType): string | null {
   }
 }
 
-function tntCloudColor(index: number): string {
-  return ['#d6d2c8', '#9b958d', '#6f6a67', '#f0c16a', '#d67a37'][index % 5];
+function rocketWavePuffColor(index: number): string {
+  return ['#fff4d6', '#f8c95d', '#f2994a', '#8d8580', '#d6d2c8'][index % 5];
 }
 
-function tntDebrisColor(index: number): string {
-  return ['#f7efe0', '#f2994a', '#c76b32', '#5f5650'][index % 4];
+function rocketWaveTrailColor(index: number): string {
+  return ['#fff8e8', '#ffd36a', '#f2994a'][index % 3];
 }
 
 function deterministicUnit(value: string): number {

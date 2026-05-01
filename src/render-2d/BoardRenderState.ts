@@ -37,7 +37,23 @@ export interface BoardBurstRingVisualState {
   zIndex: number;
 }
 
-export interface BoardTntCloudPuffVisualState {
+export interface BoardTntExplosionSpriteVisualState {
+  spriteId: string;
+  assetId: string;
+  sourceX: number;
+  sourceY: number;
+  sourceWidth: number;
+  sourceHeight: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  frameIndex: number;
+  alpha: number;
+  zIndex: number;
+}
+
+export interface BoardRocketWavePuffVisualState {
   puffId: string;
   x: number;
   y: number;
@@ -48,7 +64,7 @@ export interface BoardTntCloudPuffVisualState {
   zIndex: number;
 }
 
-export interface BoardTntDebrisTrailVisualState {
+export interface BoardRocketWaveTrailVisualState {
   trailId: string;
   x: number;
   y: number;
@@ -87,8 +103,9 @@ export interface BoardRenderState {
   boardCells: readonly BoardCellVisualState[];
   particles?: readonly BoardParticleVisualState[];
   burstRings?: readonly BoardBurstRingVisualState[];
-  tntCloudPuffs?: readonly BoardTntCloudPuffVisualState[];
-  tntDebrisTrails?: readonly BoardTntDebrisTrailVisualState[];
+  tntExplosionSprites?: readonly BoardTntExplosionSpriteVisualState[];
+  rocketWavePuffs?: readonly BoardRocketWavePuffVisualState[];
+  rocketWaveTrails?: readonly BoardRocketWaveTrailVisualState[];
   emptyCells?: readonly BoardEmptyCellVisualState[];
   pathCells: readonly CellCoord[];
   mageCell: CellCoord | null;

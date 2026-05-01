@@ -41,6 +41,9 @@ export const AssetIds = {
   materials: {
     mageTexture: 'material.mageTexture',
   },
+  spritesheets: {
+    tntExplosion: 'spritesheet.tntExplosion',
+  },
   sounds: {
     tileMatch: 'sound.tileMatch',
     comboPitchStep: 'sound.comboPitchStep',

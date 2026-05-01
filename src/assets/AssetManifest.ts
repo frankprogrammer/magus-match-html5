@@ -37,6 +37,8 @@ const TEMP_FBX_MAGE_TEXTURE_NOTES =
 const UI_BANNER_NOTES = 'Runtime 1080x150 PNG for the fixed middle HUD band; drawn full-width behind HUD text.';
 const BOARD_BACKGROUND_NOTES =
   'Runtime 1080x1080 PNG for the board base; drawn behind board cells with flat-color fallback.';
+const TNT_EXPLOSION_SPRITE_NOTES =
+  'Runtime 512x256 transparent PNG spritesheet. Two rows by four columns, eight 128x128 frames, played at 30 FPS for TNT detonations.';
 
 export const AssetManifest: Record<string, AssetManifestEntry> = {
   [AssetIds.tiles.fire]: texture(
@@ -163,6 +165,14 @@ export const AssetManifest: Record<string, AssetManifestEntry> = {
     'Assets/Textures/Rigs/Mage/knight_texture_test.png',
     'prompt.rig.mage',
     TEMP_FBX_MAGE_TEXTURE_NOTES,
+  ),
+  [AssetIds.spritesheets.tntExplosion]: texture(
+    AssetIds.spritesheets.tntExplosion,
+    '/assets/spritesheets/explosion-sprite.png',
+    'Assets/Textures/Spritesheets/explosion-sprite.png',
+    'prompt.powerups.standard',
+    TNT_EXPLOSION_SPRITE_NOTES,
+    '512x256, 8 frames at 128x128',
   ),
   [AssetIds.rigs.prince]: rig(
     AssetIds.rigs.prince,

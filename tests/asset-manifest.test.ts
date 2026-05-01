@@ -11,6 +11,7 @@ describe('AssetManifest', () => {
       ...Object.values(AssetIds.rigs),
       ...Object.values(AssetIds.ui),
       ...Object.values(AssetIds.materials),
+      ...Object.values(AssetIds.spritesheets),
       ...Object.values(AssetIds.sounds),
       AssetIds.props.princeCage,
       AssetIds.props.goalFlag,
@@ -58,6 +59,12 @@ describe('AssetManifest', () => {
     expect(AssetManifest[AssetIds.ui.boardBackground].runtimeSize).toBe('1080x1080');
     expect(AssetManifest[AssetIds.materials.mageTexture].browserUrl).toBe(
       '/assets/rigs/knight1.fbm/knight_texture_test.png',
+    );
+    expect(AssetManifest[AssetIds.spritesheets.tntExplosion].browserUrl).toBe(
+      '/assets/spritesheets/explosion-sprite.png',
+    );
+    expect(AssetManifest[AssetIds.spritesheets.tntExplosion].runtimeSize).toBe(
+      '512x256, 8 frames at 128x128',
     );
   });
 

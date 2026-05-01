@@ -221,15 +221,11 @@ function drawBoardBackground(renderer: GameRenderer): void {
 function drawEmptyCell(renderer: GameRenderer, coord: CellCoord, assetId: string): void {
   const x = BOARD_RECT.x + coord.col * BOARD_RECT.cellSize;
   const y = BOARD_RECT.y + coord.row * BOARD_RECT.cellSize;
-  renderer.drawRect('#171225', x, y, BOARD_RECT.cellSize, BOARD_RECT.cellSize);
 
   const imageRef = { id: assetId };
   if (renderer.hasImage(imageRef)) {
     renderer.drawImage(imageRef, x, y, BOARD_RECT.cellSize, BOARD_RECT.cellSize);
-    return;
   }
-
-  renderer.drawRect('#0f0b18', x + 8, y + 8, BOARD_RECT.cellSize - 16, BOARD_RECT.cellSize - 16);
 }
 
 function drawBoardFrame(renderer: GameRenderer): void {
@@ -257,31 +253,19 @@ function drawCell(renderer: GameRenderer, visual: BoardCellVisual): void {
 
   const imageRef = { id: visual.assetId };
   const hasImage = renderer.hasImage(imageRef);
-  if (hasImage) {
-    renderer.drawImage(imageRef, x, y, scaledWidth, scaledHeight);
-  } else {
-    renderer.drawRect(visual.fillColor, x, y, scaledWidth, scaledHeight);
+  if (!hasImage) {
+    renderer.pop();
+    return;
   }
+
+  renderer.drawImage(imageRef, x, y, scaledWidth, scaledHeight);
 
   if (visual.isPath) {
     renderer.drawRect('rgba(245, 233, 201, 0.55)', visual.x + 12, visual.y + 12, visual.width - 24, visual.height - 24);
   }
 
   if (visual.flash > 0) {
-    if (hasImage) {
-      renderer.drawImageAlphaMaskFill(imageRef, '#ffffff', x, y, scaledWidth, scaledHeight, visual.flash);
-    } else {
-      renderer.drawRect(`rgba(255, 255, 255, ${visual.flash.toFixed(3)})`, visual.x + 4, visual.y + 4, visual.width - 8, visual.height - 8);
-    }
-  }
-
-  if (!hasImage) {
-    renderer.drawText(visual.glyph, visual.x, visual.y, visual.width, visual.height, {
-      fontSize: 54,
-      fontWeight: 'bold',
-      color: visual.tileType === 'LIGHTNING' ? '#241832' : '#f5e9c9',
-      align: 'center',
-    });
+    renderer.drawImageAlphaMaskFill(imageRef, '#ffffff', x, y, scaledWidth, scaledHeight, visual.flash);
   }
 
   if (visual.hasGoal) {

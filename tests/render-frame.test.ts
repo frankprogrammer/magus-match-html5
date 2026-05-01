@@ -166,7 +166,7 @@ describe('buildBoardCellVisuals', () => {
     expect(renderer.calls.some((call) => call.startsWith('rect:rgba(255, 255, 255'))).toBe(false);
   });
 
-  it('keeps rectangular flashes for fallback tile rendering', () => {
+  it('draws no tile flash when tile images are unavailable', () => {
     const renderer = new FakeRenderer(new Set());
     const state = oneTileState('tile.fire');
     state.matchHint = {
@@ -179,7 +179,7 @@ describe('buildBoardCellVisuals', () => {
     renderFrame(renderer, state, hudState(), 0);
 
     expect(renderer.calls).not.toContain('mask:tile.fire:#ffffff');
-    expect(renderer.calls.some((call) => call.startsWith('rect:rgba(255, 255, 255'))).toBe(true);
+    expect(renderer.calls.some((call) => call.startsWith('rect:rgba(255, 255, 255'))).toBe(false);
   });
 
   it('draws the HUD banner image across the middle UI band when available', () => {
@@ -267,14 +267,30 @@ describe('buildBoardCellVisuals', () => {
     expect(tileImageIndex).toBeGreaterThan(emptyImageIndex);
   });
 
-  it('falls back to shapes and glyphs when image assets are unavailable', () => {
+  it('draws no tile placeholders when image assets are unavailable', () => {
     const renderer = new FakeRenderer(new Set());
 
     renderFrame(renderer, oneTileState('tile.fire'), hudState(), 0);
 
     expect(renderer.calls).not.toContain('image:tile.fire');
-    expect(renderer.calls).toContain('rect:#eb5757');
-    expect(renderer.calls).toContain('text:F');
+    expect(renderer.calls).not.toContain('rect:#eb5757');
+    expect(renderer.calls).not.toContain('text:F');
+  });
+
+  it('draws no empty cell placeholder when empty art is unavailable', () => {
+    const renderer = new FakeRenderer(new Set(['tile.fire']));
+    const state = oneTileState('tile.fire');
+    state.emptyCells = [{ coord: { col: 2, row: 3 }, assetId: AssetIds.tiles.empty }];
+
+    renderFrame(renderer, state, hudState(), 0);
+
+    expect(renderer.calls).not.toContain(`image:${AssetIds.tiles.empty}`);
+    expect(renderer.calls).not.toContain(
+      `rect:#171225:${BOARD_RECT.x + 2 * BOARD_RECT.cellSize},${BOARD_RECT.y + 3 * BOARD_RECT.cellSize},${BOARD_RECT.cellSize},${BOARD_RECT.cellSize}`,
+    );
+    expect(renderer.calls).not.toContain(
+      `rect:#0f0b18:${BOARD_RECT.x + 2 * BOARD_RECT.cellSize + 8},${BOARD_RECT.y + 3 * BOARD_RECT.cellSize + 8},${BOARD_RECT.cellSize - 16},${BOARD_RECT.cellSize - 16}`,
+    );
   });
 
   it('does not draw board-color backing rectangles for animated tile images', () => {
@@ -299,14 +315,14 @@ describe('buildBoardCellVisuals', () => {
   });
 
   it('clips the tile layer to the board rect and draws the frame above it', () => {
-    const renderer = new FakeRenderer(new Set());
+    const renderer = new FakeRenderer(new Set(['tile.fire']));
 
     renderFrame(renderer, oneTileState('tile.fire'), hudState(), 0);
 
     const clipIndex = renderer.calls.indexOf(
       `clip:${BOARD_RECT.x},${BOARD_RECT.y},${BOARD_RECT.width},${BOARD_RECT.height}`,
     );
-    const tileIndex = renderer.calls.indexOf('rect:#eb5757');
+    const tileIndex = renderer.calls.indexOf('image:tile.fire');
     const clippedLayerPopIndex = renderer.calls.indexOf('pop', tileIndex);
     const frameIndex = renderer.calls.indexOf(
       `rect:#c8a24b:${BOARD_RECT.x - 8},${BOARD_RECT.y - 8},${BOARD_RECT.width + 16},8`,
@@ -319,7 +335,7 @@ describe('buildBoardCellVisuals', () => {
   });
 
   it('draws particles inside the clipped board layer after tiles and before the frame', () => {
-    const renderer = new FakeRenderer(new Set());
+    const renderer = new FakeRenderer(new Set(['tile.fire']));
     const state = oneTileState('tile.fire');
     state.burstRings = [
       {
@@ -350,7 +366,7 @@ describe('buildBoardCellVisuals', () => {
     const clipIndex = renderer.calls.indexOf(
       `clip:${BOARD_RECT.x},${BOARD_RECT.y},${BOARD_RECT.width},${BOARD_RECT.height}`,
     );
-    const tileIndex = renderer.calls.indexOf('rect:#eb5757');
+    const tileIndex = renderer.calls.indexOf('image:tile.fire');
     const ringIndex = renderer.calls.indexOf('ring:rgba(255, 255, 255, 0.85)');
     const particleIndex = renderer.calls.indexOf('ellipse:#eb5757');
     const clippedLayerPopIndex = renderer.calls.indexOf('pop', particleIndex);
@@ -367,7 +383,7 @@ describe('buildBoardCellVisuals', () => {
   });
 
   it('draws TNT explosion sprites inside the clipped board layer before match particles', () => {
-    const renderer = new FakeRenderer(new Set([AssetIds.spritesheets.tntExplosion]));
+    const renderer = new FakeRenderer(new Set(['tile.fire', AssetIds.spritesheets.tntExplosion]));
     const state = oneTileState('tile.fire');
     state.tntExplosionSprites = [
       {
@@ -403,7 +419,7 @@ describe('buildBoardCellVisuals', () => {
     const clipIndex = renderer.calls.indexOf(
       `clip:${BOARD_RECT.x},${BOARD_RECT.y},${BOARD_RECT.width},${BOARD_RECT.height}`,
     );
-    const tileIndex = renderer.calls.indexOf('rect:#eb5757');
+    const tileIndex = renderer.calls.indexOf('image:tile.fire');
     const spriteIndex = renderer.calls.indexOf(
       `imageFrame:${AssetIds.spritesheets.tntExplosion}:128,0,128,128:${BOARD_RECT.x + 10},${BOARD_RECT.y + 10},270,270`,
     );
@@ -421,7 +437,7 @@ describe('buildBoardCellVisuals', () => {
   });
 
   it('draws rocket wave puffs and trails inside the clipped board layer after TNT effects', () => {
-    const renderer = new FakeRenderer(new Set([AssetIds.spritesheets.tntExplosion]));
+    const renderer = new FakeRenderer(new Set(['tile.fire', AssetIds.spritesheets.tntExplosion]));
     const state = oneTileState('tile.fire');
     state.tntExplosionSprites = [
       {
@@ -482,7 +498,7 @@ describe('buildBoardCellVisuals', () => {
     const clipIndex = renderer.calls.indexOf(
       `clip:${BOARD_RECT.x},${BOARD_RECT.y},${BOARD_RECT.width},${BOARD_RECT.height}`,
     );
-    const tileIndex = renderer.calls.indexOf('rect:#eb5757');
+    const tileIndex = renderer.calls.indexOf('image:tile.fire');
     const tntIndex = renderer.calls.indexOf(
       `imageFrame:${AssetIds.spritesheets.tntExplosion}:0,0,128,128:${BOARD_RECT.x + 10},${BOARD_RECT.y + 10},270,270`,
     );

@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import {
   createMageAnimationController,
+  isProjectileChargeVisible,
   isProjectileCastReady,
   isProjectileVisible,
+  mageChargeMaterialSettings,
+  projectileChargeProgress,
   projectileColor,
   projectileMaterialSettings,
   projectileParticleColorComponents,
@@ -45,6 +48,16 @@ describe('ThreeHeroStage projectile VFX', () => {
     });
   });
 
+  it('uses projectile color and blending for mage staff charge particles', () => {
+    const projectile = { schoolId: 'ice' as const, effectKind: 'match' as const };
+
+    expect(mageChargeMaterialSettings(projectile)).toMatchObject({
+      color: projectileColor('ice'),
+      blending: projectileMaterialSettings(projectile).blending,
+      transparent: projectileMaterialSettings(projectile).transparent,
+    });
+  });
+
   it('uses larger vertically stretched quad scales for match and bomb particles', () => {
     expect(projectileQuadScale('match')).toEqual({ x: 0.27, y: 0.36 });
     expect(projectileQuadScale('bomb')).toEqual({ x: 0.6, y: 0.78 });
@@ -57,6 +70,25 @@ describe('ThreeHeroStage projectile VFX', () => {
     expect(isProjectileCastReady({ castActivationDelaySec: 0.1 })).toBe(false);
     expect(isProjectileVisible({ activationDelaySec: 0.1, remainingSec: 0.2 })).toBe(false);
     expect(isProjectileVisible({ activationDelaySec: 0, remainingSec: 0.2 })).toBe(true);
+  });
+
+  it('shows mage weapon charge during projectile windup before launch', () => {
+    expect(isProjectileChargeVisible({
+      castActivationDelaySec: 0.08,
+      activationDelaySec: 0.5,
+      chargeDurationSec: 0.5,
+    })).toBe(false);
+    expect(isProjectileChargeVisible({
+      castActivationDelaySec: 0,
+      activationDelaySec: 0.25,
+      chargeDurationSec: 0.5,
+    })).toBe(true);
+    expect(isProjectileChargeVisible({
+      castActivationDelaySec: 0,
+      activationDelaySec: 0,
+      chargeDurationSec: 0.5,
+    })).toBe(false);
+    expect(projectileChargeProgress({ activationDelaySec: 0.25, chargeDurationSec: 0.5 })).toBeCloseTo(0.5);
   });
 
   it('resolves projectile origin from the mage particleSource world position', () => {
@@ -286,6 +318,7 @@ function testProjectile(): ProjectileState {
     to: { x: 4, y: 5, z: 6 },
     castActivationDelaySec: 0,
     activationDelaySec: 0,
+    chargeDurationSec: 0.5,
     remainingSec: 0.2,
     durationSec: 0.2,
   };

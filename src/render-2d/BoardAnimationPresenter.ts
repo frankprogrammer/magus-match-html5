@@ -29,6 +29,7 @@ import {
 import type {
   BoardBurstRingVisualState,
   BoardCellVisualState,
+  BoardMatchEnergyStreamVisualState,
   BoardParticleVisualState,
   BoardRenderState,
   BoardRocketWavePuffVisualState,
@@ -42,6 +43,14 @@ const MATCH_PARTICLE_MIN_DISTANCE_PX = 24;
 const MATCH_PARTICLE_MAX_DISTANCE_PX = 62;
 const MATCH_PARTICLE_START_RADIUS_PX = 12;
 const MATCH_PARTICLE_END_RADIUS_PX = 2.25;
+const MATCH_ENERGY_STREAMS_PER_TILE = 7;
+const MATCH_ENERGY_STREAM_DURATION_MS = 560;
+const MATCH_ENERGY_STREAM_TARGET_X_PX = 120;
+const MATCH_ENERGY_STREAM_TARGET_Y_PX = 180;
+const MATCH_ENERGY_STREAM_MAX_ARC_PX = 70;
+const MATCH_ENERGY_STREAM_START_RADIUS_PX = 14;
+const MATCH_ENERGY_STREAM_END_RADIUS_PX = 5;
+const MATCH_ENERGY_STREAM_MAX_ALPHA = 1;
 const MATCH_BURST_RING_DURATION_MS = 220;
 const MATCH_BURST_RING_MAX_RADIUS_PX = 86;
 const MATCH_BURST_RING_START_LINE_WIDTH_PX = 7;
@@ -112,6 +121,7 @@ export class BoardAnimationPresenter {
     const stepTimings = getBoardAnimationStepTimings(trace);
     const boardCells = sampleTraceCells(trace, stepTimings, elapsedMs, this.activeAnimation.retargetStarts);
     const particles = sampleTraceParticles(trace, stepTimings, elapsedMs);
+    const matchEnergyStreams = sampleTraceMatchEnergyStreams(trace, stepTimings, elapsedMs);
     const burstRings = sampleTraceBurstRings(trace, stepTimings, elapsedMs);
     const tntExplosionSprites = sampleTraceTntExplosionSprites(trace, stepTimings, elapsedMs);
     const rocketWavePuffs = sampleTraceRocketWavePuffs(trace, stepTimings, elapsedMs);
@@ -121,6 +131,7 @@ export class BoardAnimationPresenter {
       ...authoritativeState,
       boardCells,
       particles,
+      matchEnergyStreams,
       burstRings,
       tntExplosionSprites,
       rocketWavePuffs,
@@ -174,6 +185,28 @@ function sampleTraceCells(
     retargetStarts,
     trace.kind === 'levelIntro',
   );
+}
+
+function sampleTraceMatchEnergyStreams(
+  trace: BoardAnimationTrace,
+  stepTimings: readonly BoardAnimationStepTiming[],
+  elapsedMs: number,
+): BoardMatchEnergyStreamVisualState[] {
+  if (trace.kind === 'levelIntro' || trace.kind === 'invalidSwap') {
+    return [];
+  }
+
+  const activeStep = stepTimings.find((timing) => elapsedMs < timing.fallStartMs);
+  if (activeStep == null) {
+    return [];
+  }
+
+  const stepElapsedMs = elapsedMs - activeStep.popStartMs;
+  if (stepElapsedMs < 0) {
+    return [];
+  }
+
+  return activeStep.step.clearedTiles.flatMap((tile) => sampleClearedTileEnergyStreams(tile, stepElapsedMs));
 }
 
 function sampleTraceParticles(
@@ -293,6 +326,56 @@ function sampleTraceRocketWaveTrails(
   return activeStep.step.clearedTiles.flatMap((tile) =>
     sampleRocketWaveTrails(tile, activeStep.step.clearedTiles, stepElapsedMs),
   );
+}
+
+function sampleClearedTileEnergyStreams(
+  tile: BoardAnimationCascadeStep['clearedTiles'][number],
+  stepElapsedMs: number,
+): BoardMatchEnergyStreamVisualState[] {
+  const color = particleColorForTileType(tile.tileType);
+  if (color == null) {
+    return [];
+  }
+
+  const localElapsedMs = stepElapsedMs - (tile.clearDelayMs ?? 0);
+  if (localElapsedMs < 0 || localElapsedMs > MATCH_ENERGY_STREAM_DURATION_MS) {
+    return [];
+  }
+
+  const progress = clamp01(localElapsedMs / MATCH_ENERGY_STREAM_DURATION_MS);
+  const start = cellCenter(tile.coord);
+  const target = {
+    x: MATCH_ENERGY_STREAM_TARGET_X_PX,
+    y: MATCH_ENERGY_STREAM_TARGET_Y_PX,
+  };
+
+  return Array.from({ length: MATCH_ENERGY_STREAMS_PER_TILE }, (_, index) => {
+    const offsetProgress = clamp01(progress * 1.18 - index * 0.045);
+    const offsetEased = easeOutCubic(offsetProgress);
+    const seed = `${tile.tileId}:energy:${index}`;
+    const side = deterministicUnit(`${seed}:side`) < 0.5 ? -1 : 1;
+    const arc = lerp(18, MATCH_ENERGY_STREAM_MAX_ARC_PX, deterministicUnit(`${seed}:arc`)) * side;
+    const jitterX = lerp(-14, 14, deterministicUnit(`${seed}:x`)) * Math.sin(offsetProgress * Math.PI);
+    const jitterY = lerp(-10, 10, deterministicUnit(`${seed}:y`)) * Math.sin(offsetProgress * Math.PI * 2);
+    const x = lerp(start.x, target.x, offsetEased) + arc * Math.sin(offsetProgress * Math.PI) + jitterX;
+    const y = lerp(start.y, target.y, offsetEased) + jitterY;
+    const radius = lerp(
+      MATCH_ENERGY_STREAM_START_RADIUS_PX,
+      MATCH_ENERGY_STREAM_END_RADIUS_PX,
+      offsetProgress,
+    ) * (0.82 + deterministicUnit(`${seed}:size`) * 0.36);
+    const fadeIn = clamp01(offsetProgress / 0.08);
+    const fadeOut = clamp01((1 - offsetProgress) / 0.5);
+    return {
+      streamId: `${tile.tileId}-energy-${index}`,
+      x,
+      y,
+      radius,
+      color,
+      alpha: MATCH_ENERGY_STREAM_MAX_ALPHA * Math.min(fadeIn, fadeOut),
+      zIndex: 23 + index / 100,
+    };
+  }).filter((stream) => stream.alpha > 0 && stream.radius > 0);
 }
 
 function sampleClearedTileParticles(

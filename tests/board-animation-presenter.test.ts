@@ -84,6 +84,7 @@ describe('BoardAnimationPresenter', () => {
     presenter.present(state, 0);
     const popping = presenter.present(state, 0.14);
     const repeated = presenter.present(state, 0.14);
+    const laterStreams = presenter.present(state, 0.25).matchEnergyStreams ?? [];
     const early = new BoardAnimationPresenter();
     early.present(state, 0);
     const earlyPop = early.present(state, 0.121);
@@ -100,6 +101,15 @@ describe('BoardAnimationPresenter', () => {
     expect(popping.burstRings).toHaveLength(4);
     expect(popping.burstRings?.every((ring) => ring.color === 'rgba(255, 255, 255, 0.85)')).toBe(true);
     expect(popping.burstRings?.every((ring) => ring.radius > 0)).toBe(true);
+    expect(new Set(popping.matchEnergyStreams?.map((stream) => stream.color))).toEqual(
+      new Set(['#27ae60', '#38d5ff', '#eb5757', '#f2c94c']),
+    );
+    expect(popping.matchEnergyStreams).toEqual(repeated.matchEnergyStreams);
+    expect(Math.max(...laterStreams.map((stream) => stream.alpha))).toBeCloseTo(1);
+    expect(laterStreams.filter((stream) => stream.alpha > 0.75).length).toBeGreaterThan(10);
+    expect(Math.max(...(popping.matchEnergyStreams ?? []).map((stream) => stream.radius))).toBeGreaterThan(10);
+    expect(laterStreams.some((stream) => stream.x < BOARD_RECT.width / 2)).toBe(true);
+    expect(laterStreams.some((stream) => stream.y < BOARD_RECT.y)).toBe(true);
   });
 
   it('expands and fades the shockwave ring as it moves outward', () => {
@@ -126,12 +136,15 @@ describe('BoardAnimationPresenter', () => {
     const beforeDelayedPop = presenter.present(state, 0.14);
     expect(beforeDelayedPop.particles ?? []).toHaveLength(0);
     expect(beforeDelayedPop.burstRings ?? []).toHaveLength(0);
+    expect(beforeDelayedPop.matchEnergyStreams ?? []).toHaveLength(0);
 
     const duringDelayedPop = presenter.present(state, 0.23);
     expect(duringDelayedPop.particles?.every((particle) => particle.color === '#eb5757')).toBe(true);
     expect(duringDelayedPop.particles).toHaveLength(12);
     expect(duringDelayedPop.burstRings).toHaveLength(1);
     expect(duringDelayedPop.burstRings?.[0]?.alpha).toBeLessThanOrEqual(0.42);
+    expect(duringDelayedPop.matchEnergyStreams?.length).toBeGreaterThan(0);
+    expect(duringDelayedPop.matchEnergyStreams?.every((stream) => stream.color === '#eb5757')).toBe(true);
 
     const afterParticleWindow = presenter.present(state, 0.5);
     expect(afterParticleWindow.particles ?? []).toHaveLength(0);
@@ -219,11 +232,13 @@ describe('BoardAnimationPresenter', () => {
     expect(presenter.present(boardState(introTrace), 0.1).tntExplosionSprites ?? []).toHaveLength(0);
     expect(presenter.present(boardState(introTrace), 0.1).rocketWavePuffs ?? []).toHaveLength(0);
     expect(presenter.present(boardState(introTrace), 0.1).rocketWaveTrails ?? []).toHaveLength(0);
+    expect(presenter.present(boardState(introTrace), 0.1).matchEnergyStreams ?? []).toHaveLength(0);
 
     const secondPresenter = new BoardAnimationPresenter();
     secondPresenter.present(boardState(nonstandardTrace), 0);
     expect(secondPresenter.present(boardState(nonstandardTrace), 0.14).particles ?? []).toHaveLength(0);
     expect(secondPresenter.present(boardState(nonstandardTrace), 0.14).burstRings ?? []).toHaveLength(0);
+    expect(secondPresenter.present(boardState(nonstandardTrace), 0.14).matchEnergyStreams ?? []).toHaveLength(0);
   });
 
   it('retargets shared tiles from their current animated positions when a new trace arrives', () => {

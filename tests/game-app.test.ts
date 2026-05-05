@@ -161,6 +161,7 @@ describe('MagusMatchGameApp', () => {
           to: { x: level.trial.mageX + 1, y: level.trial.laneY, z: 0.35 },
           castActivationDelaySec: 0,
           activationDelaySec: 0.12,
+          chargeDurationSec: 0.5,
           remainingSec: 0.1,
           durationSec: 0.1,
         },

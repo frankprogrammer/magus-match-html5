@@ -12,6 +12,7 @@ export class ThreeHeroStage {
   private readonly factory = new ThreeObjectFactory();
   private readonly objectCache = new ThreeObjectCache();
   private readonly projectileCache = new Map<string, ProjectileParticleSystem>();
+  private readonly mageChargeCache = new Map<string, MageChargeParticleSystem>();
   private readonly cameraController = new ThreeCameraController();
   private readonly animationControllers = new Map<string, MageAnimationController>();
   private readonly castTriggeredProjectileIds = new Set<string>();
@@ -37,6 +38,7 @@ export class ThreeHeroStage {
     this.syncObjects(state.objects);
     this.syncProjectileCastTriggers(state.activeProjectiles);
     this.updateAnimationMixers(dtSec);
+    this.syncMageCharges(state.activeProjectiles);
     this.syncProjectiles(state.activeProjectiles);
     this.renderer.render(this.scene, this.camera);
   }
@@ -57,10 +59,15 @@ export class ThreeHeroStage {
       this.scene.remove(projectile.mesh);
       disposeProjectileSystem(projectile);
     }
+    for (const [, charge] of this.mageChargeCache.entries()) {
+      this.scene.remove(charge.mesh);
+      disposeMageChargeSystem(charge);
+    }
     this.animationControllers.clear();
     this.castTriggeredProjectileIds.clear();
     this.objectCache.clear();
     this.projectileCache.clear();
+    this.mageChargeCache.clear();
     this.factory.disposeCachedResources();
     this.renderer.dispose();
     this.renderer.domElement.remove();
@@ -113,6 +120,46 @@ export class ThreeHeroStage {
         this.projectileCache.delete(objectId);
       }
     }
+  }
+
+  private syncMageCharges(projectiles: readonly ProjectileState[]): void {
+    const seen = new Set<string>();
+    const mageObject = this.objectCache.get('actor-mage');
+
+    for (const projectileState of projectiles) {
+      if (!isProjectileChargeVisible(projectileState)) {
+        continue;
+      }
+
+      const objectId = `mage-charge-${projectileState.projectileId}`;
+      seen.add(objectId);
+      const renderProjectileState = resolveProjectileRenderOrigin(projectileState, mageObject);
+      const charge = this.getOrCreateMageCharge(objectId, renderProjectileState);
+      applyMageChargeState(charge, renderProjectileState);
+    }
+
+    for (const [objectId, charge] of [...this.mageChargeCache.entries()]) {
+      if (!seen.has(objectId)) {
+        this.scene.remove(charge.mesh);
+        disposeMageChargeSystem(charge);
+        this.mageChargeCache.delete(objectId);
+      }
+    }
+  }
+
+  private getOrCreateMageCharge(
+    objectId: string,
+    projectileState: ProjectileState,
+  ): MageChargeParticleSystem {
+    const existing = this.mageChargeCache.get(objectId);
+    if (existing != null) {
+      return existing;
+    }
+
+    const charge = createMageChargeParticleSystem(projectileState);
+    this.mageChargeCache.set(objectId, charge);
+    this.scene.add(charge.mesh);
+    return charge;
   }
 
   private getOrCreateProjectile(
@@ -494,6 +541,12 @@ export function projectileMaterialSettings(
   };
 }
 
+export function mageChargeMaterialSettings(
+  projectile: Pick<ProjectileState, 'schoolId' | 'effectKind'>,
+): { color: string; blending: THREE.Blending; transparent: boolean } {
+  return projectileMaterialSettings(projectile);
+}
+
 export function isProjectileCastReady(projectile: Pick<ProjectileState, 'castActivationDelaySec'>): boolean {
   return projectile.castActivationDelaySec <= 0;
 }
@@ -541,6 +594,24 @@ interface ProjectileParticleSystem {
   dummy: THREE.Object3D;
 }
 
+interface MageChargeParticleSystem {
+  mesh: THREE.InstancedMesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
+  texture: THREE.CanvasTexture;
+  dummy: THREE.Object3D;
+}
+
+export function isProjectileChargeVisible(
+  projectile: Pick<ProjectileState, 'castActivationDelaySec' | 'activationDelaySec' | 'chargeDurationSec'>,
+): boolean {
+  return projectile.castActivationDelaySec <= 0 && projectile.activationDelaySec > 0 && projectile.chargeDurationSec > 0;
+}
+
+export function projectileChargeProgress(
+  projectile: Pick<ProjectileState, 'activationDelaySec' | 'chargeDurationSec'>,
+): number {
+  return clamp01(1 - projectile.activationDelaySec / Math.max(0.001, projectile.chargeDurationSec));
+}
+
 function createProjectileParticleSystem(
   projectile: ProjectileState,
 ): ProjectileParticleSystem {
@@ -560,6 +631,27 @@ function createProjectileParticleSystem(
   const mesh = new THREE.InstancedMesh(geometry, material, particleCount);
   mesh.frustumCulled = false;
   mesh.renderOrder = projectile.effectKind === 'bomb' ? 32 : 30;
+  return { mesh, texture, dummy: new THREE.Object3D() };
+}
+
+function createMageChargeParticleSystem(
+  projectile: ProjectileState,
+): MageChargeParticleSystem {
+  const geometry = new THREE.PlaneGeometry(1, 1);
+  const texture = createProjectileParticleTexture();
+  const settings = mageChargeMaterialSettings(projectile);
+  const material = new THREE.MeshBasicMaterial({
+    map: texture,
+    color: settings.color,
+    transparent: settings.transparent,
+    opacity: 1,
+    blending: settings.blending,
+    depthWrite: false,
+    depthTest: true,
+  });
+  const mesh = new THREE.InstancedMesh(geometry, material, mageChargeParticleCount(projectile.effectKind));
+  mesh.frustumCulled = false;
+  mesh.renderOrder = 31;
   return { mesh, texture, dummy: new THREE.Object3D() };
 }
 
@@ -609,7 +701,51 @@ function applyProjectileState(
   system.mesh.material.needsUpdate = true;
 }
 
+function applyMageChargeState(
+  system: MageChargeParticleSystem,
+  projectile: ProjectileState,
+): void {
+  const progress = projectileChargeProgress(projectile);
+  const pulse = Math.sin(progress * Math.PI);
+  const radius = mageChargeRadius(projectile.effectKind, progress);
+  const particleScale = mageChargeParticleScale(projectile.effectKind, progress);
+
+  for (let index = 0; index < system.mesh.count; index += 1) {
+    const angleSeed = deterministicUnit(`${projectile.projectileId}:charge:angle:${index}`);
+    const radiusSeed = deterministicUnit(`${projectile.projectileId}:charge:radius:${index}`);
+    const zSeed = deterministicUnit(`${projectile.projectileId}:charge:z:${index}`);
+    const angle = angleSeed * Math.PI * 2 + progress * Math.PI * 1.3;
+    const distance = Math.sqrt(radiusSeed) * radius * (0.35 + pulse * 0.65);
+    const x = projectile.from.x + Math.cos(angle) * distance;
+    const y = projectile.from.y + Math.sin(angle) * distance * 0.82;
+    const z = projectile.from.z + (zSeed - 0.5) * radius * 0.42;
+    const particleSizeMultiplier = 0.75 + radiusSeed * 0.65 + pulse * 0.35;
+    system.dummy.position.set(x, y, z);
+    system.dummy.rotation.set(0, 0, 0);
+    system.dummy.scale.set(
+      particleScale.x * particleSizeMultiplier,
+      particleScale.y * particleSizeMultiplier,
+      1,
+    );
+    system.dummy.updateMatrix();
+    system.mesh.setMatrixAt(index, system.dummy.matrix);
+  }
+
+  system.mesh.instanceMatrix.needsUpdate = true;
+  const settings = mageChargeMaterialSettings(projectile);
+  system.mesh.material.color.set(settings.color);
+  system.mesh.material.blending = settings.blending;
+  system.mesh.material.opacity = mageChargeOpacity(projectile.effectKind, progress);
+  system.mesh.material.needsUpdate = true;
+}
+
 function disposeProjectileSystem(system: ProjectileParticleSystem): void {
+  system.mesh.geometry.dispose();
+  system.mesh.material.dispose();
+  system.texture.dispose();
+}
+
+function disposeMageChargeSystem(system: MageChargeParticleSystem): void {
   system.mesh.geometry.dispose();
   system.mesh.material.dispose();
   system.texture.dispose();
@@ -617,6 +753,10 @@ function disposeProjectileSystem(system: ProjectileParticleSystem): void {
 
 function projectileParticleCount(effectKind: ProjectileState['effectKind']): number {
   return effectKind === 'bomb' ? 220 : 96;
+}
+
+function mageChargeParticleCount(effectKind: ProjectileState['effectKind']): number {
+  return effectKind === 'bomb' ? 120 : 72;
 }
 
 export function projectileQuadScale(effectKind: ProjectileState['effectKind']): { x: number; y: number } {
@@ -649,6 +789,26 @@ function projectileOpacity(effectKind: ProjectileState['effectKind'], progress: 
   const fadeIn = clamp01(progress / 0.16);
   const fadeOut = clamp01((1 - progress) / (effectKind === 'bomb' ? 0.32 : 0.42));
   return (effectKind === 'bomb' ? 0.78 : 0.92) * Math.min(fadeIn, fadeOut);
+}
+
+function mageChargeRadius(effectKind: ProjectileState['effectKind'], progress: number): number {
+  const base = effectKind === 'bomb' ? 0.36 : 0.22;
+  return base * (0.7 + easeOutCubic(progress) * 0.65);
+}
+
+function mageChargeParticleScale(effectKind: ProjectileState['effectKind'], progress: number): { x: number; y: number } {
+  const base = effectKind === 'bomb' ? 0.18 : 0.12;
+  const pulse = Math.sin(progress * Math.PI);
+  return {
+    x: base * (0.85 + pulse * 0.55),
+    y: base * (0.85 + pulse * 0.55),
+  };
+}
+
+function mageChargeOpacity(effectKind: ProjectileState['effectKind'], progress: number): number {
+  const fadeIn = clamp01(progress / 0.16);
+  const fadeOut = clamp01((1 - progress) / 0.2);
+  return (effectKind === 'bomb' ? 0.9 : 0.78) * Math.min(fadeIn, fadeOut);
 }
 
 function createProjectileParticleTexture(): THREE.CanvasTexture {

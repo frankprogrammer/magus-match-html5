@@ -360,6 +360,17 @@ describe('buildBoardCellVisuals', () => {
         zIndex: 20,
       },
     ];
+    state.matchEnergyStreams = [
+      {
+        streamId: 'energy-0',
+        x: BOARD_RECT.x + 80,
+        y: BOARD_RECT.y + 80,
+        radius: 10,
+        color: '#38d5ff',
+        alpha: 0.7,
+        zIndex: 23,
+      },
+    ];
 
     renderFrame(renderer, state, hudState(), 0);
 
@@ -369,6 +380,7 @@ describe('buildBoardCellVisuals', () => {
     const tileIndex = renderer.calls.indexOf('image:tile.fire');
     const ringIndex = renderer.calls.indexOf('ring:rgba(255, 255, 255, 0.85)');
     const particleIndex = renderer.calls.indexOf('ellipse:#eb5757');
+    const streamIndex = renderer.calls.indexOf('ellipse:#38d5ff');
     const clippedLayerPopIndex = renderer.calls.indexOf('pop', particleIndex);
     const frameIndex = renderer.calls.indexOf(
       `rect:#c8a24b:${BOARD_RECT.x - 8},${BOARD_RECT.y - 8},${BOARD_RECT.width + 16},8`,
@@ -379,7 +391,8 @@ describe('buildBoardCellVisuals', () => {
     expect(particleIndex).toBeGreaterThan(tileIndex);
     expect(particleIndex).toBeGreaterThan(clipIndex);
     expect(clippedLayerPopIndex).toBeGreaterThan(particleIndex);
-    expect(frameIndex).toBeGreaterThan(clippedLayerPopIndex);
+    expect(streamIndex).toBeGreaterThan(clippedLayerPopIndex);
+    expect(frameIndex).toBeGreaterThan(streamIndex);
   });
 
   it('draws TNT explosion sprites inside the clipped board layer before match particles', () => {

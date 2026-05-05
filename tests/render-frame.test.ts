@@ -395,8 +395,8 @@ describe('buildBoardCellVisuals', () => {
         sourceHeight: 128,
         x: BOARD_RECT.x + 10,
         y: BOARD_RECT.y + 10,
-        width: 270,
-        height: 270,
+        width: 405,
+        height: 405,
         frameIndex: 1,
         alpha: 1,
         zIndex: 24,
@@ -421,7 +421,7 @@ describe('buildBoardCellVisuals', () => {
     );
     const tileIndex = renderer.calls.indexOf('image:tile.fire');
     const spriteIndex = renderer.calls.indexOf(
-      `imageFrame:${AssetIds.spritesheets.tntExplosion}:128,0,128,128:${BOARD_RECT.x + 10},${BOARD_RECT.y + 10},270,270`,
+      `imageFrame:${AssetIds.spritesheets.tntExplosion}:128,0,128,128:${BOARD_RECT.x + 10},${BOARD_RECT.y + 10},405,405`,
     );
     const particleIndex = renderer.calls.indexOf('ellipse:#eb5757');
     const clippedLayerPopIndex = renderer.calls.indexOf('pop', particleIndex);
@@ -449,8 +449,8 @@ describe('buildBoardCellVisuals', () => {
         sourceHeight: 128,
         x: BOARD_RECT.x + 10,
         y: BOARD_RECT.y + 10,
-        width: 270,
-        height: 270,
+        width: 405,
+        height: 405,
         frameIndex: 0,
         alpha: 1,
         zIndex: 24,
@@ -500,7 +500,7 @@ describe('buildBoardCellVisuals', () => {
     );
     const tileIndex = renderer.calls.indexOf('image:tile.fire');
     const tntIndex = renderer.calls.indexOf(
-      `imageFrame:${AssetIds.spritesheets.tntExplosion}:0,0,128,128:${BOARD_RECT.x + 10},${BOARD_RECT.y + 10},270,270`,
+      `imageFrame:${AssetIds.spritesheets.tntExplosion}:0,0,128,128:${BOARD_RECT.x + 10},${BOARD_RECT.y + 10},405,405`,
     );
     const rocketPuffIndex = renderer.calls.indexOf('ellipse:#f8c95d');
     const rocketTrailIndex = renderer.calls.indexOf('rect:#ffd36a');

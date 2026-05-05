@@ -160,8 +160,8 @@ describe('BoardAnimationPresenter', () => {
       sourceY: 0,
       sourceWidth: 128,
       sourceHeight: 128,
-      width: 270,
-      height: 270,
+      width: 405,
+      height: 405,
     });
     expect(laterTnt.tntExplosionSprites?.[0]).toMatchObject({
       frameIndex: 3,

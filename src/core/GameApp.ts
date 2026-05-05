@@ -1177,6 +1177,7 @@ export class MagusMatchGameApp implements GameApp {
             scale: MAGE_WORLD_SCALE,
             renderOrder: 4,
             animationId: animationForTrialMonster(monster, this.phase),
+            opacity: opacityForTrialMonster(monster),
           },
         ),
         ...createTrialMonsterHealthBarObjects(monster, monsterPosition),
@@ -1292,7 +1293,7 @@ function trialMonsterWorldYOffset(kind: ActiveTrialMonster["kind"]): number {
 }
 
 function animationForTrialMonster(monster: ActiveTrialMonster, phase: GamePhase): string {
-  if ((monster.defeatAnimationRemainingSec ?? 0) > 0) {
+  if ((monster.defeatAnimationRemainingSec ?? 0) > 0 || (monster.defeatFadeRemainingSec ?? 0) > 0) {
     return "defeat";
   }
 
@@ -1301,6 +1302,16 @@ function animationForTrialMonster(monster: ActiveTrialMonster, phase: GamePhase)
   }
 
   return "walk";
+}
+
+function opacityForTrialMonster(monster: ActiveTrialMonster): number | undefined {
+  const fadeRemainingSec = monster.defeatFadeRemainingSec ?? 0;
+  const fadeDurationSec = monster.defeatFadeDurationSec ?? 0;
+  if (fadeRemainingSec <= 0 || fadeDurationSec <= 0) {
+    return undefined;
+  }
+
+  return Math.max(0, Math.min(1, fadeRemainingSec / fadeDurationSec));
 }
 
 export function createTrialMonsterHealthBarObjects(
@@ -1379,7 +1390,8 @@ function healthRatioForTrialMonster(monster: ActiveTrialMonster): number {
     return 0;
   }
 
-  return Math.max(0, Math.min(1, monster.hp / monster.maxHp));
+  const displayedHp = monster.healthBarHp ?? monster.hp;
+  return Math.max(0, Math.min(1, displayedHp / monster.maxHp));
 }
 
 function healthBarYOffsetForTrialMonster(): number {

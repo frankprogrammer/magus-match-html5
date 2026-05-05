@@ -20,7 +20,7 @@ import {
   MATCH_HINT_IDLE_DELAY_SEC,
   MATCH_HINT_PAUSE_SEC,
 } from '../src/data/tuning';
-import { KOBOLD_DEFEAT_ANIMATION_SEC, type TrialRuntimeState } from '../src/generator/TrialRules';
+import { KOBOLD_DEFEAT_ANIMATION_SEC, KOBOLD_DEFEAT_FADE_SEC, type TrialRuntimeState } from '../src/generator/TrialRules';
 import { LEVEL_TRANSITION_HOLD_SEC } from '../src/run/RunProgression';
 import { BoardAnimationPresenter } from '../src/render-2d/BoardAnimationPresenter';
 
@@ -216,6 +216,12 @@ describe('MagusMatchGameApp', () => {
     );
 
     app.update(KOBOLD_DEFEAT_ANIMATION_SEC, []);
+    expect(app.getHudState().phase).toBe('IDLE');
+    expect(app.getTrialRuntimeForDebug()?.monsters[0]?.defeatFadeRemainingSec).toBeCloseTo(
+      KOBOLD_DEFEAT_FADE_SEC,
+    );
+
+    app.update(KOBOLD_DEFEAT_FADE_SEC, []);
     expect(app.getHudState().phase).toBe('WIN');
     expect(app.getTrialRuntimeForDebug()?.monsters).toHaveLength(0);
   });

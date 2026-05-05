@@ -50,6 +50,7 @@ export const TRIAL_NEXT_MONSTER_SPAWN_PROGRESS_RATIO = 0.4;
 export const TRIAL_MONSTER_RANDOM_Y_OFFSET_AMPLITUDE = 0.16;
 export const SPELL_CAST_WINDUP_SEC = 0.5;
 export const KOBOLD_DEFEAT_ANIMATION_SEC = 1.0;
+export const KOBOLD_DEFEAT_FADE_SEC = 0.15;
 
 export interface ActiveTrialMonster {
   monsterId: string;
@@ -65,10 +66,19 @@ export interface ActiveTrialMonster {
   defeatDelaySec?: number;
   defeatAnimationRemainingSec?: number;
   defeatAnimationDurationSec?: number;
+  defeatFadeRemainingSec?: number;
+  defeatFadeDurationSec?: number;
   hitShakeDelaySec?: number;
   hitShakeQueueSec?: readonly number[];
   hitShakeRemainingSec?: number;
   hitShakeDurationSec?: number;
+  healthBarHp?: number;
+  healthBarUpdateQueue?: readonly TrialHealthBarUpdate[];
+}
+
+export interface TrialHealthBarUpdate {
+  delaySec: number;
+  hp: number;
 }
 
 export interface TrialProjectileRuntimeState {
@@ -162,7 +172,8 @@ export function updateTrialRuntime(
   const elapsedSec = Math.max(0, dtSec);
   const visualRuntime = expireProjectiles(runtime, elapsedSec);
   const shakeRuntime = advanceHitShakes(visualRuntime, elapsedSec);
-  const defeatRuntime = advancePendingDefeats(shakeRuntime, elapsedSec);
+  const healthBarRuntime = advanceHealthBarUpdates(shakeRuntime, elapsedSec);
+  const defeatRuntime = advancePendingDefeats(healthBarRuntime, elapsedSec);
   const movedRuntime = {
     ...defeatRuntime,
     elapsedMs,
@@ -420,6 +431,7 @@ function applyDamageSources(
               hp: nextHp,
               defeatDelaySec: defeated ? impactDelaySec : monster.defeatDelaySec,
               ...scheduleHitShake(monster, impactDelaySec),
+              ...scheduleHealthBarUpdate(monster, impactDelaySec, nextHp),
             }
           : monster,
       );
@@ -766,6 +778,8 @@ function advancePendingDefeat(monster: ActiveTrialMonster, elapsedSec: number): 
   let defeatDelaySec = monster.defeatDelaySec ?? 0;
   let defeatAnimationRemainingSec = monster.defeatAnimationRemainingSec;
   const defeatAnimationDurationSec = monster.defeatAnimationDurationSec ?? KOBOLD_DEFEAT_ANIMATION_SEC;
+  let defeatFadeRemainingSec = monster.defeatFadeRemainingSec;
+  const defeatFadeDurationSec = monster.defeatFadeDurationSec ?? KOBOLD_DEFEAT_FADE_SEC;
 
   if (defeatDelaySec > TRIAL_DEFEAT_TIMER_EPSILON_SEC && remainingElapsedSec > 0) {
     const consumedDelaySec = Math.min(defeatDelaySec, remainingElapsedSec);
@@ -779,6 +793,8 @@ function advancePendingDefeat(monster: ActiveTrialMonster, elapsedSec: number): 
       defeatDelaySec,
       defeatAnimationRemainingSec,
       defeatAnimationDurationSec: defeatAnimationRemainingSec == null ? monster.defeatAnimationDurationSec : defeatAnimationDurationSec,
+      defeatFadeRemainingSec,
+      defeatFadeDurationSec: defeatFadeRemainingSec == null ? monster.defeatFadeDurationSec : defeatFadeDurationSec,
     };
   }
 
@@ -786,19 +802,42 @@ function advancePendingDefeat(monster: ActiveTrialMonster, elapsedSec: number): 
     defeatAnimationRemainingSec = KOBOLD_DEFEAT_ANIMATION_SEC;
   }
 
-  if (remainingElapsedSec > 0) {
-    defeatAnimationRemainingSec -= remainingElapsedSec;
+  if (defeatAnimationRemainingSec > TRIAL_DEFEAT_TIMER_EPSILON_SEC && remainingElapsedSec > 0) {
+    const consumedAnimationSec = Math.min(defeatAnimationRemainingSec, remainingElapsedSec);
+    defeatAnimationRemainingSec -= consumedAnimationSec;
+    remainingElapsedSec -= consumedAnimationSec;
   }
 
-  if (defeatAnimationRemainingSec <= TRIAL_DEFEAT_TIMER_EPSILON_SEC) {
+  if (defeatAnimationRemainingSec > TRIAL_DEFEAT_TIMER_EPSILON_SEC) {
+    return {
+      ...monster,
+      defeatDelaySec: 0,
+      defeatAnimationRemainingSec,
+      defeatAnimationDurationSec,
+      defeatFadeRemainingSec,
+      defeatFadeDurationSec: defeatFadeRemainingSec == null ? monster.defeatFadeDurationSec : defeatFadeDurationSec,
+    };
+  }
+
+  if (defeatFadeRemainingSec == null) {
+    defeatFadeRemainingSec = KOBOLD_DEFEAT_FADE_SEC;
+  }
+
+  if (remainingElapsedSec > 0) {
+    defeatFadeRemainingSec -= remainingElapsedSec;
+  }
+
+  if (defeatFadeRemainingSec <= TRIAL_DEFEAT_TIMER_EPSILON_SEC) {
     return null;
   }
 
   return {
     ...monster,
     defeatDelaySec: 0,
-    defeatAnimationRemainingSec,
+    defeatAnimationRemainingSec: 0,
     defeatAnimationDurationSec,
+    defeatFadeRemainingSec,
+    defeatFadeDurationSec,
   };
 }
 
@@ -820,11 +859,75 @@ function scheduleHitShake(
   };
 }
 
+function scheduleHealthBarUpdate(
+  monster: ActiveTrialMonster,
+  impactDelaySec: number,
+  hp: number,
+): Pick<ActiveTrialMonster, 'healthBarHp' | 'healthBarUpdateQueue'> {
+  const visibleHp = monster.healthBarHp ?? monster.hp;
+  const healthBarUpdateQueue = [
+    ...(monster.healthBarUpdateQueue ?? []),
+    { delaySec: Math.max(0, impactDelaySec), hp },
+  ].sort((first, second) => first.delaySec - second.delaySec);
+
+  return {
+    healthBarHp: visibleHp,
+    healthBarUpdateQueue,
+  };
+}
+
 function advanceHitShakes(runtime: TrialRuntimeState, dtSec: number): TrialRuntimeState {
   const elapsed = Math.max(0, dtSec);
   return {
     ...runtime,
     monsters: runtime.monsters.map((monster) => advanceMonsterHitShake(monster, elapsed)),
+  };
+}
+
+function advanceHealthBarUpdates(runtime: TrialRuntimeState, dtSec: number): TrialRuntimeState {
+  const elapsed = Math.max(0, dtSec);
+  return {
+    ...runtime,
+    monsters: runtime.monsters.map((monster) => advanceMonsterHealthBarUpdates(monster, elapsed)),
+  };
+}
+
+function advanceMonsterHealthBarUpdates(monster: ActiveTrialMonster, elapsedSec: number): ActiveTrialMonster {
+  const queuedUpdates = monster.healthBarUpdateQueue ?? [];
+  if (queuedUpdates.length <= 0) {
+    if (monster.healthBarHp != null && monster.healthBarHp === monster.hp) {
+      return {
+        ...monster,
+        healthBarHp: undefined,
+        healthBarUpdateQueue: undefined,
+      };
+    }
+
+    return monster;
+  }
+
+  const advancedUpdates = queuedUpdates
+    .map((update) => ({ ...update, delaySec: update.delaySec - elapsedSec }))
+    .sort((first, second) => first.delaySec - second.delaySec);
+  const arrivedUpdates = advancedUpdates.filter((update) => update.delaySec <= TRIAL_DEFEAT_TIMER_EPSILON_SEC);
+  const futureUpdates = advancedUpdates.filter((update) => update.delaySec > TRIAL_DEFEAT_TIMER_EPSILON_SEC);
+  const nextHealthBarHp =
+    arrivedUpdates.length > 0
+      ? arrivedUpdates[arrivedUpdates.length - 1].hp
+      : monster.healthBarHp;
+
+  if (futureUpdates.length <= 0 && nextHealthBarHp === monster.hp) {
+    return {
+      ...monster,
+      healthBarHp: undefined,
+      healthBarUpdateQueue: undefined,
+    };
+  }
+
+  return {
+    ...monster,
+    healthBarHp: nextHealthBarHp,
+    healthBarUpdateQueue: futureUpdates.length > 0 ? futureUpdates : undefined,
   };
 }
 

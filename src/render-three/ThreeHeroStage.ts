@@ -302,7 +302,7 @@ export function triggerActorOneShotAnimation(
     return;
   }
 
-  if (animationId === 'defeat' && controller.activeOneShotId === 'defeat' && controller.defeatRemainingSec > 0) {
+  if (animationId === 'defeat' && controller.activeOneShotId === 'defeat') {
     return;
   }
 
@@ -327,7 +327,7 @@ export function playActorLoopAnimation(
   controller: MageAnimationController,
   animationId: 'idle' | 'walk',
 ): void {
-  if (controller.activeOneShotId === 'defeat' && controller.defeatRemainingSec > 0) {
+  if (controller.activeOneShotId === 'defeat') {
     return;
   }
 
@@ -355,7 +355,7 @@ export function updateMageAnimationController(controller: MageAnimationControlle
   if (controller.defeatRemainingSec > 0) {
     controller.defeatRemainingSec = Math.max(0, controller.defeatRemainingSec - delta);
     if (controller.defeatRemainingSec <= 0) {
-      controller.activeOneShotId = undefined;
+      holdDefeatAnimationFinalFrame(controller);
     }
   }
 
@@ -365,6 +365,21 @@ export function updateMageAnimationController(controller: MageAnimationControlle
       stopMageCastAnimation(controller);
     }
   }
+}
+
+function holdDefeatAnimationFinalFrame(controller: MageAnimationController): void {
+  if (controller.defeatAction == null || controller.defeatDurationSec <= 0) {
+    return;
+  }
+
+  controller.activeOneShotId = 'defeat';
+  controller.defeatAction.enabled = true;
+  controller.defeatAction.clampWhenFinished = true;
+  controller.defeatAction.paused = true;
+  controller.defeatAction.time = controller.defeatDurationSec;
+  controller.defeatAction.setEffectiveWeight(1);
+  controller.walkAction?.setEffectiveWeight(0);
+  controller.idleAction?.setEffectiveWeight(0);
 }
 
 function stopMageCastAnimation(controller: MageAnimationController): void {

@@ -209,7 +209,11 @@ describe('ThreeHeroStage mage animation controller', () => {
     updateMageAnimationController(controller!, 1.01);
 
     expect(controller?.defeatRemainingSec).toBe(0);
+    expect(controller?.activeOneShotId).toBe('defeat');
+    expect(object.position.y).toBeCloseTo(-0.3);
     expect(controller?.defeatAction?.getEffectiveWeight()).toBe(1);
+    expect(controller?.defeatAction?.clampWhenFinished).toBe(true);
+    expect(controller?.walkAction?.getEffectiveWeight()).toBe(0);
   });
 
   it('does not restart kobold defeat when defeat is already active', () => {
@@ -235,6 +239,34 @@ describe('ThreeHeroStage mage animation controller', () => {
     expect(controller?.defeatRemainingSec).toBeLessThan(1);
     expect(controller?.defeatAction?.getEffectiveWeight()).toBe(1);
     expect(controller?.defeatAction?.clampWhenFinished).toBe(true);
+    expect(controller?.walkAction?.getEffectiveWeight()).toBe(0);
+  });
+
+  it('does not restart kobold defeat after the final frame is held for fade-out', () => {
+    const object = objectWithClips([
+      new THREE.AnimationClip('walk', 1, [
+        new THREE.VectorKeyframeTrack('.position', [0, 1], [0, 0, 0, 0, 0, 0.1]),
+      ]),
+      new THREE.AnimationClip('defeat', 1, [
+        new THREE.VectorKeyframeTrack('.position', [0, 1], [0, 0, 0, 0, -0.3, 0]),
+      ]),
+    ]);
+    const controller = createMageAnimationController(object);
+    expect(controller).not.toBeNull();
+
+    triggerActorOneShotAnimation(controller!, 'defeat');
+    updateMageAnimationController(controller!, 1.01);
+    const heldTime = controller!.defeatAction?.time ?? 0;
+
+    triggerActorOneShotAnimation(controller!, 'defeat');
+    updateMageAnimationController(controller!, 0);
+
+    expect(controller?.activeOneShotId).toBe('defeat');
+    expect(controller?.defeatRemainingSec).toBe(0);
+    expect(controller?.defeatAction?.time).toBeCloseTo(heldTime);
+    expect(controller?.defeatAction?.time).toBeCloseTo(1);
+    expect(object.position.y).toBeCloseTo(-0.3);
+    expect(controller?.defeatAction?.getEffectiveWeight()).toBe(1);
     expect(controller?.walkAction?.getEffectiveWeight()).toBe(0);
   });
 });

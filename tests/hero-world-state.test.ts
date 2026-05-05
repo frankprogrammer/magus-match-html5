@@ -8,7 +8,7 @@ import {
   phaseToCinematicState,
   trialMonsterHitShakeOffset,
 } from '../src/core/GameApp';
-import { getTrialMageWorldPosition, getTrialMonsterWorldPosition } from '../src/generator/TrialRules';
+import { getTrialMageWorldPosition, getTrialMonsterWorldPosition, KOBOLD_DEFEAT_FADE_SEC } from '../src/generator/TrialRules';
 import { HeroStageTemplateIds } from '../src/world-3d/HeroStageTemplates';
 
 describe('HeroWorldState', () => {
@@ -102,6 +102,30 @@ describe('HeroWorldState', () => {
     expect(fill?.transform.scale.x).toBeCloseTo((track?.transform.scale.x ?? 0) * 0.2);
     expect(fill?.transform.position.x).toBeLessThan(track?.transform.position.x ?? 0);
     expect(fill?.tintHex).toBe('#eb5757');
+  });
+
+  it('uses delayed displayed health for Trial health bar fill and tint', () => {
+    const bars = createTrialMonsterHealthBarObjects(
+      {
+        monsterId: 'delayed',
+        kind: 'kobold',
+        laneId: 0,
+        hp: 20,
+        healthBarHp: 60,
+        maxHp: 100,
+        x: 0,
+        spawnTimeMs: 0,
+        walkSpeed: 0.2,
+        scoreValue: 100,
+      },
+      { x: 2, y: -0.5, z: 0.35 },
+    );
+    const track = bars.find((object) => object.templateId === HeroStageTemplateIds.healthBarTrack);
+    const fill = bars.find((object) => object.templateId === HeroStageTemplateIds.healthBarFill);
+
+    expect(bars).toHaveLength(2);
+    expect(fill?.transform.scale.x).toBeCloseTo((track?.transform.scale.x ?? 0) * 0.6);
+    expect(fill?.tintHex).toBe('#27ae60');
   });
 
   it('applies the same Trial hit shake offset to the enemy and health bar objects', () => {
@@ -198,6 +222,31 @@ describe('HeroWorldState', () => {
     );
 
     expect(bars).toEqual([]);
+  });
+
+  it('keeps a lethal hit health bar visible until the delayed impact update arrives', () => {
+    const bars = createTrialMonsterHealthBarObjects(
+      {
+        monsterId: 'pending-lethal',
+        kind: 'kobold',
+        laneId: 0,
+        hp: 0,
+        healthBarHp: 15,
+        healthBarUpdateQueue: [{ delaySec: 0.12, hp: 0 }],
+        maxHp: 30,
+        x: 0,
+        spawnTimeMs: 0,
+        walkSpeed: 0.2,
+        scoreValue: 100,
+      },
+      { x: 2, y: -0.5, z: 0.35 },
+    );
+    const track = bars.find((object) => object.templateId === HeroStageTemplateIds.healthBarTrack);
+    const fill = bars.find((object) => object.templateId === HeroStageTemplateIds.healthBarFill);
+
+    expect(bars).toHaveLength(2);
+    expect(fill?.transform.scale.x).toBeCloseTo((track?.transform.scale.x ?? 0) * 0.5);
+    expect(fill?.tintHex).toBe('#f2c94c');
   });
 
   it('maps health bar color thresholds to green, gold, and red', () => {
@@ -300,6 +349,48 @@ describe('HeroWorldState', () => {
     const monster = state.objects.find((object) => object.templateId === HeroStageTemplateIds.monsterPlaceholder);
 
     expect(monster?.animationId).toBe('defeat');
+    expect(state.objects.some((object) => object.templateId === HeroStageTemplateIds.healthBarTrack)).toBe(false);
+    expect(state.objects.some((object) => object.templateId === HeroStageTemplateIds.healthBarFill)).toBe(false);
+  });
+
+  it('fades Trial monsters out after the kobold defeat animation finishes', () => {
+    const app = new MagusMatchGameApp(789);
+    const runtime = app.getTrialRuntimeForDebug();
+    if (runtime == null) {
+      throw new Error('Expected Trial runtime.');
+    }
+
+    const fadingMonster = {
+      ...runtime.monsters[0],
+      hp: 0,
+      defeatDelaySec: 0,
+      defeatAnimationRemainingSec: 0,
+      defeatAnimationDurationSec: 1,
+      defeatFadeRemainingSec: KOBOLD_DEFEAT_FADE_SEC,
+      defeatFadeDurationSec: KOBOLD_DEFEAT_FADE_SEC,
+    };
+
+    setTrialRuntimeForDebug(app, {
+      ...runtime,
+      monsters: [fadingMonster],
+    });
+
+    const startState = app.getHeroWorldState();
+    const startMonster = startState.objects.find((object) => object.templateId === HeroStageTemplateIds.monsterPlaceholder);
+
+    expect(startMonster?.animationId).toBe('defeat');
+    expect(startMonster?.opacity).toBeCloseTo(1);
+
+    setTrialRuntimeForDebug(app, {
+      ...runtime,
+      monsters: [{ ...fadingMonster, defeatFadeRemainingSec: KOBOLD_DEFEAT_FADE_SEC / 3 }],
+    });
+
+    const state = app.getHeroWorldState();
+    const monster = state.objects.find((object) => object.templateId === HeroStageTemplateIds.monsterPlaceholder);
+
+    expect(monster?.animationId).toBe('defeat');
+    expect(monster?.opacity).toBeCloseTo(1 / 3);
     expect(state.objects.some((object) => object.templateId === HeroStageTemplateIds.healthBarTrack)).toBe(false);
     expect(state.objects.some((object) => object.templateId === HeroStageTemplateIds.healthBarFill)).toBe(false);
   });

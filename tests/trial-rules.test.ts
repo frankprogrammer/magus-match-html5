@@ -21,6 +21,7 @@ import {
   processTrialSwap,
   processTrialRocketActivation,
   selectNearestAliveMonster,
+  SPELL_CAST_WINDUP_SEC,
   updateTrialRuntime,
 } from '../src/generator/TrialRules';
 
@@ -170,11 +171,12 @@ describe('TrialRules', () => {
     expect(result.runtime.projectiles.some((projectile) => projectile.schoolId === 'fire')).toBe(true);
     expect(result.runtime.projectiles[0]).toMatchObject({
       from: getTrialSpellOriginWorldPosition(level),
-      activationDelaySec: TILE_SWAP_RETARGET_MS / 1000,
+      castActivationDelaySec: TILE_SWAP_RETARGET_MS / 1000,
+      activationDelaySec: TILE_SWAP_RETARGET_MS / 1000 + SPELL_CAST_WINDUP_SEC,
       remainingSec: SPELL_MATCH_PROJECTILE_VISUAL_MS / 1000,
       durationSec: SPELL_MATCH_PROJECTILE_VISUAL_MS / 1000,
     });
-    const hitDelaySec = TILE_SWAP_RETARGET_MS / 1000 + SPELL_MATCH_PROJECTILE_VISUAL_MS / 1000;
+    const hitDelaySec = TILE_SWAP_RETARGET_MS / 1000 + SPELL_CAST_WINDUP_SEC + SPELL_MATCH_PROJECTILE_VISUAL_MS / 1000;
     expect(result.runtime.monsters[0]?.hitShakeDelaySec).toBeCloseTo(hitDelaySec);
     expect(result.runtime.monsters[0]?.hitShakeQueueSec).toHaveLength(result.runtime.projectiles.length);
     expect(result.runtime.monsters[0]?.hitShakeQueueSec?.[0]).toBeCloseTo(hitDelaySec);
@@ -183,7 +185,10 @@ describe('TrialRules', () => {
     expect(result.scoreDelta).toBeGreaterThan(0);
 
     const waiting = updateTrialRuntime(result.runtime, level, 0.08);
-    expect(waiting.projectiles[0].activationDelaySec).toBeCloseTo(TILE_SWAP_RETARGET_MS / 1000 - 0.08);
+    expect(waiting.projectiles[0].castActivationDelaySec).toBeCloseTo(TILE_SWAP_RETARGET_MS / 1000 - 0.08);
+    expect(waiting.projectiles[0].activationDelaySec).toBeCloseTo(
+      TILE_SWAP_RETARGET_MS / 1000 + SPELL_CAST_WINDUP_SEC - 0.08,
+    );
     expect(waiting.projectiles[0].remainingSec).toBeCloseTo(SPELL_MATCH_PROJECTILE_VISUAL_MS / 1000);
     expect(waiting.monsters[0]?.hitShakeDelaySec).toBeCloseTo(hitDelaySec - 0.08);
     expect(waiting.monsters[0]?.hitShakeQueueSec?.[0]).toBeCloseTo(hitDelaySec - 0.08);
@@ -427,15 +432,16 @@ describe('TrialRules', () => {
     expect(bombProjectiles[0]).toMatchObject({
       schoolId: 'fire',
       from: getTrialSpellOriginWorldPosition(level),
-      activationDelaySec: TILE_SWAP_RETARGET_MS / 1000,
+      castActivationDelaySec: TILE_SWAP_RETARGET_MS / 1000,
+      activationDelaySec: TILE_SWAP_RETARGET_MS / 1000 + SPELL_CAST_WINDUP_SEC,
       remainingSec: SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
       durationSec: SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
     });
     expect(result.runtime.monsters[0]?.hitShakeDelaySec).toBeCloseTo(
-      TILE_SWAP_RETARGET_MS / 1000 + SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
+      TILE_SWAP_RETARGET_MS / 1000 + SPELL_CAST_WINDUP_SEC + SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
     );
     expect(result.runtime.monsters[0]?.hitShakeQueueSec?.[0]).toBeCloseTo(
-      TILE_SWAP_RETARGET_MS / 1000 + SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
+      TILE_SWAP_RETARGET_MS / 1000 + SPELL_CAST_WINDUP_SEC + SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
     );
     expect(result.animationTrace?.cascadeSteps[0].clearedTiles.find((tile) => tile.clearDelayMs === 0)?.coord).toEqual({
       col: 1,
@@ -463,13 +469,13 @@ describe('TrialRules', () => {
       hp: 0,
     });
     expect(result.runtime.monsters[0].defeatDelaySec).toBeCloseTo(
-      TILE_SWAP_RETARGET_MS / 1000 + SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
+      TILE_SWAP_RETARGET_MS / 1000 + SPELL_CAST_WINDUP_SEC + SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
     );
     expect(result.runtime.monsters[0].hitShakeDelaySec).toBeCloseTo(
-      TILE_SWAP_RETARGET_MS / 1000 + SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
+      TILE_SWAP_RETARGET_MS / 1000 + SPELL_CAST_WINDUP_SEC + SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
     );
     expect(result.runtime.monsters[0].hitShakeQueueSec?.[0]).toBeCloseTo(
-      TILE_SWAP_RETARGET_MS / 1000 + SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
+      TILE_SWAP_RETARGET_MS / 1000 + SPELL_CAST_WINDUP_SEC + SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
     );
     expect(result.runtime.defeatedMonsterIds).toEqual([]);
     expect(result.runtime.result).toBe('playing');
@@ -604,8 +610,11 @@ describe('TrialRules', () => {
       coord: { col: 2, row: 0 },
       clearDelayMs: 2 * ROCKET_SWEEP_CLEAR_STAGGER_MS,
     }));
-    expect(result.runtime.projectiles.find((projectile) => projectile.effectKind === 'bomb')?.activationDelaySec).toBeCloseTo(
+    expect(result.runtime.projectiles.find((projectile) => projectile.effectKind === 'bomb')?.castActivationDelaySec).toBeCloseTo(
       (TILE_SWAP_RETARGET_MS + 2 * ROCKET_SWEEP_CLEAR_STAGGER_MS) / 1000,
+    );
+    expect(result.runtime.projectiles.find((projectile) => projectile.effectKind === 'bomb')?.activationDelaySec).toBeCloseTo(
+      (TILE_SWAP_RETARGET_MS + 2 * ROCKET_SWEEP_CLEAR_STAGGER_MS) / 1000 + SPELL_CAST_WINDUP_SEC,
     );
     expect(firstStepTiles).toContainEqual(expect.objectContaining({ coord: { col: 1, row: 1 } }));
     expect(result.animationTrace?.cascadeSteps[0].refillTiles.length).toBeGreaterThan(0);
@@ -634,7 +643,7 @@ describe('TrialRules', () => {
       new SeededRng(24),
     );
 
-    const defeatDelaySec = TILE_SWAP_RETARGET_MS / 1000 + SPELL_MATCH_PROJECTILE_VISUAL_MS / 1000;
+    const defeatDelaySec = TILE_SWAP_RETARGET_MS / 1000 + SPELL_CAST_WINDUP_SEC + SPELL_MATCH_PROJECTILE_VISUAL_MS / 1000;
     expect(result.runtime.monsters).toHaveLength(1);
     expect(result.runtime.monsters[0]).toMatchObject({
       hp: 0,

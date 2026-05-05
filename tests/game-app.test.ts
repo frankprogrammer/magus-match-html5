@@ -159,6 +159,7 @@ describe('MagusMatchGameApp', () => {
           effectKind: 'match',
           from: { x: level.trial.mageX, y: level.trial.laneY, z: 0.55 },
           to: { x: level.trial.mageX + 1, y: level.trial.laneY, z: 0.35 },
+          castActivationDelaySec: 0,
           activationDelaySec: 0.12,
           remainingSec: 0.1,
           durationSec: 0.1,

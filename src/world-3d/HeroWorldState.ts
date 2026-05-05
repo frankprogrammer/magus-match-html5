@@ -15,6 +15,7 @@ export interface ProjectileState {
   effectKind: 'match' | 'bomb';
   from: Vec3Data;
   to: Vec3Data;
+  castActivationDelaySec: number;
   activationDelaySec: number;
   remainingSec: number;
   durationSec: number;

@@ -14,6 +14,7 @@ export class ThreeHeroStage {
   private readonly projectileCache = new Map<string, ProjectileParticleSystem>();
   private readonly cameraController = new ThreeCameraController();
   private readonly animationControllers = new Map<string, MageAnimationController>();
+  private readonly castTriggeredProjectileIds = new Set<string>();
   private elapsedSec = 0;
 
   constructor(private readonly container: HTMLElement) {
@@ -34,8 +35,9 @@ export class ThreeHeroStage {
     this.elapsedSec += Math.max(0, dtSec);
     this.syncCamera(state);
     this.syncObjects(state.objects);
-    this.syncProjectiles(state.activeProjectiles);
+    this.syncProjectileCastTriggers(state.activeProjectiles);
     this.updateAnimationMixers(dtSec);
+    this.syncProjectiles(state.activeProjectiles);
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -56,6 +58,7 @@ export class ThreeHeroStage {
       disposeProjectileSystem(projectile);
     }
     this.animationControllers.clear();
+    this.castTriggeredProjectileIds.clear();
     this.objectCache.clear();
     this.projectileCache.clear();
     this.factory.disposeCachedResources();
@@ -67,8 +70,29 @@ export class ThreeHeroStage {
     this.cameraController.apply(this.camera, state.camera, orthographicAspect(this.camera));
   }
 
+  private syncProjectileCastTriggers(projectiles: readonly ProjectileState[]): void {
+    const activeProjectileIds = new Set<string>();
+
+    for (const projectileState of projectiles) {
+      activeProjectileIds.add(projectileState.projectileId);
+      if (!isProjectileCastReady(projectileState) || this.castTriggeredProjectileIds.has(projectileState.projectileId)) {
+        continue;
+      }
+
+      this.triggerObjectCastAnimation('actor-mage');
+      this.castTriggeredProjectileIds.add(projectileState.projectileId);
+    }
+
+    for (const projectileId of [...this.castTriggeredProjectileIds]) {
+      if (!activeProjectileIds.has(projectileId)) {
+        this.castTriggeredProjectileIds.delete(projectileId);
+      }
+    }
+  }
+
   private syncProjectiles(projectiles: readonly ProjectileState[]): void {
     const seen = new Set<string>();
+    const mageObject = this.objectCache.get('actor-mage');
 
     for (const projectileState of projectiles) {
       if (!isProjectileVisible(projectileState)) {
@@ -77,12 +101,9 @@ export class ThreeHeroStage {
 
       const objectId = `projectile-${projectileState.projectileId}`;
       seen.add(objectId);
-      const isNewlyVisibleProjectile = !this.projectileCache.has(objectId);
-      const projectile = this.getOrCreateProjectile(objectId, projectileState);
-      applyProjectileState(projectile, projectileState);
-      if (isNewlyVisibleProjectile) {
-        this.triggerObjectCastAnimation('actor-mage');
-      }
+      const renderProjectileState = resolveProjectileRenderOrigin(projectileState, mageObject);
+      const projectile = this.getOrCreateProjectile(objectId, renderProjectileState);
+      applyProjectileState(projectile, renderProjectileState);
     }
 
     for (const [objectId, projectile] of [...this.projectileCache.entries()]) {
@@ -367,8 +388,45 @@ export function projectileMaterialSettings(
   };
 }
 
-function isProjectileVisible(projectile: ProjectileState): boolean {
+export function isProjectileCastReady(projectile: Pick<ProjectileState, 'castActivationDelaySec'>): boolean {
+  return projectile.castActivationDelaySec <= 0;
+}
+
+export function isProjectileVisible(projectile: Pick<ProjectileState, 'activationDelaySec' | 'remainingSec'>): boolean {
   return projectile.activationDelaySec <= 0 && projectile.remainingSec > 0;
+}
+
+export function resolveProjectileRenderOrigin(
+  projectile: ProjectileState,
+  mageObject?: THREE.Object3D,
+): ProjectileState {
+  const particleSourcePosition = resolveMageParticleSourceWorldPosition(mageObject);
+  return particleSourcePosition == null
+    ? projectile
+    : {
+        ...projectile,
+        from: particleSourcePosition,
+      };
+}
+
+export function resolveMageParticleSourceWorldPosition(mageObject?: THREE.Object3D): ProjectileState['from'] | null {
+  if (mageObject == null) {
+    return null;
+  }
+
+  const particleSource = mageObject.getObjectByName('particleSource');
+  if (particleSource == null) {
+    return null;
+  }
+
+  mageObject.updateWorldMatrix(true, true);
+  particleSource.updateWorldMatrix(true, false);
+  const position = particleSource.getWorldPosition(new THREE.Vector3());
+  return {
+    x: position.x,
+    y: position.y,
+    z: position.z,
+  };
 }
 
 interface ProjectileParticleSystem {

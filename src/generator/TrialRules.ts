@@ -46,6 +46,7 @@ export type SpellSchoolId = 'fire' | 'ice' | 'lightning' | 'earth';
 
 const TRIAL_DEFEAT_TIMER_EPSILON_SEC = 0.000001;
 const TRIAL_HIT_SHAKE_DURATION_SEC = 0.18;
+export const SPELL_CAST_WINDUP_SEC = 0.5;
 
 export interface ActiveTrialMonster {
   monsterId: string;
@@ -70,6 +71,7 @@ export interface TrialProjectileRuntimeState {
   effectKind: 'match' | 'bomb';
   from: Vec3Data;
   to: Vec3Data;
+  castActivationDelaySec: number;
   activationDelaySec: number;
   remainingSec: number;
   durationSec: number;
@@ -109,7 +111,7 @@ interface TrialDamageSource {
   damage: number;
   shotCount: number;
   visualShotCount: number;
-  activationDelaySec: number;
+  castActivationDelaySec: number;
   durationSec: number;
 }
 
@@ -403,14 +405,15 @@ function applyDamageSources(
       const damage = Math.min(target.hp, source.damage);
       const nextHp = Math.max(0, target.hp - source.damage);
       const defeated = nextHp <= 0;
+      const impactDelaySec = source.castActivationDelaySec + SPELL_CAST_WINDUP_SEC + source.durationSec;
       const projectile = shotIndex < source.visualShotCount ? createProjectile(nextRuntime, level, source, target) : null;
       const monsters = nextRuntime.monsters.map((monster) =>
         monster.monsterId === target.monsterId
           ? {
               ...monster,
               hp: nextHp,
-              defeatDelaySec: defeated ? source.activationDelaySec + source.durationSec : monster.defeatDelaySec,
-              ...scheduleHitShake(monster, source.activationDelaySec + source.durationSec),
+              defeatDelaySec: defeated ? impactDelaySec : monster.defeatDelaySec,
+              ...scheduleHitShake(monster, impactDelaySec),
             }
           : monster,
       );
@@ -458,7 +461,7 @@ function cascadeDamageSources(
         damage: level.trial.baseDamage * (damageMultiplierForMatch(match) + cascadeIndex * 0.25),
         shotCount: 1,
         visualShotCount: 1,
-        activationDelaySec: (stepTimings[cascadeIndex + animationStepOffset]?.popStartMs ?? 0) / 1000,
+        castActivationDelaySec: (stepTimings[cascadeIndex + animationStepOffset]?.popStartMs ?? 0) / 1000,
         durationSec: SPELL_MATCH_PROJECTILE_VISUAL_MS / 1000,
       })),
   );
@@ -487,7 +490,7 @@ function powerUpDamageSource(
     damage: level.trial.baseDamage * powerUpDamageMultiplier(detonation.powerUpType),
     shotCount: powerUpShotCount(detonation),
     visualShotCount: isBomb ? 1 : powerUpShotCount(detonation),
-    activationDelaySec: chainStepPopStartSec + entry.activationDelayMs / 1000,
+    castActivationDelaySec: chainStepPopStartSec + entry.activationDelayMs / 1000,
     durationSec: (isBomb ? SPELL_BOMB_PROJECTILE_VISUAL_MS : SPELL_MATCH_PROJECTILE_VISUAL_MS) / 1000,
   };
 }
@@ -528,7 +531,8 @@ function createProjectile(
     effectKind: source.effectKind,
     from: getTrialSpellOriginWorldPosition(level),
     to: getTrialMonsterWorldPosition(level, target),
-    activationDelaySec: source.activationDelaySec,
+    castActivationDelaySec: source.castActivationDelaySec,
+    activationDelaySec: source.castActivationDelaySec + SPELL_CAST_WINDUP_SEC,
     remainingSec: source.durationSec,
     durationSec: source.durationSec,
   };
@@ -801,6 +805,7 @@ function advanceMonsterHitShake(monster: ActiveTrialMonster, elapsedSec: number)
 function advanceProjectile(projectile: TrialProjectileRuntimeState, elapsedSec: number): TrialProjectileRuntimeState {
   let remainingElapsedSec = elapsedSec;
   let activationDelaySec = projectile.activationDelaySec;
+  const castActivationDelaySec = Math.max(0, projectile.castActivationDelaySec - elapsedSec);
   let remainingSec = projectile.remainingSec;
 
   if (activationDelaySec > 0) {
@@ -815,6 +820,7 @@ function advanceProjectile(projectile: TrialProjectileRuntimeState, elapsedSec: 
 
   return {
     ...projectile,
+    castActivationDelaySec,
     activationDelaySec: Math.max(0, activationDelaySec),
     remainingSec,
   };

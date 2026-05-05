@@ -2,13 +2,18 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import {
   createMageAnimationController,
+  isProjectileCastReady,
+  isProjectileVisible,
   projectileColor,
   projectileMaterialSettings,
   projectileParticleColorComponents,
   projectileQuadScale,
+  resolveMageParticleSourceWorldPosition,
+  resolveProjectileRenderOrigin,
   triggerMageCastAnimation,
   updateMageAnimationController,
 } from '../src/render-three/ThreeHeroStage';
+import type { ProjectileState } from '../src/world-3d/HeroWorldState';
 
 describe('ThreeHeroStage projectile VFX', () => {
   it('maps spell schools to the requested tile colors', () => {
@@ -44,6 +49,39 @@ describe('ThreeHeroStage projectile VFX', () => {
     expect(projectileQuadScale('bomb')).toEqual({ x: 0.6, y: 0.78 });
     expect(projectileQuadScale('match').y).toBeGreaterThan(projectileQuadScale('match').x);
     expect(projectileQuadScale('bomb').y).toBeGreaterThan(projectileQuadScale('bomb').x);
+  });
+
+  it('starts cast from cast timing while particles wait for projectile activation timing', () => {
+    expect(isProjectileCastReady({ castActivationDelaySec: 0 })).toBe(true);
+    expect(isProjectileCastReady({ castActivationDelaySec: 0.1 })).toBe(false);
+    expect(isProjectileVisible({ activationDelaySec: 0.1, remainingSec: 0.2 })).toBe(false);
+    expect(isProjectileVisible({ activationDelaySec: 0, remainingSec: 0.2 })).toBe(true);
+  });
+
+  it('resolves projectile origin from the mage particleSource world position', () => {
+    const mage = new THREE.Group();
+    mage.position.set(2, 3, 4);
+    mage.scale.set(2, 3, 4);
+    const particleSource = new THREE.Object3D();
+    particleSource.name = 'particleSource';
+    particleSource.position.set(0.25, 0.5, -0.1);
+    mage.add(particleSource);
+    const projectile = testProjectile();
+
+    const position = resolveMageParticleSourceWorldPosition(mage);
+    const renderProjectile = resolveProjectileRenderOrigin(projectile, mage);
+
+    expect(position?.x).toBeCloseTo(2.5);
+    expect(position?.y).toBeCloseTo(4.5);
+    expect(position?.z).toBeCloseTo(3.6);
+    expect(renderProjectile.from).toEqual(position);
+  });
+
+  it('falls back to the rule-authored projectile origin when particleSource is missing', () => {
+    const projectile = testProjectile();
+
+    expect(resolveMageParticleSourceWorldPosition(new THREE.Group())).toBeNull();
+    expect(resolveProjectileRenderOrigin(projectile, new THREE.Group())).toBe(projectile);
   });
 });
 
@@ -113,4 +151,18 @@ function objectWithClips(clips: THREE.AnimationClip[]): THREE.Object3D {
   const object = new THREE.Object3D();
   object.animations = clips;
   return object;
+}
+
+function testProjectile(): ProjectileState {
+  return {
+    projectileId: 'test-projectile',
+    schoolId: 'ice',
+    effectKind: 'match',
+    from: { x: -1, y: -2, z: -3 },
+    to: { x: 4, y: 5, z: 6 },
+    castActivationDelaySec: 0,
+    activationDelaySec: 0,
+    remainingSec: 0.2,
+    durationSec: 0.2,
+  };
 }

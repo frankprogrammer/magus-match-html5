@@ -8,6 +8,7 @@ import {
   addBoneProxyRig,
   applyMageTextureToMeshes,
   applyFallbackMaterialToUnmaterialedMeshes,
+  createKoboldAnimationClips,
   createMageAnimationClips,
   createAlphaBleedCanvasTexture,
   ensureMageMeshesVisibleWithoutOverridingTextures,
@@ -17,9 +18,11 @@ import {
 } from "./ThreeModelUtils";
 
 const MAGE_TARGET_HEIGHT = 1.45;
+const KOBOLD_TARGET_HEIGHT = 1.16;
 const MAGE_LOOP_START_FRAME = 0;
 const MAGE_LOOP_END_FRAME = 60;
 export const MAGE_MODEL_Y_ROTATION_RAD = -Math.PI / 2;
+export const KOBOLD_MODEL_Y_ROTATION_RAD = -Math.PI / 2;
 export const HERO_BACKDROP_VIEW_WIDTH = 10.8;
 export const HERO_BACKDROP_VIEW_HEIGHT = 5;
 
@@ -31,9 +34,17 @@ export class ThreeObjectFactory {
   private mageTextureLoadStarted = false;
   private mageTextureDebugShown = false;
   private mageBoneOnlyWarningShown = false;
+  private koboldTemplate: THREE.Group | null = null;
+  private koboldTemplateVersion = 0;
+  private koboldLoadStarted = false;
+  private koboldTexture: THREE.Texture | null = null;
+  private koboldTextureLoadStarted = false;
+  private koboldTextureDebugShown = false;
+  private koboldBoneOnlyWarningShown = false;
 
   constructor() {
     this.startMageModelLoad();
+    this.startKoboldModelLoad();
   }
 
   create(templateId: string): THREE.Object3D {
@@ -49,7 +60,7 @@ export class ThreeObjectFactory {
       case HeroStageTemplateIds.pathMarker:
         return createPathMarker();
       case HeroStageTemplateIds.monsterPlaceholder:
-        return createMonsterPlaceholder();
+        return this.createKobold();
       case HeroStageTemplateIds.projectilePlaceholder:
         return createProjectilePlaceholder();
       case HeroStageTemplateIds.healthBarTrack:
@@ -64,6 +75,10 @@ export class ThreeObjectFactory {
   getTemplateVersion(templateId: string): number {
     if (templateId === HeroStageTemplateIds.mage) {
       return this.mageTemplateVersion;
+    }
+
+    if (templateId === HeroStageTemplateIds.monsterPlaceholder) {
+      return this.koboldTemplateVersion;
     }
 
     return 0;
@@ -88,6 +103,11 @@ export class ThreeObjectFactory {
       this.mageTemplate = null;
     }
     this.mageTexture = null;
+    if (this.koboldTemplate != null) {
+      this.dispose(this.koboldTemplate);
+      this.koboldTemplate = null;
+    }
+    this.koboldTexture = null;
   }
 
   private createMage(): THREE.Object3D {
@@ -97,6 +117,15 @@ export class ThreeObjectFactory {
     }
 
     return createPlaceholderMage();
+  }
+
+  private createKobold(): THREE.Object3D {
+    this.startKoboldModelLoad();
+    if (this.koboldTemplate != null) {
+      return cloneLoadedKoboldTemplate(this.koboldTemplate);
+    }
+
+    return createMonsterPlaceholder();
   }
 
   private startMageModelLoad(): void {
@@ -206,6 +235,103 @@ export class ThreeObjectFactory {
     }
     return true;
   }
+
+  private startKoboldModelLoad(): void {
+    if (this.koboldLoadStarted || typeof window === "undefined") {
+      return;
+    }
+
+    const entry = getAssetManifestEntry(AssetIds.rigs.kobold);
+    if (entry?.sourceFormat !== "fbx") {
+      return;
+    }
+
+    this.koboldLoadStarted = true;
+    const loader = new FBXLoader();
+    const koboldUrl = resolveBrowserAssetUrl(entry.browserUrl);
+    loader.load(
+      koboldUrl,
+      (loaded) => {
+        const loadedHadRenderableGeometry = hasRenderableGeometry(loaded);
+        if (!loadedHadRenderableGeometry) {
+          const proxyAdded = addBoneProxyRig(loaded);
+          if (!this.koboldBoneOnlyWarningShown) {
+            console.warn(
+              proxyAdded
+                ? `Kobold FBX at ${koboldUrl} has animation bones but no renderable meshes; using temporary bone proxy visuals.`
+                : `Kobold FBX at ${koboldUrl} has no renderable meshes and no usable bones; keeping placeholder kobold.`,
+            );
+            this.koboldBoneOnlyWarningShown = true;
+          }
+
+          if (!proxyAdded) {
+            return;
+          }
+        }
+
+        applyFallbackMaterialToUnmaterialedMeshes(loaded);
+        ensureMageMeshesVisibleWithoutOverridingTextures(loaded);
+        this.koboldTemplate = normalizeModelToActorBounds(
+          loaded,
+          KOBOLD_TARGET_HEIGHT,
+        );
+        this.koboldTemplate.animations = createKoboldAnimationClips(loaded.animations);
+        if (loadedHadRenderableGeometry) {
+          this.applyKoboldTextureToTemplateIfReady();
+          this.startKoboldTextureLoad();
+        }
+        this.koboldTemplateVersion += 1;
+      },
+      undefined,
+      (error) => {
+        console.warn(`Failed to load kobold FBX from ${koboldUrl}`, error);
+      },
+    );
+  }
+
+  private startKoboldTextureLoad(): void {
+    if (this.koboldTextureLoadStarted || typeof window === "undefined") {
+      return;
+    }
+
+    const entry = getAssetManifestEntry(AssetIds.materials.koboldTexture);
+    if (entry == null) {
+      return;
+    }
+
+    this.koboldTextureLoadStarted = true;
+    const textureUrl = resolveBrowserAssetUrl(entry.browserUrl);
+    new THREE.TextureLoader().load(
+      textureUrl,
+      (texture) => {
+        texture.colorSpace = THREE.SRGBColorSpace;
+        this.koboldTexture = createAlphaBleedCanvasTexture(texture);
+        if (this.applyKoboldTextureToTemplateIfReady()) {
+          this.koboldTemplateVersion += 1;
+        }
+      },
+      undefined,
+      (error) => {
+        console.warn(`Failed to load kobold texture from ${textureUrl}`, error);
+      },
+    );
+  }
+
+  private applyKoboldTextureToTemplateIfReady(): boolean {
+    if (this.koboldTemplate == null || this.koboldTexture == null) {
+      return false;
+    }
+
+    applyMageTextureToMeshes(this.koboldTemplate, this.koboldTexture);
+    if (!this.koboldTextureDebugShown && import.meta.env.DEV) {
+      console.info(
+        "Applied forced kobold texture to FBX meshes:",
+        getMageTextureDebugInfo(this.koboldTemplate),
+      );
+      this.koboldTextureDebugShown = true;
+    }
+    return true;
+  }
 }
 
 function cloneLoadedMageTemplate(template: THREE.Group): THREE.Object3D {
@@ -218,6 +344,18 @@ function cloneLoadedMageTemplate(template: THREE.Group): THREE.Object3D {
 export function applyMageModelFacingCorrection(object: THREE.Object3D): void {
   const modelRoot = object.children[0] ?? object;
   modelRoot.rotation.y = MAGE_MODEL_Y_ROTATION_RAD;
+}
+
+function cloneLoadedKoboldTemplate(template: THREE.Group): THREE.Object3D {
+  const clone = normalizeModelToActorBounds(template, KOBOLD_TARGET_HEIGHT);
+  applyKoboldModelFacingCorrection(clone);
+  clone.animations = template.animations;
+  return clone;
+}
+
+export function applyKoboldModelFacingCorrection(object: THREE.Object3D): void {
+  const modelRoot = object.children[0] ?? object;
+  modelRoot.rotation.y = KOBOLD_MODEL_Y_ROTATION_RAD;
 }
 
 function createBackdrop(): THREE.Object3D {

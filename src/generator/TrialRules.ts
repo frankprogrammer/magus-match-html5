@@ -47,6 +47,7 @@ export type SpellSchoolId = 'fire' | 'ice' | 'lightning' | 'earth';
 const TRIAL_DEFEAT_TIMER_EPSILON_SEC = 0.000001;
 const TRIAL_HIT_SHAKE_DURATION_SEC = 0.18;
 export const SPELL_CAST_WINDUP_SEC = 0.5;
+export const KOBOLD_DEFEAT_ANIMATION_SEC = 1.0;
 
 export interface ActiveTrialMonster {
   monsterId: string;
@@ -59,6 +60,8 @@ export interface ActiveTrialMonster {
   walkSpeed: number;
   scoreValue: number;
   defeatDelaySec?: number;
+  defeatAnimationRemainingSec?: number;
+  defeatAnimationDurationSec?: number;
   hitShakeDelaySec?: number;
   hitShakeQueueSec?: readonly number[];
   hitShakeRemainingSec?: number;
@@ -706,33 +709,69 @@ function expireProjectiles(runtime: TrialRuntimeState, dtSec: number): TrialRunt
 function advancePendingDefeats(runtime: TrialRuntimeState, dtSec: number): TrialRuntimeState {
   const elapsed = Math.max(0, dtSec);
   const defeatedMonsterIds = [...runtime.defeatedMonsterIds];
-  const monsters = runtime.monsters
-    .map((monster) => {
-      if (monster.hp > 0) {
-        return monster;
-      }
+  const monsters: ActiveTrialMonster[] = [];
 
-      const defeatDelaySec = (monster.defeatDelaySec ?? 0) - elapsed;
-      return {
-        ...monster,
-        defeatDelaySec,
-      };
-    })
-    .filter((monster) => {
-      if (monster.hp > 0 || (monster.defeatDelaySec ?? 0) > TRIAL_DEFEAT_TIMER_EPSILON_SEC) {
-        return true;
-      }
-
+  for (const monster of runtime.monsters) {
+    const advancedMonster = advancePendingDefeat(monster, elapsed);
+    if (advancedMonster == null) {
       if (!defeatedMonsterIds.includes(monster.monsterId)) {
         defeatedMonsterIds.push(monster.monsterId);
       }
-      return false;
-    });
+      continue;
+    }
+
+    monsters.push(advancedMonster);
+  }
 
   return {
     ...runtime,
     monsters,
     defeatedMonsterIds,
+  };
+}
+
+function advancePendingDefeat(monster: ActiveTrialMonster, elapsedSec: number): ActiveTrialMonster | null {
+  if (monster.hp > 0) {
+    return monster;
+  }
+
+  let remainingElapsedSec = elapsedSec;
+  let defeatDelaySec = monster.defeatDelaySec ?? 0;
+  let defeatAnimationRemainingSec = monster.defeatAnimationRemainingSec;
+  const defeatAnimationDurationSec = monster.defeatAnimationDurationSec ?? KOBOLD_DEFEAT_ANIMATION_SEC;
+
+  if (defeatDelaySec > TRIAL_DEFEAT_TIMER_EPSILON_SEC && remainingElapsedSec > 0) {
+    const consumedDelaySec = Math.min(defeatDelaySec, remainingElapsedSec);
+    defeatDelaySec -= consumedDelaySec;
+    remainingElapsedSec -= consumedDelaySec;
+  }
+
+  if (defeatDelaySec > TRIAL_DEFEAT_TIMER_EPSILON_SEC) {
+    return {
+      ...monster,
+      defeatDelaySec,
+      defeatAnimationRemainingSec,
+      defeatAnimationDurationSec: defeatAnimationRemainingSec == null ? monster.defeatAnimationDurationSec : defeatAnimationDurationSec,
+    };
+  }
+
+  if (defeatAnimationRemainingSec == null) {
+    defeatAnimationRemainingSec = KOBOLD_DEFEAT_ANIMATION_SEC;
+  }
+
+  if (remainingElapsedSec > 0) {
+    defeatAnimationRemainingSec -= remainingElapsedSec;
+  }
+
+  if (defeatAnimationRemainingSec <= TRIAL_DEFEAT_TIMER_EPSILON_SEC) {
+    return null;
+  }
+
+  return {
+    ...monster,
+    defeatDelaySec: 0,
+    defeatAnimationRemainingSec,
+    defeatAnimationDurationSec,
   };
 }
 

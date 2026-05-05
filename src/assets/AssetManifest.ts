@@ -59,6 +59,10 @@ const TEMP_FBX_MAGE_NOTES =
   "Temporary browser hero-stage FBX model. Auto-normalized in Three.js to bottom-center pivot and 1.45 world-unit height. Loops animation frames 0-60.";
 const TEMP_FBX_MAGE_TEXTURE_NOTES =
   "Temporary browser hero-stage texture recovered from the FBX .fbm export folder and applied to the mage mesh when the FBX material does not load a map.";
+const TEMP_FBX_KOBOLD_NOTES =
+  "Temporary browser hero-stage FBX kobold enemy model. Auto-normalized in Three.js and uses embedded walk/defeat clips.";
+const TEMP_FBX_KOBOLD_TEXTURE_NOTES =
+  "Temporary browser hero-stage texture recovered from the kobold FBX .fbm export folder and applied to kobold meshes when the FBX material does not load a map.";
 const UI_BANNER_NOTES =
   "Runtime 1080x150 PNG for the fixed middle HUD band; drawn full-width behind HUD text.";
 const BOARD_BACKGROUND_NOTES =
@@ -208,9 +212,19 @@ export const AssetManifest: Record<string, AssetManifestEntry> = {
   ),
   [AssetIds.rigs.kobold]: rig(
     AssetIds.rigs.kobold,
-    "/assets/rigs/kobold/kobold-parts-source.png",
-    "Assets/Rigs/Kobold/kobold-rig.json",
+    "/assets/rigs/kobold.fbx",
+    "Assets/Rigs/Kobold/kobold.fbx",
     "prompt.rig.kobolds",
+    "fbx",
+    "temporary FBX stand-in, auto-normalized to 1.16 world units",
+    TEMP_FBX_KOBOLD_NOTES,
+  ),
+  [AssetIds.materials.koboldTexture]: material(
+    AssetIds.materials.koboldTexture,
+    "/assets/rigs/kobold.fbm/kobold_texture.png",
+    "Assets/Textures/Rigs/Kobold/kobold_texture.png",
+    "prompt.rig.kobolds",
+    TEMP_FBX_KOBOLD_TEXTURE_NOTES,
   ),
   [AssetIds.rigs.tallKobold]: rig(
     AssetIds.rigs.tallKobold,

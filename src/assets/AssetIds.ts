@@ -40,6 +40,7 @@ export const AssetIds = {
   },
   materials: {
     mageTexture: 'material.mageTexture',
+    koboldTexture: 'material.koboldTexture',
   },
   spritesheets: {
     tntExplosion: 'spritesheet.tntExplosion',

@@ -6,6 +6,7 @@ import {
   applyMageTextureToMeshes,
   createMageAnimationClips,
   bleedTransparentPixelRgb,
+  createKoboldAnimationClips,
   createMageLoopClip,
   ensureMageMeshesVisibleWithoutOverridingTextures,
   getMageTextureDebugInfo,
@@ -214,5 +215,25 @@ describe('normalizeModelToActorBounds', () => {
 
     expect(clips.map((clip) => clip.name)).toEqual(['idle']);
     expect(clips[0].duration).toBeCloseTo(2.5);
+  });
+
+  it('maps named FBX kobold walk and defeat clips to renderer animation ids', () => {
+    const walkClip = new THREE.AnimationClip('K.Armature|K.Armature|Kobold Walk', 1, [
+      new THREE.VectorKeyframeTrack('hips.position', [0, 1], [0, 0, 0, 0, 0, 0.1]),
+    ]);
+    const defeatClip = new THREE.AnimationClip('K.Armature|K.Armature|Kobold Defeat', 1, [
+      new THREE.VectorKeyframeTrack('hips.position', [0, 1], [0, 0, 0, 0, -0.25, 0]),
+    ]);
+    const zeroDurationClip = new THREE.AnimationClip('K.Armature|K.Armature|Idle Stand', 0, [
+      new THREE.VectorKeyframeTrack('hips.position', [0], [0, 0, 0]),
+    ]);
+
+    const clips = createKoboldAnimationClips([walkClip, zeroDurationClip, defeatClip]);
+
+    expect(clips.map((clip) => clip.name)).toEqual(['walk', 'defeat']);
+    expect(clips[0]).not.toBe(walkClip);
+    expect(clips[1]).not.toBe(defeatClip);
+    expect(clips[0].duration).toBeCloseTo(1);
+    expect(clips[1].duration).toBeCloseTo(1);
   });
 });

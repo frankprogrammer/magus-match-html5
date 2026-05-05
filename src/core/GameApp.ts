@@ -114,11 +114,11 @@ interface RuntimeBoardVisualCue extends Omit<BoardVisualCueState, "value"> {
 }
 
 const MAGE_WORLD_Y_OFFSET = -0.72;
-const TRIAL_MONSTER_SCALE_MULTIPLIER = 2;
 const TRIAL_HEALTH_BAR_WIDTH = 0.92;
 const TRIAL_HEALTH_BAR_HEIGHT = 0.18;
 const TRIAL_HEALTH_BAR_FILL_HEIGHT = 0.11;
 const TRIAL_HEALTH_BAR_Z_OFFSET = 0.08;
+const TRIAL_KOBOLD_HEALTH_BAR_Y_OFFSET = 2.56;
 const TRIAL_HIT_SHAKE_X_AMPLITUDE = 0.14;
 const TRIAL_HIT_SHAKE_Y_AMPLITUDE = 0.045;
 
@@ -1174,10 +1174,9 @@ export class MagusMatchGameApp implements GameApp {
           HeroStageTemplateIds.monsterPlaceholder,
           {
             position: monsterPosition,
-            scale: scaleForTrialMonster(monster.kind),
+            scale: MAGE_WORLD_SCALE,
             renderOrder: 4,
-            animationId: this.phase === "LOSE" ? "victory" : "walk",
-            tintHex: tintForTrialMonster(monster.kind),
+            animationId: animationForTrialMonster(monster, this.phase),
           },
         ),
         ...createTrialMonsterHealthBarObjects(monster, monsterPosition),
@@ -1281,30 +1280,6 @@ function phaseToPrinceAnimation(phase: GamePhase): string {
   return "cower";
 }
 
-function scaleForTrialMonster(
-  kind: ActiveTrialMonster["kind"],
-): TransformState["scale"] {
-  const scale = baseScaleForTrialMonster(kind);
-  return {
-    x: scale.x * TRIAL_MONSTER_SCALE_MULTIPLIER,
-    y: scale.y * TRIAL_MONSTER_SCALE_MULTIPLIER,
-    z: scale.z * TRIAL_MONSTER_SCALE_MULTIPLIER,
-  };
-}
-
-function baseScaleForTrialMonster(
-  kind: ActiveTrialMonster["kind"],
-): TransformState["scale"] {
-  switch (kind) {
-    case "kobold":
-      return { x: 0.46, y: 0.62, z: 0.46 };
-    case "tallKobold":
-      return { x: 0.52, y: 0.86, z: 0.52 };
-    case "miniBoss":
-      return { x: 0.7, y: 1.05, z: 0.7 };
-  }
-}
-
 function trialMonsterWorldYOffset(kind: ActiveTrialMonster["kind"]): number {
   switch (kind) {
     case "kobold":
@@ -1316,15 +1291,16 @@ function trialMonsterWorldYOffset(kind: ActiveTrialMonster["kind"]): number {
   }
 }
 
-function tintForTrialMonster(kind: ActiveTrialMonster["kind"]): string {
-  switch (kind) {
-    case "kobold":
-      return "#27ae60";
-    case "tallKobold":
-      return "#8b6f47";
-    case "miniBoss":
-      return "#eb5757";
+function animationForTrialMonster(monster: ActiveTrialMonster, phase: GamePhase): string {
+  if ((monster.defeatAnimationRemainingSec ?? 0) > 0) {
+    return "defeat";
   }
+
+  if (phase === "LOSE" && monster.hp > 0) {
+    return "victory";
+  }
+
+  return "walk";
 }
 
 export function createTrialMonsterHealthBarObjects(
@@ -1337,7 +1313,7 @@ export function createTrialMonsterHealthBarObjects(
   }
 
   const barY =
-    monsterPosition.y + healthBarYOffsetForTrialMonster(monster.kind);
+    monsterPosition.y + healthBarYOffsetForTrialMonster();
   const barZ = monsterPosition.z + TRIAL_HEALTH_BAR_Z_OFFSET;
   const fillWidth = TRIAL_HEALTH_BAR_WIDTH * ratio;
   const fillCenterX =
@@ -1406,17 +1382,8 @@ function healthRatioForTrialMonster(monster: ActiveTrialMonster): number {
   return Math.max(0, Math.min(1, monster.hp / monster.maxHp));
 }
 
-function healthBarYOffsetForTrialMonster(
-  kind: ActiveTrialMonster["kind"],
-): number {
-  switch (kind) {
-    case "kobold":
-      return 1.64;
-    case "tallKobold":
-      return 2.1;
-    case "miniBoss":
-      return 2.56;
-  }
+function healthBarYOffsetForTrialMonster(): number {
+  return TRIAL_KOBOLD_HEALTH_BAR_Y_OFFSET;
 }
 
 function screenForPhase(phase: GamePhase): ScreenRenderState["screen"] {

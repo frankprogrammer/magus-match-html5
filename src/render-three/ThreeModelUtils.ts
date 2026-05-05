@@ -5,6 +5,8 @@ const UNIT_Y = new THREE.Vector3(0, 1, 0);
 const MAGE_TEXTURE_ALPHA_TEST = 0.01;
 const MAGE_IDLE_CLIP_NAME = 'Armature|Idle';
 const MAGE_CAST_CLIP_NAME = 'Armature|Cast';
+const KOBOLD_WALK_CLIP_NAME = 'Kobold Walk';
+const KOBOLD_DEFEAT_CLIP_NAME = 'Kobold Defeat';
 
 export function normalizeModelToActorBounds(source: THREE.Object3D, targetHeight: number): THREE.Group {
   const wrapper = new THREE.Group();
@@ -95,8 +97,8 @@ export function createMageAnimationClips(
   fallbackStartFrame: number,
   fallbackEndFrame: number,
 ): THREE.AnimationClip[] {
-  const idleClip = findMageClip(clips, MAGE_IDLE_CLIP_NAME, 'idle');
-  const castClip = findMageClip(clips, MAGE_CAST_CLIP_NAME, 'cast');
+  const idleClip = findUsableClipByName(clips, MAGE_IDLE_CLIP_NAME, 'idle');
+  const castClip = findUsableClipByName(clips, MAGE_CAST_CLIP_NAME, 'cast');
   const result: THREE.AnimationClip[] = [];
 
   if (idleClip != null) {
@@ -115,6 +117,22 @@ export function createMageAnimationClips(
   return result;
 }
 
+export function createKoboldAnimationClips(clips: readonly THREE.AnimationClip[]): THREE.AnimationClip[] {
+  const walkClip = findUsableClipByName(clips, KOBOLD_WALK_CLIP_NAME, 'kobold walk');
+  const defeatClip = findUsableClipByName(clips, KOBOLD_DEFEAT_CLIP_NAME, 'kobold defeat');
+  const result: THREE.AnimationClip[] = [];
+
+  if (walkClip != null) {
+    result.push(cloneClipWithName(walkClip, 'walk'));
+  }
+
+  if (defeatClip != null) {
+    result.push(cloneClipWithName(defeatClip, 'defeat'));
+  }
+
+  return result;
+}
+
 export function inferFrameRateForInclusiveFrameRange(
   durationSec: number,
   startFrame: number,
@@ -128,7 +146,7 @@ function isUsableClip(clip: THREE.AnimationClip): boolean {
   return clip.duration > 0 && clip.tracks.length > 0;
 }
 
-function findMageClip(
+function findUsableClipByName(
   clips: readonly THREE.AnimationClip[],
   exactName: string,
   shortName: string,
@@ -137,7 +155,12 @@ function findMageClip(
   const shortNormalized = shortName.trim().toLowerCase();
   return clips.find((clip) => {
     const clipName = clip.name.trim().toLowerCase();
-    return isUsableClip(clip) && (clipName === exactNormalized || clipName.endsWith(`|${shortNormalized}`));
+    return (
+      isUsableClip(clip) &&
+      (clipName === exactNormalized ||
+        clipName.endsWith(`|${shortNormalized}`) ||
+        clipName.endsWith(shortNormalized))
+    );
   });
 }
 

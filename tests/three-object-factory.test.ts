@@ -1,10 +1,12 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import {
+  applyKoboldModelFacingCorrection,
   applyMageModelFacingCorrection,
   backdropCoverSizeForImageAspect,
   HERO_BACKDROP_VIEW_HEIGHT,
   HERO_BACKDROP_VIEW_WIDTH,
+  KOBOLD_MODEL_Y_ROTATION_RAD,
   MAGE_MODEL_Y_ROTATION_RAD,
   ThreeObjectFactory,
 } from '../src/render-three/ThreeObjectFactory';
@@ -18,6 +20,15 @@ describe('ThreeObjectFactory', () => {
     expect(mage).toBeInstanceOf(THREE.Object3D);
     expect(mage.children.length).toBeGreaterThan(0);
     expect(factory.getTemplateVersion(HeroStageTemplateIds.mage)).toBe(0);
+  });
+
+  it('creates a synchronous placeholder monster before the kobold FBX model is loaded', () => {
+    const factory = new ThreeObjectFactory();
+    const monster = factory.create(HeroStageTemplateIds.monsterPlaceholder);
+
+    expect(monster).toBeInstanceOf(THREE.Object3D);
+    expect(monster.children.length).toBeGreaterThan(0);
+    expect(factory.getTemplateVersion(HeroStageTemplateIds.monsterPlaceholder)).toBe(0);
   });
 
   it('creates a synchronous castle backdrop fallback object before the texture is loaded', () => {
@@ -66,6 +77,21 @@ describe('ThreeObjectFactory', () => {
     root.add(modelRoot);
 
     applyMageModelFacingCorrection(root);
+
+    expect(root.rotation.y).toBe(0);
+    expect(modelRoot.rotation.y).toBeCloseTo(-Math.PI / 2);
+  });
+
+  it('documents the loaded kobold FBX facing correction as -90 degrees around Y', () => {
+    expect(KOBOLD_MODEL_Y_ROTATION_RAD).toBeCloseTo(-Math.PI / 2);
+  });
+
+  it('applies the kobold facing correction to the model child so world transforms do not overwrite it', () => {
+    const root = new THREE.Group();
+    const modelRoot = new THREE.Group();
+    root.add(modelRoot);
+
+    applyKoboldModelFacingCorrection(root);
 
     expect(root.rotation.y).toBe(0);
     expect(modelRoot.rotation.y).toBeCloseTo(-Math.PI / 2);

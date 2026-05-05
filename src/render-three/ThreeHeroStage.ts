@@ -137,6 +137,7 @@ export class ThreeHeroStage {
       seen.add(objectState.objectId);
       const object = this.getOrCreateObject(objectState);
       applyWorldObjectState(object, objectState, this.elapsedSec);
+      this.syncObjectAnimation(objectState.objectId, objectState.animationId);
     }
 
     for (const [objectId, object] of [...this.objectCache.entries()]) {
@@ -192,6 +193,22 @@ export class ThreeHeroStage {
     triggerMageCastAnimation(controller);
   }
 
+  private syncObjectAnimation(objectId: string, animationId?: string): void {
+    const controller = this.animationControllers.get(objectId);
+    if (controller == null) {
+      return;
+    }
+
+    if (animationId === 'defeat') {
+      triggerActorOneShotAnimation(controller, 'defeat');
+      return;
+    }
+
+    if (animationId === 'walk' || animationId === 'idle') {
+      playActorLoopAnimation(controller, animationId);
+    }
+  }
+
   private updateAnimationMixers(dtSec: number): void {
     const delta = Math.max(0, dtSec);
     for (const controller of this.animationControllers.values()) {
@@ -203,73 +220,150 @@ export class ThreeHeroStage {
 export interface MageAnimationController {
   mixer: THREE.AnimationMixer;
   idleAction?: THREE.AnimationAction;
+  walkAction?: THREE.AnimationAction;
   castAction?: THREE.AnimationAction;
+  defeatAction?: THREE.AnimationAction;
   castDurationSec: number;
   castRemainingSec: number;
+  defeatDurationSec: number;
+  defeatRemainingSec: number;
+  activeLoopId?: 'idle' | 'walk';
+  activeOneShotId?: 'cast' | 'defeat';
 }
 
 export function createMageAnimationController(object: THREE.Object3D): MageAnimationController | null {
-  const idleClip = object.animations.find((clip) => clip.name === 'idle') ?? object.animations[0];
+  const idleClip = object.animations.find((clip) => clip.name === 'idle');
+  const walkClip = object.animations.find((clip) => clip.name === 'walk');
   const castClip = object.animations.find((clip) => clip.name === 'cast');
-  if (idleClip == null && castClip == null) {
+  const defeatClip = object.animations.find((clip) => clip.name === 'defeat');
+  const fallbackLoopClip =
+    idleClip ??
+    walkClip ??
+    object.animations.find((clip) => clip.name !== 'cast' && clip.name !== 'defeat') ??
+    object.animations[0];
+  if (fallbackLoopClip == null && castClip == null && defeatClip == null) {
     return null;
   }
 
   const mixer = new THREE.AnimationMixer(object);
-  const idleAction = idleClip == null ? undefined : mixer.clipAction(idleClip);
-  if (idleAction != null) {
-    idleAction.reset();
-    idleAction.setLoop(THREE.LoopRepeat, Infinity);
-    idleAction.setEffectiveWeight(1);
-    idleAction.play();
-  }
-
+  const fallbackIdleClip = idleClip ?? (walkClip == null ? fallbackLoopClip : undefined);
+  const idleAction = fallbackIdleClip == null ? undefined : actionForLoop(mixer, fallbackIdleClip);
+  const walkAction = walkClip == null ? undefined : actionForLoop(mixer, walkClip);
   const castAction = castClip == null ? undefined : mixer.clipAction(castClip);
   if (castAction != null) {
     castAction.setLoop(THREE.LoopOnce, 1);
     castAction.clampWhenFinished = false;
     castAction.setEffectiveWeight(0);
   }
+  const defeatAction = defeatClip == null ? undefined : mixer.clipAction(defeatClip);
+  if (defeatAction != null) {
+    defeatAction.setLoop(THREE.LoopOnce, 1);
+    defeatAction.clampWhenFinished = true;
+    defeatAction.setEffectiveWeight(0);
+  }
 
-  return {
+  const activeLoopId = walkClip != null && idleClip == null ? 'walk' : 'idle';
+  const controller: MageAnimationController = {
     mixer,
     idleAction,
+    walkAction,
     castAction,
+    defeatAction,
     castDurationSec: castClip?.duration ?? 0,
     castRemainingSec: 0,
+    defeatDurationSec: defeatClip?.duration ?? 0,
+    defeatRemainingSec: 0,
+    activeLoopId,
   };
+  playActorLoopAnimation(controller, activeLoopId);
+  return controller;
+}
+
+function actionForLoop(mixer: THREE.AnimationMixer, clip: THREE.AnimationClip): THREE.AnimationAction {
+  const action = mixer.clipAction(clip);
+  action.reset();
+  action.setLoop(THREE.LoopRepeat, Infinity);
+  action.setEffectiveWeight(0);
+  action.play();
+  return action;
 }
 
 export function triggerMageCastAnimation(controller: MageAnimationController): void {
-  if (controller.castAction == null || controller.castDurationSec <= 0) {
+  triggerActorOneShotAnimation(controller, 'cast');
+}
+
+export function triggerActorOneShotAnimation(
+  controller: MageAnimationController,
+  animationId: 'cast' | 'defeat',
+): void {
+  const action = animationId === 'cast' ? controller.castAction : controller.defeatAction;
+  const durationSec = animationId === 'cast' ? controller.castDurationSec : controller.defeatDurationSec;
+  if (action == null || durationSec <= 0) {
     return;
   }
 
-  if (controller.idleAction != null) {
-    controller.idleAction.enabled = true;
-    controller.idleAction.setEffectiveWeight(0);
+  if (animationId === 'defeat' && controller.activeOneShotId === 'defeat' && controller.defeatRemainingSec > 0) {
+    return;
   }
 
-  controller.castAction.reset();
-  controller.castAction.setLoop(THREE.LoopOnce, 1);
-  controller.castAction.clampWhenFinished = false;
-  controller.castAction.enabled = true;
-  controller.castAction.setEffectiveWeight(1);
-  controller.castAction.play();
-  controller.castRemainingSec = controller.castDurationSec;
+  controller.idleAction?.setEffectiveWeight(0);
+  controller.walkAction?.setEffectiveWeight(0);
+
+  action.reset();
+  action.setLoop(THREE.LoopOnce, 1);
+  action.clampWhenFinished = animationId === 'defeat';
+  action.enabled = true;
+  action.setEffectiveWeight(1);
+  action.play();
+  controller.activeOneShotId = animationId;
+  if (animationId === 'cast') {
+    controller.castRemainingSec = controller.castDurationSec;
+  } else {
+    controller.defeatRemainingSec = controller.defeatDurationSec;
+  }
+}
+
+export function playActorLoopAnimation(
+  controller: MageAnimationController,
+  animationId: 'idle' | 'walk',
+): void {
+  if (controller.activeOneShotId === 'defeat' && controller.defeatRemainingSec > 0) {
+    return;
+  }
+
+  const nextAction = animationId === 'walk' ? controller.walkAction : controller.idleAction;
+  const fallbackAction = nextAction ?? controller.idleAction ?? controller.walkAction;
+  if (fallbackAction == null) {
+    return;
+  }
+
+  controller.activeLoopId = nextAction === controller.walkAction ? 'walk' : 'idle';
+  if (controller.castRemainingSec > 0 || controller.defeatRemainingSec > 0) {
+    return;
+  }
+
+  controller.idleAction?.setEffectiveWeight(fallbackAction === controller.idleAction ? 1 : 0);
+  controller.walkAction?.setEffectiveWeight(fallbackAction === controller.walkAction ? 1 : 0);
+  fallbackAction.enabled = true;
+  fallbackAction.play();
 }
 
 export function updateMageAnimationController(controller: MageAnimationController, dtSec: number): void {
   const delta = Math.max(0, dtSec);
   controller.mixer.update(delta);
 
-  if (controller.castRemainingSec <= 0) {
-    return;
+  if (controller.defeatRemainingSec > 0) {
+    controller.defeatRemainingSec = Math.max(0, controller.defeatRemainingSec - delta);
+    if (controller.defeatRemainingSec <= 0) {
+      controller.activeOneShotId = undefined;
+    }
   }
 
-  controller.castRemainingSec = Math.max(0, controller.castRemainingSec - delta);
-  if (controller.castRemainingSec <= 0) {
-    stopMageCastAnimation(controller);
+  if (controller.castRemainingSec > 0) {
+    controller.castRemainingSec = Math.max(0, controller.castRemainingSec - delta);
+    if (controller.castRemainingSec <= 0) {
+      stopMageCastAnimation(controller);
+    }
   }
 }
 
@@ -278,12 +372,9 @@ function stopMageCastAnimation(controller: MageAnimationController): void {
     controller.castAction.stop();
     controller.castAction.setEffectiveWeight(0);
   }
+  controller.activeOneShotId = undefined;
 
-  if (controller.idleAction != null) {
-    controller.idleAction.enabled = true;
-    controller.idleAction.setEffectiveWeight(1);
-    controller.idleAction.play();
-  }
+  playActorLoopAnimation(controller, controller.activeLoopId ?? 'idle');
 }
 
 function createHeroStageCamera(aspect: number): THREE.OrthographicCamera {

@@ -21,6 +21,7 @@ import {
   processTrialSwap,
   processTrialRocketActivation,
   selectNearestAliveMonster,
+  KOBOLD_DEFEAT_ANIMATION_SEC,
   SPELL_CAST_WINDUP_SEC,
   updateTrialRuntime,
 } from '../src/generator/TrialRules';
@@ -83,7 +84,14 @@ describe('TrialRules', () => {
     expect(waiting.nextSpawnIndex).toBe(1);
     expect(waiting.defeatedMonsterIds).toEqual([]);
 
-    const updated = updateTrialRuntime(waiting, level, 0.01);
+    const animating = updateTrialRuntime(waiting, level, 0.01);
+
+    expect(animating.monsters.map((activeMonster) => activeMonster.monsterId)).toEqual(['first']);
+    expect(animating.monsters[0].defeatAnimationRemainingSec).toBeCloseTo(KOBOLD_DEFEAT_ANIMATION_SEC);
+    expect(animating.nextSpawnIndex).toBe(1);
+    expect(animating.defeatedMonsterIds).toEqual([]);
+
+    const updated = updateTrialRuntime(animating, level, KOBOLD_DEFEAT_ANIMATION_SEC);
 
     expect(updated.monsters.map((activeMonster) => activeMonster.monsterId)).toEqual(['second']);
     expect(updated.nextSpawnIndex).toBe(2);
@@ -471,6 +479,7 @@ describe('TrialRules', () => {
     expect(result.runtime.monsters[0].defeatDelaySec).toBeCloseTo(
       TILE_SWAP_RETARGET_MS / 1000 + SPELL_CAST_WINDUP_SEC + SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
     );
+    expect(result.runtime.monsters[0].defeatAnimationRemainingSec).toBeUndefined();
     expect(result.runtime.monsters[0].hitShakeDelaySec).toBeCloseTo(
       TILE_SWAP_RETARGET_MS / 1000 + SPELL_CAST_WINDUP_SEC + SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
     );
@@ -479,6 +488,14 @@ describe('TrialRules', () => {
     );
     expect(result.runtime.defeatedMonsterIds).toEqual([]);
     expect(result.runtime.result).toBe('playing');
+
+    const impact = updateTrialRuntime(
+      result.runtime,
+      level,
+      TILE_SWAP_RETARGET_MS / 1000 + SPELL_CAST_WINDUP_SEC + SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
+    );
+    expect(impact.monsters[0].defeatAnimationRemainingSec).toBeCloseTo(KOBOLD_DEFEAT_ANIMATION_SEC);
+    expect(impact.defeatedMonsterIds).toEqual([]);
   });
 
   it('expires active hit shake without changing monster gameplay state', () => {
@@ -631,7 +648,7 @@ describe('TrialRules', () => {
     expect(result.runtime).toBe(runtime);
   });
 
-  it('wins after the final defeated monster waits for the killing match projectile to arrive', () => {
+  it('wins after the final defeated monster waits for the killing match projectile and defeat animation', () => {
     const board = matchSwapBoard();
     const level = testTrialLevel([monster({ maxHp: 5 })], board);
     const result = processTrialSwap(
@@ -657,9 +674,36 @@ describe('TrialRules', () => {
     expect(waiting.result).toBe('playing');
 
     const updated = updateTrialRuntime(waiting, level, 0.001);
+    expect(updated.monsters).toHaveLength(1);
+    expect(updated.monsters[0].defeatAnimationRemainingSec).toBeCloseTo(KOBOLD_DEFEAT_ANIMATION_SEC);
+    expect(updated.defeatedMonsterIds).toHaveLength(0);
+    expect(updated.result).toBe('playing');
+
+    const won = updateTrialRuntime(updated, level, KOBOLD_DEFEAT_ANIMATION_SEC);
+    expect(won.monsters).toHaveLength(0);
+    expect(won.defeatedMonsterIds).toHaveLength(1);
+    expect(won.result).toBe('won');
+  });
+
+  it('consumes large defeat updates across projectile impact wait and defeat animation', () => {
+    const level = testTrialLevel([monster({ monsterId: 'large-dt-target' })]);
+    const runtime = {
+      ...createTrialRuntime(level),
+      monsters: [
+        {
+          ...createTrialRuntime(level).monsters[0],
+          monsterId: 'large-dt-target',
+          hp: 0,
+          defeatDelaySec: 0.2,
+        },
+      ],
+      defeatedMonsterIds: [],
+    };
+
+    const updated = updateTrialRuntime(runtime, level, 0.2 + KOBOLD_DEFEAT_ANIMATION_SEC);
+
     expect(updated.monsters).toHaveLength(0);
-    expect(updated.defeatedMonsterIds).toHaveLength(1);
-    expect(updated.result).toBe('won');
+    expect(updated.defeatedMonsterIds).toEqual(['large-dt-target']);
   });
 });
 

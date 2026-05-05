@@ -73,6 +73,7 @@ describe('HeroWorldState', () => {
     expect(track?.replication).toBe('localCosmetic');
     expect(fill?.replication).toBe('localCosmetic');
     expect(track?.transform.position.y).toBeGreaterThan(monster?.transform.position.y ?? 0);
+    expect((track?.transform.position.y ?? 0) - (monster?.transform.position.y ?? 0)).toBeCloseTo(2.56);
     expect(fill?.transform.scale.x).toBeCloseTo(track?.transform.scale.x ?? 0);
     expect(track?.transform.scale.y).toBeCloseTo(0.18);
     expect(fill?.transform.scale.y).toBeCloseTo(0.11);
@@ -202,12 +203,63 @@ describe('HeroWorldState', () => {
     expect(contactMarker?.transform.position.x).toBeCloseTo(level?.type === 'TRIAL' ? level.trial.contactX : 0);
   });
 
-  it('doubles Trial enemy scales and lowers their world positions', () => {
+  it('uses player scale and FBX material colors for Trial enemies', () => {
     const state = new MagusMatchGameApp(789).getHeroWorldState();
     const monster = state.objects.find((object) => object.templateId === HeroStageTemplateIds.monsterPlaceholder);
 
-    expect(monster?.transform.scale).toEqual({ x: 0.92, y: 1.24, z: 0.92 });
+    expect(monster?.transform.scale).toEqual(MAGE_WORLD_SCALE);
+    expect(monster?.tintHex).toBeUndefined();
     expect(monster?.transform.position.y).toBeLessThan(-0.85);
+  });
+
+  it('uses walk animation for living and projectile-pending defeated Trial monsters', () => {
+    const app = new MagusMatchGameApp(789);
+    const runtime = app.getTrialRuntimeForDebug();
+    if (runtime == null) {
+      throw new Error('Expected Trial runtime.');
+    }
+
+    const livingState = app.getHeroWorldState();
+    const livingMonster = livingState.objects.find((object) => object.templateId === HeroStageTemplateIds.monsterPlaceholder);
+    expect(livingMonster?.animationId).toBe('walk');
+
+    setTrialRuntimeForDebug(app, {
+      ...runtime,
+      monsters: [{ ...runtime.monsters[0], hp: 0, defeatDelaySec: 0.2 }],
+    });
+    const pendingMonster = app
+      .getHeroWorldState()
+      .objects.find((object) => object.templateId === HeroStageTemplateIds.monsterPlaceholder);
+
+    expect(pendingMonster?.animationId).toBe('walk');
+  });
+
+  it('uses defeat animation for Trial monsters during the kobold defeat timer', () => {
+    const app = new MagusMatchGameApp(789);
+    const runtime = app.getTrialRuntimeForDebug();
+    if (runtime == null) {
+      throw new Error('Expected Trial runtime.');
+    }
+
+    setTrialRuntimeForDebug(app, {
+      ...runtime,
+      monsters: [
+        {
+          ...runtime.monsters[0],
+          hp: 0,
+          defeatDelaySec: 0,
+          defeatAnimationRemainingSec: 0.5,
+          defeatAnimationDurationSec: 1,
+        },
+      ],
+    });
+
+    const state = app.getHeroWorldState();
+    const monster = state.objects.find((object) => object.templateId === HeroStageTemplateIds.monsterPlaceholder);
+
+    expect(monster?.animationId).toBe('defeat');
+    expect(state.objects.some((object) => object.templateId === HeroStageTemplateIds.healthBarTrack)).toBe(false);
+    expect(state.objects.some((object) => object.templateId === HeroStageTemplateIds.healthBarFill)).toBe(false);
   });
 });
 

@@ -78,6 +78,9 @@ describe("AssetManifest", () => {
     expect(AssetManifest[AssetIds.materials.mageTexture].browserUrl).toBe(
       "/assets/rigs/knight2.fbm/knight_texture_final.png",
     );
+    expect(AssetManifest[AssetIds.materials.koboldTexture].browserUrl).toBe(
+      "/assets/rigs/kobold.fbm/kobold_texture.png",
+    );
     expect(AssetManifest[AssetIds.spritesheets.tntExplosion].browserUrl).toBe(
       "/assets/spritesheets/explosion-sprite.png",
     );
@@ -89,6 +92,15 @@ describe("AssetManifest", () => {
   it("maps the temporary mage rig to the dropped FBX player model", () => {
     expect(AssetManifest[AssetIds.rigs.mage]).toMatchObject({
       browserUrl: "/assets/rigs/knight2.fbx",
+      sourceFormat: "fbx",
+      pivot: "bottomCenter",
+      upAxis: "+Y",
+    });
+  });
+
+  it("maps the temporary kobold rig to the dropped FBX enemy model", () => {
+    expect(AssetManifest[AssetIds.rigs.kobold]).toMatchObject({
+      browserUrl: "/assets/rigs/kobold.fbx",
       sourceFormat: "fbx",
       pivot: "bottomCenter",
       upAxis: "+Y",

@@ -10,6 +10,7 @@ import {
   projectileQuadScale,
   resolveMageParticleSourceWorldPosition,
   resolveProjectileRenderOrigin,
+  triggerActorOneShotAnimation,
   triggerMageCastAnimation,
   updateMageAnimationController,
 } from '../src/render-three/ThreeHeroStage';
@@ -129,6 +130,28 @@ describe('ThreeHeroStage mage animation controller', () => {
     expect(controller?.idleAction?.getEffectiveWeight()).toBe(1);
   });
 
+  it('restarts cast when explicitly triggered again', () => {
+    const object = objectWithClips([
+      new THREE.AnimationClip('idle', 1, [
+        new THREE.VectorKeyframeTrack('.position', [0, 1], [0, 0, 0, 0, 0.04, 0]),
+      ]),
+      new THREE.AnimationClip('cast', 0.5, [
+        new THREE.VectorKeyframeTrack('.position', [0, 0.5], [0, 0, 0, 0.2, 0, 0]),
+      ]),
+    ]);
+    const controller = createMageAnimationController(object);
+    expect(controller).not.toBeNull();
+
+    triggerMageCastAnimation(controller!);
+    updateMageAnimationController(controller!, 0.2);
+    expect(controller?.castRemainingSec).toBeCloseTo(0.3);
+
+    triggerMageCastAnimation(controller!);
+
+    expect(controller?.castRemainingSec).toBeCloseTo(0.5);
+    expect(controller?.castAction?.isRunning()).toBe(true);
+  });
+
   it('treats a missing cast clip as a no-op', () => {
     const object = objectWithClips([
       new THREE.AnimationClip('idle', 1, [
@@ -144,6 +167,75 @@ describe('ThreeHeroStage mage animation controller', () => {
     expect(controller?.castRemainingSec).toBe(0);
     expect(controller?.idleAction?.isRunning()).toBe(true);
     expect(controller?.idleAction?.getEffectiveWeight()).toBe(1);
+  });
+
+  it('starts the walk clip by default for kobold animation sets', () => {
+    const object = objectWithClips([
+      new THREE.AnimationClip('walk', 1, [
+        new THREE.VectorKeyframeTrack('.position', [0, 1], [0, 0, 0, 0, 0, 0.1]),
+      ]),
+      new THREE.AnimationClip('defeat', 1, [
+        new THREE.VectorKeyframeTrack('.position', [0, 1], [0, 0, 0, 0, -0.3, 0]),
+      ]),
+    ]);
+
+    const controller = createMageAnimationController(object);
+
+    expect(controller).not.toBeNull();
+    expect(controller?.walkAction?.isRunning()).toBe(true);
+    expect(controller?.walkAction?.getEffectiveWeight()).toBe(1);
+    expect(controller?.defeatRemainingSec).toBe(0);
+  });
+
+  it('plays kobold defeat as a clamped one-shot', () => {
+    const object = objectWithClips([
+      new THREE.AnimationClip('walk', 1, [
+        new THREE.VectorKeyframeTrack('.position', [0, 1], [0, 0, 0, 0, 0, 0.1]),
+      ]),
+      new THREE.AnimationClip('defeat', 1, [
+        new THREE.VectorKeyframeTrack('.position', [0, 1], [0, 0, 0, 0, -0.3, 0]),
+      ]),
+    ]);
+    const controller = createMageAnimationController(object);
+    expect(controller).not.toBeNull();
+
+    triggerActorOneShotAnimation(controller!, 'defeat');
+
+    expect(controller?.defeatRemainingSec).toBeCloseTo(1);
+    expect(controller?.defeatAction?.isRunning()).toBe(true);
+    expect(controller?.defeatAction?.clampWhenFinished).toBe(true);
+    expect(controller?.walkAction?.getEffectiveWeight()).toBe(0);
+
+    updateMageAnimationController(controller!, 1.01);
+
+    expect(controller?.defeatRemainingSec).toBe(0);
+    expect(controller?.defeatAction?.getEffectiveWeight()).toBe(1);
+  });
+
+  it('does not restart kobold defeat when defeat is already active', () => {
+    const object = objectWithClips([
+      new THREE.AnimationClip('walk', 1, [
+        new THREE.VectorKeyframeTrack('.position', [0, 1], [0, 0, 0, 0, 0, 0.1]),
+      ]),
+      new THREE.AnimationClip('defeat', 1, [
+        new THREE.VectorKeyframeTrack('.position', [0, 1], [0, 0, 0, 0, -0.3, 0]),
+      ]),
+    ]);
+    const controller = createMageAnimationController(object);
+    expect(controller).not.toBeNull();
+
+    triggerActorOneShotAnimation(controller!, 'defeat');
+    updateMageAnimationController(controller!, 0.35);
+    const remainingAfterAdvance = controller!.defeatRemainingSec;
+
+    triggerActorOneShotAnimation(controller!, 'defeat');
+
+    expect(controller?.activeOneShotId).toBe('defeat');
+    expect(controller?.defeatRemainingSec).toBeCloseTo(remainingAfterAdvance);
+    expect(controller?.defeatRemainingSec).toBeLessThan(1);
+    expect(controller?.defeatAction?.getEffectiveWeight()).toBe(1);
+    expect(controller?.defeatAction?.clampWhenFinished).toBe(true);
+    expect(controller?.walkAction?.getEffectiveWeight()).toBe(0);
   });
 });
 

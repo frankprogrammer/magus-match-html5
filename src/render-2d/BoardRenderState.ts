@@ -26,6 +26,16 @@ export interface BoardParticleVisualState {
   zIndex: number;
 }
 
+export interface BoardMatchEnergyStreamVisualState {
+  streamId: string;
+  x: number;
+  y: number;
+  radius: number;
+  color: string;
+  alpha: number;
+  zIndex: number;
+}
+
 export interface BoardBurstRingVisualState {
   ringId: string;
   x: number;
@@ -102,6 +112,7 @@ export interface BoardRenderState {
   logicalHeight: number;
   boardCells: readonly BoardCellVisualState[];
   particles?: readonly BoardParticleVisualState[];
+  matchEnergyStreams?: readonly BoardMatchEnergyStreamVisualState[];
   burstRings?: readonly BoardBurstRingVisualState[];
   tntExplosionSprites?: readonly BoardTntExplosionSpriteVisualState[];
   rocketWavePuffs?: readonly BoardRocketWavePuffVisualState[];

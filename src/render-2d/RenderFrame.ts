@@ -203,6 +203,7 @@ function drawBoard(renderer: GameRenderer, boardState: BoardRenderState, elapsed
   drawParticles(renderer, boardState);
   renderer.pop();
 
+  drawMatchEnergyStreams(renderer, boardState);
   drawBoardFrame(renderer);
   drawDamagePopups(renderer, boardState);
   renderer.pop();
@@ -299,6 +300,19 @@ function drawParticles(renderer: GameRenderer, boardState: BoardRenderState): vo
 
     renderer.pushAlpha(particle.alpha);
     renderer.drawEllipse(particle.color, particle.x, particle.y, particle.radius, particle.radius);
+    renderer.pop();
+  }
+}
+
+function drawMatchEnergyStreams(renderer: GameRenderer, boardState: BoardRenderState): void {
+  const streams = [...(boardState.matchEnergyStreams ?? [])].sort((first, second) => first.zIndex - second.zIndex);
+  for (const stream of streams) {
+    if (stream.alpha <= 0 || stream.radius <= 0) {
+      continue;
+    }
+
+    renderer.pushAlpha(stream.alpha);
+    renderer.drawEllipse(stream.color, stream.x, stream.y, stream.radius, stream.radius);
     renderer.pop();
   }
 }

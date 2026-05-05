@@ -79,6 +79,7 @@ export interface TrialProjectileRuntimeState {
   to: Vec3Data;
   castActivationDelaySec: number;
   activationDelaySec: number;
+  chargeDurationSec: number;
   remainingSec: number;
   durationSec: number;
 }
@@ -539,6 +540,7 @@ function createProjectile(
     to: getTrialMonsterWorldPosition(level, target),
     castActivationDelaySec: source.castActivationDelaySec,
     activationDelaySec: source.castActivationDelaySec + SPELL_CAST_WINDUP_SEC,
+    chargeDurationSec: SPELL_CAST_WINDUP_SEC,
     remainingSec: source.durationSec,
     durationSec: source.durationSec,
   };

@@ -17,6 +17,7 @@ export interface ProjectileState {
   to: Vec3Data;
   castActivationDelaySec: number;
   activationDelaySec: number;
+  chargeDurationSec: number;
   remainingSec: number;
   durationSec: number;
 }

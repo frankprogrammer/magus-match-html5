@@ -13,22 +13,66 @@ import {
 import { HeroStageTemplateIds } from '../src/world-3d/HeroStageTemplates';
 
 describe('ThreeObjectFactory', () => {
-  it('creates a synchronous placeholder mage before the FBX model is loaded', () => {
+  it('keeps the mage invisible before the FBX model is loaded', () => {
     const factory = new ThreeObjectFactory();
     const mage = factory.create(HeroStageTemplateIds.mage);
 
     expect(mage).toBeInstanceOf(THREE.Object3D);
-    expect(mage.children.length).toBeGreaterThan(0);
+    expect(mage.children).toHaveLength(0);
+    expect(countMeshes(mage)).toBe(0);
     expect(factory.getTemplateVersion(HeroStageTemplateIds.mage)).toBe(0);
   });
 
-  it('creates a synchronous placeholder monster before the kobold FBX model is loaded', () => {
+  it('keeps the mage invisible until the loaded FBX template has its forced texture applied', () => {
+    const factory = new ThreeObjectFactory();
+    const internals = factory as unknown as TextureGateTestInternals;
+    internals.pendingMageTemplate = createTexturableTemplate();
+
+    expect(internals.publishMageTemplateIfTextureReady()).toBe(false);
+    expect(factory.create(HeroStageTemplateIds.mage).children).toHaveLength(0);
+    expect(factory.getTemplateVersion(HeroStageTemplateIds.mage)).toBe(0);
+
+    const texture = new THREE.Texture();
+    internals.mageTexture = texture;
+
+    expect(internals.publishMageTemplateIfTextureReady()).toBe(true);
+    expect(factory.getTemplateVersion(HeroStageTemplateIds.mage)).toBe(1);
+
+    const mage = factory.create(HeroStageTemplateIds.mage);
+    expect(countMeshes(mage)).toBeGreaterThan(0);
+    expect(firstMeshTexture(internals.mageTemplate)).toBe(texture);
+    expect(firstMeshTexture(mage)).toBeInstanceOf(THREE.Texture);
+  });
+
+  it('keeps the Trial monster invisible before the kobold FBX model is loaded', () => {
     const factory = new ThreeObjectFactory();
     const monster = factory.create(HeroStageTemplateIds.monsterPlaceholder);
 
     expect(monster).toBeInstanceOf(THREE.Object3D);
-    expect(monster.children.length).toBeGreaterThan(0);
+    expect(monster.children).toHaveLength(0);
+    expect(countMeshes(monster)).toBe(0);
     expect(factory.getTemplateVersion(HeroStageTemplateIds.monsterPlaceholder)).toBe(0);
+  });
+
+  it('keeps the Trial monster invisible until the loaded kobold FBX template has its forced texture applied', () => {
+    const factory = new ThreeObjectFactory();
+    const internals = factory as unknown as TextureGateTestInternals;
+    internals.pendingKoboldTemplate = createTexturableTemplate();
+
+    expect(internals.publishKoboldTemplateIfTextureReady()).toBe(false);
+    expect(factory.create(HeroStageTemplateIds.monsterPlaceholder).children).toHaveLength(0);
+    expect(factory.getTemplateVersion(HeroStageTemplateIds.monsterPlaceholder)).toBe(0);
+
+    const texture = new THREE.Texture();
+    internals.koboldTexture = texture;
+
+    expect(internals.publishKoboldTemplateIfTextureReady()).toBe(true);
+    expect(factory.getTemplateVersion(HeroStageTemplateIds.monsterPlaceholder)).toBe(1);
+
+    const monster = factory.create(HeroStageTemplateIds.monsterPlaceholder);
+    expect(countMeshes(monster)).toBeGreaterThan(0);
+    expect(firstMeshTexture(internals.koboldTemplate)).toBe(texture);
+    expect(firstMeshTexture(monster)).toBeInstanceOf(THREE.Texture);
   });
 
   it('creates a synchronous castle backdrop fallback object before the texture is loaded', () => {
@@ -97,3 +141,51 @@ describe('ThreeObjectFactory', () => {
     expect(modelRoot.rotation.y).toBeCloseTo(-Math.PI / 2);
   });
 });
+
+interface TextureGateTestInternals {
+  mageTemplate: THREE.Group | null;
+  pendingMageTemplate: THREE.Group | null;
+  mageTexture: THREE.Texture | null;
+  publishMageTemplateIfTextureReady: () => boolean;
+  koboldTemplate: THREE.Group | null;
+  pendingKoboldTemplate: THREE.Group | null;
+  koboldTexture: THREE.Texture | null;
+  publishKoboldTemplateIfTextureReady: () => boolean;
+}
+
+function createTexturableTemplate(): THREE.Group {
+  const group = new THREE.Group();
+  const mesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(1, 1),
+    new THREE.MeshBasicMaterial(),
+  );
+  group.add(mesh);
+  return group;
+}
+
+function countMeshes(object: THREE.Object3D): number {
+  let count = 0;
+  object.traverse((child) => {
+    if (child instanceof THREE.Mesh) {
+      count += 1;
+    }
+  });
+  return count;
+}
+
+function firstMeshTexture(object: THREE.Object3D | null): THREE.Texture | null {
+  if (object == null) {
+    return null;
+  }
+
+  let texture: THREE.Texture | null = null;
+  object.traverse((child) => {
+    if (texture != null || !(child instanceof THREE.Mesh)) {
+      return;
+    }
+
+    const material = Array.isArray(child.material) ? child.material[0] : child.material;
+    texture = material instanceof THREE.MeshBasicMaterial ? material.map : null;
+  });
+  return texture;
+}

@@ -28,6 +28,7 @@ export const HERO_BACKDROP_VIEW_HEIGHT = 5;
 
 export class ThreeObjectFactory {
   private mageTemplate: THREE.Group | null = null;
+  private pendingMageTemplate: THREE.Group | null = null;
   private mageTemplateVersion = 0;
   private mageLoadStarted = false;
   private mageTexture: THREE.Texture | null = null;
@@ -35,6 +36,7 @@ export class ThreeObjectFactory {
   private mageTextureDebugShown = false;
   private mageBoneOnlyWarningShown = false;
   private koboldTemplate: THREE.Group | null = null;
+  private pendingKoboldTemplate: THREE.Group | null = null;
   private koboldTemplateVersion = 0;
   private koboldLoadStarted = false;
   private koboldTexture: THREE.Texture | null = null;
@@ -102,10 +104,18 @@ export class ThreeObjectFactory {
       this.dispose(this.mageTemplate);
       this.mageTemplate = null;
     }
+    if (this.pendingMageTemplate != null) {
+      this.dispose(this.pendingMageTemplate);
+      this.pendingMageTemplate = null;
+    }
     this.mageTexture = null;
     if (this.koboldTemplate != null) {
       this.dispose(this.koboldTemplate);
       this.koboldTemplate = null;
+    }
+    if (this.pendingKoboldTemplate != null) {
+      this.dispose(this.pendingKoboldTemplate);
+      this.pendingKoboldTemplate = null;
     }
     this.koboldTexture = null;
   }
@@ -116,7 +126,7 @@ export class ThreeObjectFactory {
       return cloneLoadedMageTemplate(this.mageTemplate);
     }
 
-    return createPlaceholderMage();
+    return new THREE.Group();
   }
 
   private createKobold(): THREE.Object3D {
@@ -125,7 +135,7 @@ export class ThreeObjectFactory {
       return cloneLoadedKoboldTemplate(this.koboldTemplate);
     }
 
-    return createMonsterPlaceholder();
+    return new THREE.Group();
   }
 
   private startMageModelLoad(): void {
@@ -163,20 +173,19 @@ export class ThreeObjectFactory {
 
         applyFallbackMaterialToUnmaterialedMeshes(loaded);
         ensureMageMeshesVisibleWithoutOverridingTextures(loaded);
-        this.mageTemplate = normalizeModelToActorBounds(
+        this.pendingMageTemplate = normalizeModelToActorBounds(
           loaded,
           MAGE_TARGET_HEIGHT,
         );
-        this.mageTemplate.animations = createMageAnimationClips(
+        this.pendingMageTemplate.animations = createMageAnimationClips(
           loaded.animations,
           MAGE_LOOP_START_FRAME,
           MAGE_LOOP_END_FRAME,
         );
         if (loadedHadRenderableGeometry) {
-          this.applyMageTextureToTemplateIfReady();
+          this.publishMageTemplateIfTextureReady();
           this.startMageTextureLoad();
         }
-        this.mageTemplateVersion += 1;
       },
       undefined,
       (error) => {
@@ -209,9 +218,7 @@ export class ThreeObjectFactory {
               : `Cleaned mage texture alpha fringe for ${textureUrl}`,
           );
         }
-        if (this.applyMageTextureToTemplateIfReady()) {
-          this.mageTemplateVersion += 1;
-        }
+        this.publishMageTemplateIfTextureReady();
       },
       undefined,
       (error) => {
@@ -220,19 +227,25 @@ export class ThreeObjectFactory {
     );
   }
 
-  private applyMageTextureToTemplateIfReady(): boolean {
-    if (this.mageTemplate == null || this.mageTexture == null) {
+  private publishMageTemplateIfTextureReady(): boolean {
+    if (this.pendingMageTemplate == null || this.mageTexture == null) {
       return false;
     }
 
-    applyMageTextureToMeshes(this.mageTemplate, this.mageTexture);
+    applyMageTextureToMeshes(this.pendingMageTemplate, this.mageTexture);
     if (!this.mageTextureDebugShown && import.meta.env.DEV) {
       console.info(
         "Applied forced mage texture to FBX meshes:",
-        getMageTextureDebugInfo(this.mageTemplate),
+        getMageTextureDebugInfo(this.pendingMageTemplate),
       );
       this.mageTextureDebugShown = true;
     }
+    if (this.mageTemplate != null) {
+      this.dispose(this.mageTemplate);
+    }
+    this.mageTemplate = this.pendingMageTemplate;
+    this.pendingMageTemplate = null;
+    this.mageTemplateVersion += 1;
     return true;
   }
 
@@ -271,16 +284,15 @@ export class ThreeObjectFactory {
 
         applyFallbackMaterialToUnmaterialedMeshes(loaded);
         ensureMageMeshesVisibleWithoutOverridingTextures(loaded);
-        this.koboldTemplate = normalizeModelToActorBounds(
+        this.pendingKoboldTemplate = normalizeModelToActorBounds(
           loaded,
           KOBOLD_TARGET_HEIGHT,
         );
-        this.koboldTemplate.animations = createKoboldAnimationClips(loaded.animations);
+        this.pendingKoboldTemplate.animations = createKoboldAnimationClips(loaded.animations);
         if (loadedHadRenderableGeometry) {
-          this.applyKoboldTextureToTemplateIfReady();
+          this.publishKoboldTemplateIfTextureReady();
           this.startKoboldTextureLoad();
         }
-        this.koboldTemplateVersion += 1;
       },
       undefined,
       (error) => {
@@ -306,9 +318,7 @@ export class ThreeObjectFactory {
       (texture) => {
         texture.colorSpace = THREE.SRGBColorSpace;
         this.koboldTexture = createAlphaBleedCanvasTexture(texture);
-        if (this.applyKoboldTextureToTemplateIfReady()) {
-          this.koboldTemplateVersion += 1;
-        }
+        this.publishKoboldTemplateIfTextureReady();
       },
       undefined,
       (error) => {
@@ -317,19 +327,25 @@ export class ThreeObjectFactory {
     );
   }
 
-  private applyKoboldTextureToTemplateIfReady(): boolean {
-    if (this.koboldTemplate == null || this.koboldTexture == null) {
+  private publishKoboldTemplateIfTextureReady(): boolean {
+    if (this.pendingKoboldTemplate == null || this.koboldTexture == null) {
       return false;
     }
 
-    applyMageTextureToMeshes(this.koboldTemplate, this.koboldTexture);
+    applyMageTextureToMeshes(this.pendingKoboldTemplate, this.koboldTexture);
     if (!this.koboldTextureDebugShown && import.meta.env.DEV) {
       console.info(
         "Applied forced kobold texture to FBX meshes:",
-        getMageTextureDebugInfo(this.koboldTemplate),
+        getMageTextureDebugInfo(this.pendingKoboldTemplate),
       );
       this.koboldTextureDebugShown = true;
     }
+    if (this.koboldTemplate != null) {
+      this.dispose(this.koboldTemplate);
+    }
+    this.koboldTemplate = this.pendingKoboldTemplate;
+    this.pendingKoboldTemplate = null;
+    this.koboldTemplateVersion += 1;
     return true;
   }
 }
@@ -455,28 +471,6 @@ function startCastleBackdropTextureLoad(plane: THREE.Mesh): void {
   );
 }
 
-function createPlaceholderMage(): THREE.Object3D {
-  const group = new THREE.Group();
-  group.add(
-    mesh(new THREE.CylinderGeometry(0.42, 0.52, 1.1, 18), "#4b2e83", 0, 0.4, 0),
-  );
-  group.add(
-    mesh(new THREE.SphereGeometry(0.34, 18, 12), "#f5e9c9", 0, 1.12, 0),
-  );
-  group.add(
-    mesh(
-      new THREE.CylinderGeometry(0.045, 0.045, 1.35, 10),
-      "#c8a24b",
-      0.48,
-      0.45,
-      0.04,
-      Math.PI / 10,
-    ),
-  );
-  group.add(mesh(new THREE.ConeGeometry(0.26, 0.34, 4), "#c8a24b", 0, 1.42, 0));
-  return group;
-}
-
 function createPrinceCage(): THREE.Object3D {
   const group = new THREE.Group();
   const cageGeometry = new THREE.BoxGeometry(1, 1.25, 0.7);
@@ -524,15 +518,6 @@ function createPathMarker(): THREE.Object3D {
     0,
     0,
   );
-}
-
-function createMonsterPlaceholder(): THREE.Object3D {
-  const group = new THREE.Group();
-  group.add(
-    mesh(new THREE.CylinderGeometry(0.4, 0.48, 0.8, 14), "#27ae60", 0, 0.32, 0),
-  );
-  group.add(mesh(new THREE.SphereGeometry(0.3, 14, 10), "#8b6f47", 0, 0.86, 0));
-  return group;
 }
 
 function createProjectilePlaceholder(): THREE.Object3D {

@@ -23,7 +23,10 @@ import {
   selectNearestAliveMonster,
   KOBOLD_DEFEAT_ANIMATION_SEC,
   SPELL_CAST_WINDUP_SEC,
+  TRIAL_MONSTER_RANDOM_Y_OFFSET_AMPLITUDE,
+  TRIAL_NEXT_MONSTER_SPAWN_PROGRESS_RATIO,
   updateTrialRuntime,
+  visualYOffsetForMonster,
 } from '../src/generator/TrialRules';
 
 describe('TrialRules', () => {
@@ -57,15 +60,58 @@ describe('TrialRules', () => {
     expect(hasTrialMonsterReachedMage(level, { ...activeMonster, x: level.trial.contactX + radius })).toBe(true);
   });
 
-  it('spawns only one active monster at a time', () => {
+  it('spawns another due monster after the newest visible monster advances 40 percent down the lane', () => {
     const level = testTrialLevel([
-      monster({ monsterId: 'first', spawnTimeMs: 0 }),
-      monster({ monsterId: 'second', spawnTimeMs: 0 }),
+      monster({ monsterId: 'first', spawnTimeMs: 0, walkSpeed: 0.2 }),
+      monster({ monsterId: 'second', spawnTimeMs: 0, walkSpeed: 0.2 }),
     ]);
     const runtime = createTrialRuntime(level);
+    const spawnX = level.trial.lanes[0].spawnX;
+    const thresholdDistance =
+      (spawnX - level.trial.contactX) * TRIAL_NEXT_MONSTER_SPAWN_PROGRESS_RATIO;
+    const thresholdSec = thresholdDistance / runtime.monsters[0].walkSpeed;
 
-    expect(runtime.monsters.map((activeMonster) => activeMonster.monsterId)).toEqual(['first']);
-    expect(runtime.nextSpawnIndex).toBe(1);
+    const beforeThreshold = updateTrialRuntime(runtime, level, thresholdSec - 0.01);
+
+    expect(beforeThreshold.monsters.map((activeMonster) => activeMonster.monsterId)).toEqual(['first']);
+    expect(beforeThreshold.nextSpawnIndex).toBe(1);
+
+    const afterThreshold = updateTrialRuntime(beforeThreshold, level, 0.02);
+
+    expect(afterThreshold.monsters.map((activeMonster) => activeMonster.monsterId)).toEqual(['first', 'second']);
+    expect(afterThreshold.nextSpawnIndex).toBe(2);
+    expect(afterThreshold.monsters[0].x).toBeLessThan(afterThreshold.monsters[1].x);
+  });
+
+  it('moves multiple active monsters together and targets the front living kobold', () => {
+    const level = testTrialLevel([
+      monster({ monsterId: 'first', spawnTimeMs: 0, walkSpeed: 0.2 }),
+      monster({ monsterId: 'second', spawnTimeMs: 0, walkSpeed: 0.2 }),
+    ]);
+    const runtime = {
+      ...createTrialRuntime(level),
+      nextSpawnIndex: 2,
+      monsters: [
+        { ...createTrialRuntime(level).monsters[0], monsterId: 'first', x: 1 },
+        { ...createTrialRuntime(level).monsters[0], monsterId: 'second', x: 3 },
+      ],
+    };
+
+    const updated = updateTrialRuntime(runtime, level, 0.5);
+
+    expect(updated.monsters.map((activeMonster) => activeMonster.x)).toEqual([0.9, 2.9]);
+    expect(selectNearestAliveMonster(updated, level)?.monsterId).toBe('first');
+  });
+
+  it('assigns deterministic visual y offsets to spawned Trial monsters', () => {
+    const level = testTrialLevel([monster({ monsterId: 'first' })]);
+    const firstRuntime = createTrialRuntime(level);
+    const secondRuntime = createTrialRuntime(level);
+    const visualYOffset = firstRuntime.monsters[0].visualYOffset;
+
+    expect(visualYOffset).toBeCloseTo(visualYOffsetForMonster(level, 'first'));
+    expect(visualYOffset).toBe(secondRuntime.monsters[0].visualYOffset);
+    expect(Math.abs(visualYOffset ?? 0)).toBeLessThanOrEqual(TRIAL_MONSTER_RANDOM_Y_OFFSET_AMPLITUDE);
   });
 
   it('spawns the next due monster after the defeated monster disappears', () => {

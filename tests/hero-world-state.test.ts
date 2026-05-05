@@ -8,7 +8,7 @@ import {
   phaseToCinematicState,
   trialMonsterHitShakeOffset,
 } from '../src/core/GameApp';
-import { getTrialMageWorldPosition } from '../src/generator/TrialRules';
+import { getTrialMageWorldPosition, getTrialMonsterWorldPosition } from '../src/generator/TrialRules';
 import { HeroStageTemplateIds } from '../src/world-3d/HeroStageTemplates';
 
 describe('HeroWorldState', () => {
@@ -147,6 +147,40 @@ describe('HeroWorldState', () => {
     expect(shakenFill?.transform.position.y).toBeCloseTo((stableFill?.transform.position.y ?? 0) + offset.y);
   });
 
+  it('applies Trial monster visual y offsets to the enemy and health bar objects', () => {
+    const app = new MagusMatchGameApp(789);
+    const runtime = app.getTrialRuntimeForDebug();
+    if (runtime == null) {
+      throw new Error('Expected Trial runtime.');
+    }
+
+    const monster = {
+      ...runtime.monsters[0],
+      hp: 15,
+      maxHp: 30,
+      visualYOffset: 0.16,
+    };
+    setTrialRuntimeForDebug(app, {
+      ...runtime,
+      monsters: [monster],
+    });
+    const raisedState = app.getHeroWorldState();
+
+    setTrialRuntimeForDebug(app, {
+      ...runtime,
+      monsters: [{ ...monster, visualYOffset: -0.16 }],
+    });
+    const loweredState = app.getHeroWorldState();
+
+    const raisedMonster = raisedState.objects.find((object) => object.objectId === `trial-monster-${monster.monsterId}`);
+    const raisedTrack = raisedState.objects.find((object) => object.objectId === `trial-monster-${monster.monsterId}-health-track`);
+    const loweredMonster = loweredState.objects.find((object) => object.objectId === `trial-monster-${monster.monsterId}`);
+    const loweredTrack = loweredState.objects.find((object) => object.objectId === `trial-monster-${monster.monsterId}-health-track`);
+
+    expect((raisedMonster?.transform.position.y ?? 0) - (loweredMonster?.transform.position.y ?? 0)).toBeCloseTo(0.32);
+    expect((raisedTrack?.transform.position.y ?? 0) - (loweredTrack?.transform.position.y ?? 0)).toBeCloseTo(0.32);
+  });
+
   it('omits health bar objects for defeated monsters', () => {
     const bars = createTrialMonsterHealthBarObjects(
       {
@@ -204,12 +238,20 @@ describe('HeroWorldState', () => {
   });
 
   it('uses player scale and FBX material colors for Trial enemies', () => {
-    const state = new MagusMatchGameApp(789).getHeroWorldState();
+    const app = new MagusMatchGameApp(789);
+    const state = app.getHeroWorldState();
+    const level = app.getCurrentLevelForDebug();
+    const runtime = app.getTrialRuntimeForDebug();
     const monster = state.objects.find((object) => object.templateId === HeroStageTemplateIds.monsterPlaceholder);
+    const baseMonsterPosition =
+      level?.type === 'TRIAL' && runtime != null
+        ? getTrialMonsterWorldPosition(level, runtime.monsters[0])
+        : null;
+    const visualYOffset = runtime?.monsters[0].visualYOffset ?? 0;
 
     expect(monster?.transform.scale).toEqual(MAGE_WORLD_SCALE);
     expect(monster?.tintHex).toBeUndefined();
-    expect(monster?.transform.position.y).toBeLessThan(-0.85);
+    expect(monster?.transform.position.y).toBeCloseTo((baseMonsterPosition?.y ?? -0.85) - 0.74 + visualYOffset);
   });
 
   it('uses walk animation for living and projectile-pending defeated Trial monsters', () => {

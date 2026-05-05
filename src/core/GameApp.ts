@@ -1160,7 +1160,7 @@ export class MagusMatchGameApp implements GameApp {
     for (const monster of this.trialRuntime.monsters) {
       const baseMonsterPosition = translateY(
         getTrialMonsterWorldPosition(this.currentLevel, monster),
-        trialMonsterWorldYOffset(monster.kind),
+        trialMonsterWorldYOffset(monster.kind) + (monster.visualYOffset ?? 0),
       );
       const hitShakeOffset = trialMonsterHitShakeOffset(monster);
       const monsterPosition = translate(
@@ -1283,11 +1283,11 @@ function phaseToPrinceAnimation(phase: GamePhase): string {
 function trialMonsterWorldYOffset(kind: ActiveTrialMonster["kind"]): number {
   switch (kind) {
     case "kobold":
-      return -0.36;
+      return -0.74;
     case "tallKobold":
-      return -0.5;
+      return -0.88;
     case "miniBoss":
-      return -0.6;
+      return -0.98;
   }
 }
 

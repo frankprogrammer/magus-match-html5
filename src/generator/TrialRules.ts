@@ -46,6 +46,8 @@ export type SpellSchoolId = 'fire' | 'ice' | 'lightning' | 'earth';
 
 const TRIAL_DEFEAT_TIMER_EPSILON_SEC = 0.000001;
 const TRIAL_HIT_SHAKE_DURATION_SEC = 0.18;
+export const TRIAL_NEXT_MONSTER_SPAWN_PROGRESS_RATIO = 0.4;
+export const TRIAL_MONSTER_RANDOM_Y_OFFSET_AMPLITUDE = 0.16;
 export const SPELL_CAST_WINDUP_SEC = 0.5;
 export const KOBOLD_DEFEAT_ANIMATION_SEC = 1.0;
 
@@ -59,6 +61,7 @@ export interface ActiveTrialMonster {
   spawnTimeMs: number;
   walkSpeed: number;
   scoreValue: number;
+  visualYOffset?: number;
   defeatDelaySec?: number;
   defeatAnimationRemainingSec?: number;
   defeatAnimationDurationSec?: number;
@@ -657,16 +660,13 @@ function getTapPowerUpActivation(board: Board, origin: CellCoord): { targetType?
 }
 
 function spawnDueMonsters(runtime: TrialRuntimeState, level: GeneratedTrialLevel): TrialRuntimeState {
-  if (runtime.monsters.length > 0) {
-    return runtime;
-  }
-
   const monsters = [...runtime.monsters];
   let nextSpawnIndex = runtime.nextSpawnIndex;
 
   if (
     nextSpawnIndex < level.trial.waveManifest.length &&
-    level.trial.waveManifest[nextSpawnIndex].spawnTimeMs <= runtime.elapsedMs
+    level.trial.waveManifest[nextSpawnIndex].spawnTimeMs <= runtime.elapsedMs &&
+    canSpawnMonsterInLane(level, monsters, level.trial.waveManifest[nextSpawnIndex].laneId)
   ) {
     monsters.push(createActiveMonster(level, level.trial.waveManifest[nextSpawnIndex]));
     nextSpawnIndex += 1;
@@ -693,7 +693,34 @@ function createActiveMonster(
     spawnTimeMs: manifestEntry.spawnTimeMs,
     walkSpeed: manifestEntry.walkSpeed,
     scoreValue: manifestEntry.scoreValue,
+    visualYOffset: visualYOffsetForMonster(level, manifestEntry.monsterId),
   };
+}
+
+function canSpawnMonsterInLane(
+  level: GeneratedTrialLevel,
+  monsters: readonly ActiveTrialMonster[],
+  laneId: number,
+): boolean {
+  const lane = laneForId(level, laneId);
+  const laneLength = Math.max(0.001, lane.spawnX - level.trial.contactX);
+  const blockedDistance = laneLength * TRIAL_NEXT_MONSTER_SPAWN_PROGRESS_RATIO;
+  return !monsters.some((monster) => {
+    if (monster.laneId !== laneId) {
+      return false;
+    }
+
+    const distanceFromSpawn = lane.spawnX - monster.x;
+    return distanceFromSpawn < blockedDistance;
+  });
+}
+
+export function visualYOffsetForMonster(
+  level: Pick<GeneratedTrialLevel, 'seed'>,
+  monsterId: string,
+): number {
+  const normalized = stableUnitHash(`${level.seed}:${monsterId}`);
+  return (normalized * 2 - 1) * TRIAL_MONSTER_RANDOM_Y_OFFSET_AMPLITUDE;
 }
 
 function expireProjectiles(runtime: TrialRuntimeState, dtSec: number): TrialRuntimeState {
@@ -912,6 +939,16 @@ function laneForId(level: GeneratedTrialLevel, laneId: number) {
   }
 
   return lane;
+}
+
+function stableUnitHash(value: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return (hash >>> 0) / 0xffffffff;
 }
 
 function zForMonsterKind(kind: TrialMonsterKind): number {

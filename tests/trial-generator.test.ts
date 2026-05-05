@@ -97,32 +97,33 @@ describe('TrialGenerator', () => {
   });
 
   it.each([
-    [1, 'kobold', 6],
-    [4, 'kobold', 8],
-    [4, 'tallKobold', 10],
-    [8, 'kobold', 10],
-    [8, 'tallKobold', 12],
-    [15, 'kobold', 12],
-    [15, 'tallKobold', 14],
-    [15, 'miniBoss', 16],
-    [19, 'kobold', 12],
-    [19, 'tallKobold', 14],
-    [19, 'miniBoss', 16],
-  ])('sets difficulty %s %s HP to %s base-damage match groups after doubled health tuning', (difficulty, kind, matchGroups) => {
+    [1, 'kobold', 72],
+    [4, 'kobold', 104],
+    [4, 'tallKobold', 130],
+    [8, 'kobold', 140],
+    [8, 'tallKobold', 168],
+    [15, 'kobold', 180],
+    [15, 'tallKobold', 210],
+    [15, 'miniBoss', 240],
+    [19, 'kobold', 154],
+    [19, 'tallKobold', 180],
+    [19, 'miniBoss', 207],
+  ])('sets difficulty %s %s HP to tuned value %s', (difficulty, kind, maxHp) => {
     const config = getTrialDifficultyConfig(difficulty);
     const level = generateTrialLevel({ difficulty, seed: 8800 + difficulty });
     const monsters = level.trial.waveManifest.filter((monster) => monster.kind === kind);
 
     expect(monsters.length).toBeGreaterThan(0);
-    expect(monsters.every((monster) => monster.maxHp === config.baseDamage * matchGroups)).toBe(true);
+    expect(config.baseDamage).toBeGreaterThan(0);
+    expect(monsters.every((monster) => monster.maxHp === maxHp)).toBe(true);
   });
 
   it.each([
-    [1, 0.25],
-    [4, 0.275],
-    [8, 0.35],
-    [15, 0.4],
-    [19, 0.475],
+    [1, 0.3125],
+    [4, 0.34375],
+    [8, 0.4375],
+    [15, 0.5],
+    [19, 0.59375],
   ])('uses 25 percent faster Trial walk speed for difficulty %s', (difficulty, walkSpeed) => {
     const level = generateTrialLevel({ difficulty, seed: 9900 + difficulty });
 

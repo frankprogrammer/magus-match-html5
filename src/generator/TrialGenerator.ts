@@ -47,6 +47,7 @@ export const TRIAL_MAGE_CONTACT_RADIUS = 0.55;
 export const TRIAL_CONTACT_X = TRIAL_MAGE_X + TRIAL_MAGE_CONTACT_RADIUS;
 export const TRIAL_LANE_Y = -0.85;
 export const TRIAL_CLEARABILITY_DAMAGE_RATE = 1;
+export const TRIAL_MONSTER_WALK_SPEED_MULTIPLIER = 1.25;
 
 const TRIAL_LANES: readonly TrialLane[] = [
   { laneId: 0, y: TRIAL_LANE_Y, spawnX: 4.65 },
@@ -120,7 +121,7 @@ export function createWaveManifest(
       laneId: TRIAL_LANES[0].laneId,
       spawnTimeMs: waveIndex * config.waveGapMs + localIndex * config.spawnIntervalMs,
       maxHp: hpForKind(kind, config),
-      walkSpeed: config.walkSpeed,
+      walkSpeed: config.walkSpeed * TRIAL_MONSTER_WALK_SPEED_MULTIPLIER,
       scoreValue: scoreValueForKind(kind),
     };
   });

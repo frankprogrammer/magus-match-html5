@@ -4,6 +4,7 @@ import {
   addBoneProxyRig,
   applyFallbackMaterialToUnmaterialedMeshes,
   applyMageTextureToMeshes,
+  createMageAnimationClips,
   bleedTransparentPixelRgb,
   createMageLoopClip,
   ensureMageMeshesVisibleWithoutOverridingTextures,
@@ -185,5 +186,33 @@ describe('normalizeModelToActorBounds', () => {
     expect(inferFrameRateForInclusiveFrameRange(2.5, 0, 60)).toBeCloseTo(24);
     expect(loopClip?.name).toBe('mage-loop-frames-0-60');
     expect(loopClip?.duration).toBeCloseTo(2.5);
+  });
+
+  it('maps named FBX mage idle and cast clips to renderer animation ids', () => {
+    const idleClip = new THREE.AnimationClip('Armature|Idle', 1.2, [
+      new THREE.VectorKeyframeTrack('hips.position', [0, 1.2], [0, 0, 0, 0, 0.04, 0]),
+    ]);
+    const castClip = new THREE.AnimationClip('Armature|Cast', 0.75, [
+      new THREE.VectorKeyframeTrack('hand_r.position', [0, 0.75], [0, 0, 0, 0.15, 0.08, 0]),
+    ]);
+
+    const clips = createMageAnimationClips([idleClip, castClip], 0, 60);
+
+    expect(clips.map((clip) => clip.name)).toEqual(['idle', 'cast']);
+    expect(clips[0]).not.toBe(idleClip);
+    expect(clips[1]).not.toBe(castClip);
+    expect(clips[0].duration).toBeCloseTo(1.2);
+    expect(clips[1].duration).toBeCloseTo(0.75);
+  });
+
+  it('falls back to a generated idle loop when the FBX has no named idle clip', () => {
+    const sourceClip = new THREE.AnimationClip('Armature|Armature|Cast Spell', 2.5, [
+      new THREE.VectorKeyframeTrack('hips.position', [0, 2.5], [0, 0, 0, 1, 0, 0]),
+    ]);
+
+    const clips = createMageAnimationClips([sourceClip], 0, 60);
+
+    expect(clips.map((clip) => clip.name)).toEqual(['idle']);
+    expect(clips[0].duration).toBeCloseTo(2.5);
   });
 });

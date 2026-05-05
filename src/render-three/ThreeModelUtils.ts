@@ -3,6 +3,8 @@ import { clone as cloneSkeletonObject } from 'three/examples/jsm/utils/SkeletonU
 
 const UNIT_Y = new THREE.Vector3(0, 1, 0);
 const MAGE_TEXTURE_ALPHA_TEST = 0.01;
+const MAGE_IDLE_CLIP_NAME = 'Armature|Idle';
+const MAGE_CAST_CLIP_NAME = 'Armature|Cast';
 
 export function normalizeModelToActorBounds(source: THREE.Object3D, targetHeight: number): THREE.Group {
   const wrapper = new THREE.Group();
@@ -88,6 +90,31 @@ export function createMageLoopClip(
   );
 }
 
+export function createMageAnimationClips(
+  clips: readonly THREE.AnimationClip[],
+  fallbackStartFrame: number,
+  fallbackEndFrame: number,
+): THREE.AnimationClip[] {
+  const idleClip = findMageClip(clips, MAGE_IDLE_CLIP_NAME, 'idle');
+  const castClip = findMageClip(clips, MAGE_CAST_CLIP_NAME, 'cast');
+  const result: THREE.AnimationClip[] = [];
+
+  if (idleClip != null) {
+    result.push(cloneClipWithName(idleClip, 'idle'));
+  } else {
+    const fallbackIdle = createMageLoopClip(clips, fallbackStartFrame, fallbackEndFrame);
+    if (fallbackIdle != null) {
+      result.push(cloneClipWithName(fallbackIdle, 'idle'));
+    }
+  }
+
+  if (castClip != null) {
+    result.push(cloneClipWithName(castClip, 'cast'));
+  }
+
+  return result;
+}
+
 export function inferFrameRateForInclusiveFrameRange(
   durationSec: number,
   startFrame: number,
@@ -95,6 +122,29 @@ export function inferFrameRateForInclusiveFrameRange(
 ): number {
   const frameSpan = Math.max(1, endFrame - startFrame);
   return durationSec > 0 ? frameSpan / durationSec : 24;
+}
+
+function isUsableClip(clip: THREE.AnimationClip): boolean {
+  return clip.duration > 0 && clip.tracks.length > 0;
+}
+
+function findMageClip(
+  clips: readonly THREE.AnimationClip[],
+  exactName: string,
+  shortName: string,
+): THREE.AnimationClip | undefined {
+  const exactNormalized = exactName.trim().toLowerCase();
+  const shortNormalized = shortName.trim().toLowerCase();
+  return clips.find((clip) => {
+    const clipName = clip.name.trim().toLowerCase();
+    return isUsableClip(clip) && (clipName === exactNormalized || clipName.endsWith(`|${shortNormalized}`));
+  });
+}
+
+function cloneClipWithName(clip: THREE.AnimationClip, name: string): THREE.AnimationClip {
+  const cloned = clip.clone();
+  cloned.name = name;
+  return cloned;
 }
 
 export function applyFallbackMaterialToUnmaterialedMeshes(object: THREE.Object3D): void {

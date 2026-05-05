@@ -8,7 +8,7 @@ import {
   addBoneProxyRig,
   applyMageTextureToMeshes,
   applyFallbackMaterialToUnmaterialedMeshes,
-  createMageLoopClip,
+  createMageAnimationClips,
   createAlphaBleedCanvasTexture,
   ensureMageMeshesVisibleWithoutOverridingTextures,
   getMageTextureDebugInfo,
@@ -138,13 +138,11 @@ export class ThreeObjectFactory {
           loaded,
           MAGE_TARGET_HEIGHT,
         );
-        const mageLoopClip = createMageLoopClip(
+        this.mageTemplate.animations = createMageAnimationClips(
           loaded.animations,
           MAGE_LOOP_START_FRAME,
           MAGE_LOOP_END_FRAME,
         );
-        this.mageTemplate.animations =
-          mageLoopClip != null ? [mageLoopClip] : [];
         if (loadedHadRenderableGeometry) {
           this.applyMageTextureToTemplateIfReady();
           this.startMageTextureLoad();

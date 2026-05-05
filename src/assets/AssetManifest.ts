@@ -1,12 +1,35 @@
-import { AssetIds } from './AssetIds';
-import type { ArtPromptId } from './ArtPrompts';
-import { SoundManifest, type SoundManifestEntry } from '../audio/SoundManifest';
+import { AssetIds } from "./AssetIds";
+import type { ArtPromptId } from "./ArtPrompts";
+import { SoundManifest, type SoundManifestEntry } from "../audio/SoundManifest";
 
-export type AssetKind = 'texture' | 'model' | 'template' | 'audio' | 'ui' | 'rig' | 'material';
-export type SourceFormat = 'png' | 'jpg' | 'webp' | 'mp3' | 'ogg' | 'wav' | 'glb' | 'gltf' | 'fbx' | 'json';
-export type Axis = '+X' | '-X' | '+Y' | '-Y' | '+Z' | '-Z';
-export type Pivot = 'center' | 'bottomCenter' | 'custom';
-export type CollisionShape = 'none' | 'box' | 'sphere' | 'capsule' | 'mesh' | 'custom';
+export type AssetKind =
+  | "texture"
+  | "model"
+  | "template"
+  | "audio"
+  | "ui"
+  | "rig"
+  | "material";
+export type SourceFormat =
+  | "png"
+  | "jpg"
+  | "webp"
+  | "mp3"
+  | "ogg"
+  | "wav"
+  | "glb"
+  | "gltf"
+  | "fbx"
+  | "json";
+export type Axis = "+X" | "-X" | "+Y" | "-Y" | "+Z" | "-Z";
+export type Pivot = "center" | "bottomCenter" | "custom";
+export type CollisionShape =
+  | "none"
+  | "box"
+  | "sphere"
+  | "capsule"
+  | "mesh"
+  | "custom";
 
 export interface AssetManifestEntry {
   id: string;
@@ -17,7 +40,7 @@ export interface AssetManifestEntry {
   runtimeSize?: string;
   unitScale?: number;
   forwardAxis?: Axis;
-  upAxis?: '+Y' | '+Z';
+  upAxis?: "+Y" | "+Z";
   pivot?: Pivot;
   collision?: CollisionShape;
   artPromptId?: ArtPromptId;
@@ -25,245 +48,255 @@ export interface AssetManifestEntry {
 }
 
 const TILE_NOTES =
-  'Runtime 256x256 transparent PNG, centered subject, 24-36px padding, readable at 100x100.';
-const BACKDROP_NOTES = 'Runtime 2160x1000 PNG/WebP for 2x coverage of the 1080x500 hero stage.';
+  "Runtime 256x256 transparent PNG, centered subject, 24-36px padding, readable at 100x100.";
+const BACKDROP_NOTES =
+  "Runtime 2160x1000 PNG/WebP for 2x coverage of the 1080x500 hero stage.";
 const CASTLE_BACKDROP_NOTES =
-  'Hero-stage cover backdrop. Drawn as a Three.js texture plane that fills the orthographic 1080x500 stage and crops overflow.';
-const RIG_NOTES = 'Transparent PNG source parts now; later exported as a 2048x2048 atlas plus skeletal JSON.';
+  "Hero-stage cover backdrop. Drawn as a Three.js texture plane that fills the orthographic 1080x500 stage and crops overflow.";
+const RIG_NOTES =
+  "Transparent PNG source parts now; later exported as a 2048x2048 atlas plus skeletal JSON.";
 const TEMP_FBX_MAGE_NOTES =
-  'Temporary browser hero-stage FBX model. Auto-normalized in Three.js to bottom-center pivot and 1.45 world-unit height. Loops animation frames 0-60.';
+  "Temporary browser hero-stage FBX model. Auto-normalized in Three.js to bottom-center pivot and 1.45 world-unit height. Loops animation frames 0-60.";
 const TEMP_FBX_MAGE_TEXTURE_NOTES =
-  'Temporary browser hero-stage texture recovered from the FBX .fbm export folder and applied to the mage mesh when the FBX material does not load a map.';
-const UI_BANNER_NOTES = 'Runtime 1080x150 PNG for the fixed middle HUD band; drawn full-width behind HUD text.';
+  "Temporary browser hero-stage texture recovered from the FBX .fbm export folder and applied to the mage mesh when the FBX material does not load a map.";
+const UI_BANNER_NOTES =
+  "Runtime 1080x150 PNG for the fixed middle HUD band; drawn full-width behind HUD text.";
 const BOARD_BACKGROUND_NOTES =
-  'Runtime 1080x1080 PNG for the board base; drawn behind board cells with flat-color fallback.';
+  "Runtime 1080x1080 PNG for the board base; drawn behind board cells with flat-color fallback.";
 const TNT_EXPLOSION_SPRITE_NOTES =
-  'Runtime 512x256 transparent PNG spritesheet. Two rows by four columns, eight 128x128 frames, played at 30 FPS for TNT detonations.';
+  "Runtime 512x256 transparent PNG spritesheet. Two rows by four columns, eight 128x128 frames, played at 30 FPS for TNT detonations.";
 
 export const AssetManifest: Record<string, AssetManifestEntry> = {
   [AssetIds.tiles.fire]: texture(
     AssetIds.tiles.fire,
-    '/assets/tiles/tile-fire.png',
-    'Assets/Textures/Tiles/tile-fire.png',
-    'prompt.tiles.standard',
+    "/assets/tiles/tile-fire.png",
+    "Assets/Textures/Tiles/tile-fire.png",
+    "prompt.tiles.standard",
     TILE_NOTES,
   ),
   [AssetIds.tiles.ice]: texture(
     AssetIds.tiles.ice,
-    '/assets/tiles/tile-ice.png',
-    'Assets/Textures/Tiles/tile-ice.png',
-    'prompt.tiles.standard',
+    "/assets/tiles/tile-ice.png",
+    "Assets/Textures/Tiles/tile-ice.png",
+    "prompt.tiles.standard",
     TILE_NOTES,
   ),
   [AssetIds.tiles.lightning]: texture(
     AssetIds.tiles.lightning,
-    '/assets/tiles/tile-lightning.png',
-    'Assets/Textures/Tiles/tile-lightning.png',
-    'prompt.tiles.standard',
+    "/assets/tiles/tile-lightning.png",
+    "Assets/Textures/Tiles/tile-lightning.png",
+    "prompt.tiles.standard",
     TILE_NOTES,
   ),
   [AssetIds.tiles.earth]: texture(
     AssetIds.tiles.earth,
-    '/assets/tiles/tile-earth.png',
-    'Assets/Textures/Tiles/tile-earth.png',
-    'prompt.tiles.standard',
+    "/assets/tiles/tile-earth.png",
+    "Assets/Textures/Tiles/tile-earth.png",
+    "prompt.tiles.standard",
     TILE_NOTES,
   ),
   [AssetIds.tiles.land]: texture(
     AssetIds.tiles.land,
-    '/assets/tiles/tile-land.png',
-    'Assets/Textures/Tiles/tile-land.png',
-    'prompt.tiles.journey',
+    "/assets/tiles/tile-land.png",
+    "Assets/Textures/Tiles/tile-land.png",
+    "prompt.tiles.journey",
     TILE_NOTES,
   ),
   [AssetIds.tiles.path]: texture(
     AssetIds.tiles.path,
-    '/assets/tiles/tile-path.png',
-    'Assets/Textures/Tiles/tile-path.png',
-    'prompt.tiles.journey',
+    "/assets/tiles/tile-path.png",
+    "Assets/Textures/Tiles/tile-path.png",
+    "prompt.tiles.journey",
     TILE_NOTES,
   ),
   [AssetIds.tiles.empty]: texture(
     AssetIds.tiles.empty,
-    '/assets/tiles/empty.png',
-    'Assets/Textures/Tiles/empty.png',
-    'prompt.tiles.standard',
-    'Runtime empty-cell marker for non-playable Trial void spaces. Drawn as board art only; not matchable or refillable.',
+    "/assets/tiles/empty.png",
+    "Assets/Textures/Tiles/empty.png",
+    "prompt.tiles.standard",
+    "Runtime empty-cell marker for non-playable Trial void spaces. Drawn as board art only; not matchable or refillable.",
   ),
   [AssetIds.powerUps.rocketH]: texture(
     AssetIds.powerUps.rocketH,
-    '/assets/powerups/power-rocket-h.png',
-    'Assets/Textures/PowerUps/power-rocket-h.png',
-    'prompt.powerups.standard',
+    "/assets/powerups/power-rocket-h.png",
+    "Assets/Textures/PowerUps/power-rocket-h.png",
+    "prompt.powerups.standard",
     TILE_NOTES,
   ),
   [AssetIds.powerUps.rocketV]: texture(
     AssetIds.powerUps.rocketV,
-    '/assets/powerups/power-rocket-v.png',
-    'Assets/Textures/PowerUps/power-rocket-v.png',
-    'prompt.powerups.standard',
+    "/assets/powerups/power-rocket-v.png",
+    "Assets/Textures/PowerUps/power-rocket-v.png",
+    "prompt.powerups.standard",
     TILE_NOTES,
   ),
   [AssetIds.powerUps.tnt]: texture(
     AssetIds.powerUps.tnt,
-    '/assets/powerups/power-tnt.png',
-    'Assets/Textures/PowerUps/power-tnt.png',
-    'prompt.powerups.standard',
+    "/assets/powerups/power-tnt.png",
+    "Assets/Textures/PowerUps/power-tnt.png",
+    "prompt.powerups.standard",
     TILE_NOTES,
   ),
   [AssetIds.powerUps.lightball]: texture(
     AssetIds.powerUps.lightball,
-    '/assets/powerups/power-lightball.png',
-    'Assets/Textures/PowerUps/power-lightball.png',
-    'prompt.powerups.standard',
+    "/assets/powerups/power-lightball.png",
+    "Assets/Textures/PowerUps/power-lightball.png",
+    "prompt.powerups.standard",
     TILE_NOTES,
   ),
   [AssetIds.backdrops.forest]: texture(
     AssetIds.backdrops.forest,
-    '/assets/backdrops/backdrop-forest.png',
-    'Assets/Textures/Backdrops/backdrop-forest.png',
-    'prompt.backdrops.hero',
+    "/assets/backdrops/backdrop-forest.png",
+    "Assets/Textures/Backdrops/backdrop-forest.png",
+    "prompt.backdrops.hero",
     BACKDROP_NOTES,
-    '2160x1000',
+    "2160x1000",
   ),
   [AssetIds.backdrops.crypt]: texture(
     AssetIds.backdrops.crypt,
-    '/assets/backdrops/backdrop-crypt.png',
-    'Assets/Textures/Backdrops/backdrop-crypt.png',
-    'prompt.backdrops.hero',
+    "/assets/backdrops/backdrop-crypt.png",
+    "Assets/Textures/Backdrops/backdrop-crypt.png",
+    "prompt.backdrops.hero",
     BACKDROP_NOTES,
-    '2160x1000',
+    "2160x1000",
   ),
   [AssetIds.backdrops.crystalCave]: texture(
     AssetIds.backdrops.crystalCave,
-    '/assets/backdrops/backdrop-crystal-cave.png',
-    'Assets/Textures/Backdrops/backdrop-crystal-cave.png',
-    'prompt.backdrops.hero',
+    "/assets/backdrops/backdrop-crystal-cave.png",
+    "Assets/Textures/Backdrops/backdrop-crystal-cave.png",
+    "prompt.backdrops.hero",
     BACKDROP_NOTES,
-    '2160x1000',
+    "2160x1000",
   ),
   [AssetIds.backdrops.castle]: texture(
     AssetIds.backdrops.castle,
-    '/assets/backdrops/backdrop-castle.png',
-    'Assets/Textures/Backdrops/backdrop-castle.png',
-    'prompt.backdrops.hero',
+    "/assets/backdrops/backdrop-castle.png",
+    "Assets/Textures/Backdrops/backdrop-castle.png",
+    "prompt.backdrops.hero",
     CASTLE_BACKDROP_NOTES,
-    'cover 1080x500 hero stage',
+    "cover 1080x500 hero stage",
   ),
   [AssetIds.rigs.mage]: rig(
     AssetIds.rigs.mage,
-    '/assets/rigs/knight1.fbx',
-    'Assets/Rigs/Mage/knight1.fbx',
-    'prompt.rig.mage',
-    'fbx',
-    'temporary FBX stand-in, auto-normalized to 1.45 world units',
+    "/assets/rigs/knight2.fbx",
+    "Assets/Rigs/Mage/knight2.fbx",
+    "prompt.rig.mage",
+    "fbx",
+    "temporary FBX stand-in, auto-normalized to 1.45 world units",
     TEMP_FBX_MAGE_NOTES,
   ),
   [AssetIds.materials.mageTexture]: material(
     AssetIds.materials.mageTexture,
-    '/assets/rigs/knight1.fbm/knight_texture_test.png',
-    'Assets/Textures/Rigs/Mage/knight_texture_test.png',
-    'prompt.rig.mage',
+    "/assets/rigs/knight2.fbm/knight_texture_final.png",
+    "Assets/Textures/Rigs/Mage/knight_texture_final.png",
+    "prompt.rig.mage",
     TEMP_FBX_MAGE_TEXTURE_NOTES,
   ),
   [AssetIds.spritesheets.tntExplosion]: texture(
     AssetIds.spritesheets.tntExplosion,
-    '/assets/spritesheets/explosion-sprite.png',
-    'Assets/Textures/Spritesheets/explosion-sprite.png',
-    'prompt.powerups.standard',
+    "/assets/spritesheets/explosion-sprite.png",
+    "Assets/Textures/Spritesheets/explosion-sprite.png",
+    "prompt.powerups.standard",
     TNT_EXPLOSION_SPRITE_NOTES,
-    '512x256, 8 frames at 128x128',
+    "512x256, 8 frames at 128x128",
   ),
   [AssetIds.rigs.prince]: rig(
     AssetIds.rigs.prince,
-    '/assets/rigs/prince/prince-parts-source.png',
-    'Assets/Rigs/Prince/prince-rig.json',
-    'prompt.rig.prince',
+    "/assets/rigs/prince/prince-parts-source.png",
+    "Assets/Rigs/Prince/prince-rig.json",
+    "prompt.rig.prince",
   ),
   [AssetIds.rigs.kobold]: rig(
     AssetIds.rigs.kobold,
-    '/assets/rigs/kobold/kobold-parts-source.png',
-    'Assets/Rigs/Kobold/kobold-rig.json',
-    'prompt.rig.kobolds',
+    "/assets/rigs/kobold/kobold-parts-source.png",
+    "Assets/Rigs/Kobold/kobold-rig.json",
+    "prompt.rig.kobolds",
   ),
   [AssetIds.rigs.tallKobold]: rig(
     AssetIds.rigs.tallKobold,
-    '/assets/rigs/tall-kobold/tall-kobold-parts-source.png',
-    'Assets/Rigs/TallKobold/tall-kobold-rig.json',
-    'prompt.rig.kobolds',
+    "/assets/rigs/tall-kobold/tall-kobold-parts-source.png",
+    "Assets/Rigs/TallKobold/tall-kobold-rig.json",
+    "prompt.rig.kobolds",
   ),
   [AssetIds.props.princeCage]: prop(
     AssetIds.props.princeCage,
-    '/assets/props/prop-prince-cage.png',
-    'Assets/Textures/Props/prop-prince-cage.png',
-    'prompt.rig.prince',
-    'Cage frame source until rig export is available.',
+    "/assets/props/prop-prince-cage.png",
+    "Assets/Textures/Props/prop-prince-cage.png",
+    "prompt.rig.prince",
+    "Cage frame source until rig export is available.",
   ),
   [AssetIds.props.goalFlag]: prop(
     AssetIds.props.goalFlag,
-    '/assets/props/prop-goal-flag.png',
-    'Assets/Textures/Props/prop-goal-flag.png',
-    'prompt.tiles.journey',
-    'Goal marker prop for Journey staging.',
+    "/assets/props/prop-goal-flag.png",
+    "Assets/Textures/Props/prop-goal-flag.png",
+    "prompt.tiles.journey",
+    "Goal marker prop for Journey staging.",
   ),
   [AssetIds.props.abductorGlove]: prop(
     AssetIds.props.abductorGlove,
-    '/assets/props/prop-abductor-glove.png',
-    'Assets/Textures/Props/prop-abductor-glove.png',
-    'prompt.props.abductor',
-    'Edge-of-frame cage-yank hint prop.',
+    "/assets/props/prop-abductor-glove.png",
+    "Assets/Textures/Props/prop-abductor-glove.png",
+    "prompt.props.abductor",
+    "Edge-of-frame cage-yank hint prop.",
   ),
   [AssetIds.props.abductorHook]: prop(
     AssetIds.props.abductorHook,
-    '/assets/props/prop-abductor-hook.png',
-    'Assets/Textures/Props/prop-abductor-hook.png',
-    'prompt.props.abductor',
-    'Edge-of-frame cage-yank hint prop.',
+    "/assets/props/prop-abductor-hook.png",
+    "Assets/Textures/Props/prop-abductor-hook.png",
+    "prompt.props.abductor",
+    "Edge-of-frame cage-yank hint prop.",
   ),
   [AssetIds.props.abductorHand]: prop(
     AssetIds.props.abductorHand,
-    '/assets/props/prop-abductor-hand.png',
-    'Assets/Textures/Props/prop-abductor-hand.png',
-    'prompt.props.abductor',
-    'Edge-of-frame cage-yank hint prop.',
+    "/assets/props/prop-abductor-hand.png",
+    "Assets/Textures/Props/prop-abductor-hand.png",
+    "prompt.props.abductor",
+    "Edge-of-frame cage-yank hint prop.",
   ),
   [AssetIds.props.abductorRope]: prop(
     AssetIds.props.abductorRope,
-    '/assets/props/prop-abductor-rope.png',
-    'Assets/Textures/Props/prop-abductor-rope.png',
-    'prompt.props.abductor',
-    'Edge-of-frame cage-yank hint prop.',
+    "/assets/props/prop-abductor-rope.png",
+    "Assets/Textures/Props/prop-abductor-rope.png",
+    "prompt.props.abductor",
+    "Edge-of-frame cage-yank hint prop.",
   ),
   [AssetIds.ui.hudBanner]: ui(
     AssetIds.ui.hudBanner,
-    '/assets/ui/ui-banner.png',
-    'Assets/Textures/UI/ui-banner.png',
+    "/assets/ui/ui-banner.png",
+    "Assets/Textures/UI/ui-banner.png",
     UI_BANNER_NOTES,
-    '1080x150',
+    "1080x150",
   ),
   [AssetIds.ui.boardBackground]: ui(
     AssetIds.ui.boardBackground,
-    '/assets/ui/board-background.png',
-    'Assets/Textures/UI/board-background.png',
+    "/assets/ui/board-background.png",
+    "Assets/Textures/UI/board-background.png",
     BOARD_BACKGROUND_NOTES,
-    '1080x1080',
+    "1080x1080",
   ),
   ...Object.fromEntries(
     Object.values(SoundManifest).map((entry) => [entry.id, audio(entry)]),
   ),
 };
 
-export function getAssetManifestEntry(assetId: string): AssetManifestEntry | undefined {
-  const manifest = AssetManifest as Record<string, AssetManifestEntry | undefined>;
+export function getAssetManifestEntry(
+  assetId: string,
+): AssetManifestEntry | undefined {
+  const manifest = AssetManifest as Record<
+    string,
+    AssetManifestEntry | undefined
+  >;
   return manifest[assetId];
 }
 
 export function getTextureAssetEntries(): AssetManifestEntry[] {
-  return Object.values(AssetManifest).filter((entry) => entry.kind === 'texture' || entry.kind === 'ui');
+  return Object.values(AssetManifest).filter(
+    (entry) => entry.kind === "texture" || entry.kind === "ui",
+  );
 }
 
 export function getAudioAssetEntries(): AssetManifestEntry[] {
-  return Object.values(AssetManifest).filter((entry) => entry.kind === 'audio');
+  return Object.values(AssetManifest).filter((entry) => entry.kind === "audio");
 }
 
 function texture(
@@ -272,18 +305,18 @@ function texture(
   futureMhsPath: string,
   artPromptId: ArtPromptId,
   notes: string,
-  runtimeSize = '256x256',
+  runtimeSize = "256x256",
 ): AssetManifestEntry {
   return {
     id,
-    kind: 'texture',
+    kind: "texture",
     browserUrl,
     futureMhsPath,
-    sourceFormat: 'png',
+    sourceFormat: "png",
     runtimeSize,
     unitScale: 1,
-    pivot: 'center',
-    collision: 'none',
+    pivot: "center",
+    collision: "none",
     artPromptId,
     notes,
   };
@@ -298,14 +331,14 @@ function prop(
 ): AssetManifestEntry {
   return {
     id,
-    kind: 'texture',
+    kind: "texture",
     browserUrl,
     futureMhsPath,
-    sourceFormat: 'png',
-    runtimeSize: 'max 1024px longest side',
+    sourceFormat: "png",
+    runtimeSize: "max 1024px longest side",
     unitScale: 1,
-    pivot: 'center',
-    collision: 'none',
+    pivot: "center",
+    collision: "none",
     artPromptId,
     notes,
   };
@@ -316,22 +349,22 @@ function rig(
   browserUrl: string,
   futureMhsPath: string,
   artPromptId: ArtPromptId,
-  sourceFormat: SourceFormat = 'png',
-  runtimeSize = 'source parts max 1024px, final atlas 2048x2048',
+  sourceFormat: SourceFormat = "png",
+  runtimeSize = "source parts max 1024px, final atlas 2048x2048",
   notes = RIG_NOTES,
 ): AssetManifestEntry {
   return {
     id,
-    kind: 'rig',
+    kind: "rig",
     browserUrl,
     futureMhsPath,
     sourceFormat,
     runtimeSize,
     unitScale: 1,
-    forwardAxis: '+Z',
-    upAxis: '+Y',
-    pivot: 'bottomCenter',
-    collision: 'capsule',
+    forwardAxis: "+Z",
+    upAxis: "+Y",
+    pivot: "bottomCenter",
+    collision: "capsule",
     artPromptId,
     notes,
   };
@@ -346,14 +379,14 @@ function ui(
 ): AssetManifestEntry {
   return {
     id,
-    kind: 'ui',
+    kind: "ui",
     browserUrl,
     futureMhsPath,
-    sourceFormat: 'png',
+    sourceFormat: "png",
     runtimeSize,
     unitScale: 1,
-    pivot: 'center',
-    collision: 'none',
+    pivot: "center",
+    collision: "none",
     notes,
   };
 }
@@ -367,14 +400,14 @@ function material(
 ): AssetManifestEntry {
   return {
     id,
-    kind: 'material',
+    kind: "material",
     browserUrl,
     futureMhsPath,
-    sourceFormat: 'png',
-    runtimeSize: 'runtime FBX diffuse texture',
+    sourceFormat: "png",
+    runtimeSize: "runtime FBX diffuse texture",
     unitScale: 1,
-    pivot: 'center',
-    collision: 'none',
+    pivot: "center",
+    collision: "none",
     artPromptId,
     notes,
   };
@@ -383,14 +416,14 @@ function material(
 function audio(entry: SoundManifestEntry): AssetManifestEntry {
   return {
     id: entry.id,
-    kind: 'audio',
+    kind: "audio",
     browserUrl: entry.browserUrl,
     futureMhsPath: entry.futureMhsPath,
-    sourceFormat: 'mp3',
-    runtimeSize: 'optional browser audio file with WebAudio synth fallback',
+    sourceFormat: "mp3",
+    runtimeSize: "optional browser audio file with WebAudio synth fallback",
     unitScale: 1,
-    pivot: 'center',
-    collision: 'none',
-    notes: `${entry.notes} MHS mapping: ${entry.scope === 'global' ? 'global SoundComponent' : 'template-local SoundComponent'}.`,
+    pivot: "center",
+    collision: "none",
+    notes: `${entry.notes} MHS mapping: ${entry.scope === "global" ? "global SoundComponent" : "template-local SoundComponent"}.`,
   };
 }

@@ -13,7 +13,7 @@ export class ThreeHeroStage {
   private readonly objectCache = new ThreeObjectCache();
   private readonly projectileCache = new Map<string, ProjectileParticleSystem>();
   private readonly cameraController = new ThreeCameraController();
-  private readonly animationMixers = new Map<string, THREE.AnimationMixer>();
+  private readonly animationControllers = new Map<string, MageAnimationController>();
   private elapsedSec = 0;
 
   constructor(private readonly container: HTMLElement) {
@@ -55,7 +55,7 @@ export class ThreeHeroStage {
       this.scene.remove(projectile.mesh);
       disposeProjectileSystem(projectile);
     }
-    this.animationMixers.clear();
+    this.animationControllers.clear();
     this.objectCache.clear();
     this.projectileCache.clear();
     this.factory.disposeCachedResources();
@@ -77,8 +77,12 @@ export class ThreeHeroStage {
 
       const objectId = `projectile-${projectileState.projectileId}`;
       seen.add(objectId);
+      const isNewlyVisibleProjectile = !this.projectileCache.has(objectId);
       const projectile = this.getOrCreateProjectile(objectId, projectileState);
       applyProjectileState(projectile, projectileState);
+      if (isNewlyVisibleProjectile) {
+        this.triggerObjectCastAnimation('actor-mage');
+      }
     }
 
     for (const [objectId, projectile] of [...this.projectileCache.entries()]) {
@@ -117,7 +121,7 @@ export class ThreeHeroStage {
     for (const [objectId, object] of [...this.objectCache.entries()]) {
       if (!seen.has(objectId)) {
         this.scene.remove(object);
-        this.animationMixers.delete(objectId);
+        this.animationControllers.delete(objectId);
         this.factory.dispose(object);
         this.objectCache.delete(objectId);
       }
@@ -137,37 +141,127 @@ export class ThreeHeroStage {
 
     if (existing != null) {
       this.scene.remove(existing);
-      this.animationMixers.delete(objectState.objectId);
+      this.animationControllers.delete(objectState.objectId);
       this.factory.dispose(existing);
       this.objectCache.delete(objectState.objectId);
     }
 
     const object = this.factory.create(objectState.templateId);
     this.objectCache.set(objectState.objectId, objectState.templateId, templateVersion, object);
-    this.attachLoopingAnimation(objectState.objectId, object);
+    this.attachAnimationController(objectState.objectId, object);
     this.scene.add(object);
     return object;
   }
 
-  private attachLoopingAnimation(objectId: string, object: THREE.Object3D): void {
-    const clip = object.animations[0];
-    if (clip == null) {
+  private attachAnimationController(objectId: string, object: THREE.Object3D): void {
+    const controller = createMageAnimationController(object);
+    if (controller == null) {
       return;
     }
 
-    const mixer = new THREE.AnimationMixer(object);
-    const action = mixer.clipAction(clip);
-    action.reset();
-    action.setLoop(THREE.LoopRepeat, Infinity);
-    action.play();
-    this.animationMixers.set(objectId, mixer);
+    this.animationControllers.set(objectId, controller);
+  }
+
+  private triggerObjectCastAnimation(objectId: string): void {
+    const controller = this.animationControllers.get(objectId);
+    if (controller == null) {
+      return;
+    }
+
+    triggerMageCastAnimation(controller);
   }
 
   private updateAnimationMixers(dtSec: number): void {
     const delta = Math.max(0, dtSec);
-    for (const mixer of this.animationMixers.values()) {
-      mixer.update(delta);
+    for (const controller of this.animationControllers.values()) {
+      updateMageAnimationController(controller, delta);
     }
+  }
+}
+
+export interface MageAnimationController {
+  mixer: THREE.AnimationMixer;
+  idleAction?: THREE.AnimationAction;
+  castAction?: THREE.AnimationAction;
+  castDurationSec: number;
+  castRemainingSec: number;
+}
+
+export function createMageAnimationController(object: THREE.Object3D): MageAnimationController | null {
+  const idleClip = object.animations.find((clip) => clip.name === 'idle') ?? object.animations[0];
+  const castClip = object.animations.find((clip) => clip.name === 'cast');
+  if (idleClip == null && castClip == null) {
+    return null;
+  }
+
+  const mixer = new THREE.AnimationMixer(object);
+  const idleAction = idleClip == null ? undefined : mixer.clipAction(idleClip);
+  if (idleAction != null) {
+    idleAction.reset();
+    idleAction.setLoop(THREE.LoopRepeat, Infinity);
+    idleAction.setEffectiveWeight(1);
+    idleAction.play();
+  }
+
+  const castAction = castClip == null ? undefined : mixer.clipAction(castClip);
+  if (castAction != null) {
+    castAction.setLoop(THREE.LoopOnce, 1);
+    castAction.clampWhenFinished = false;
+    castAction.setEffectiveWeight(0);
+  }
+
+  return {
+    mixer,
+    idleAction,
+    castAction,
+    castDurationSec: castClip?.duration ?? 0,
+    castRemainingSec: 0,
+  };
+}
+
+export function triggerMageCastAnimation(controller: MageAnimationController): void {
+  if (controller.castAction == null || controller.castDurationSec <= 0) {
+    return;
+  }
+
+  if (controller.idleAction != null) {
+    controller.idleAction.enabled = true;
+    controller.idleAction.setEffectiveWeight(0);
+  }
+
+  controller.castAction.reset();
+  controller.castAction.setLoop(THREE.LoopOnce, 1);
+  controller.castAction.clampWhenFinished = false;
+  controller.castAction.enabled = true;
+  controller.castAction.setEffectiveWeight(1);
+  controller.castAction.play();
+  controller.castRemainingSec = controller.castDurationSec;
+}
+
+export function updateMageAnimationController(controller: MageAnimationController, dtSec: number): void {
+  const delta = Math.max(0, dtSec);
+  controller.mixer.update(delta);
+
+  if (controller.castRemainingSec <= 0) {
+    return;
+  }
+
+  controller.castRemainingSec = Math.max(0, controller.castRemainingSec - delta);
+  if (controller.castRemainingSec <= 0) {
+    stopMageCastAnimation(controller);
+  }
+}
+
+function stopMageCastAnimation(controller: MageAnimationController): void {
+  if (controller.castAction != null) {
+    controller.castAction.stop();
+    controller.castAction.setEffectiveWeight(0);
+  }
+
+  if (controller.idleAction != null) {
+    controller.idleAction.enabled = true;
+    controller.idleAction.setEffectiveWeight(1);
+    controller.idleAction.play();
   }
 }
 

@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import {
+  createMageAnimationController,
   projectileColor,
   projectileMaterialSettings,
   projectileParticleColorComponents,
   projectileQuadScale,
+  triggerMageCastAnimation,
+  updateMageAnimationController,
 } from '../src/render-three/ThreeHeroStage';
 
 describe('ThreeHeroStage projectile VFX', () => {
@@ -43,3 +46,71 @@ describe('ThreeHeroStage projectile VFX', () => {
     expect(projectileQuadScale('bomb').y).toBeGreaterThan(projectileQuadScale('bomb').x);
   });
 });
+
+describe('ThreeHeroStage mage animation controller', () => {
+  it('starts the idle clip by default', () => {
+    const object = objectWithClips([
+      new THREE.AnimationClip('idle', 1, [
+        new THREE.VectorKeyframeTrack('.position', [0, 1], [0, 0, 0, 0, 0.04, 0]),
+      ]),
+      new THREE.AnimationClip('cast', 0.5, [
+        new THREE.VectorKeyframeTrack('.position', [0, 0.5], [0, 0, 0, 0.2, 0, 0]),
+      ]),
+    ]);
+
+    const controller = createMageAnimationController(object);
+
+    expect(controller).not.toBeNull();
+    expect(controller?.idleAction?.isRunning()).toBe(true);
+    expect(controller?.castRemainingSec).toBe(0);
+  });
+
+  it('plays cast as a one-shot then returns to idle', () => {
+    const object = objectWithClips([
+      new THREE.AnimationClip('idle', 1, [
+        new THREE.VectorKeyframeTrack('.position', [0, 1], [0, 0, 0, 0, 0.04, 0]),
+      ]),
+      new THREE.AnimationClip('cast', 0.5, [
+        new THREE.VectorKeyframeTrack('.position', [0, 0.5], [0, 0, 0, 0.2, 0, 0]),
+      ]),
+    ]);
+    const controller = createMageAnimationController(object);
+    expect(controller).not.toBeNull();
+
+    triggerMageCastAnimation(controller!);
+
+    expect(controller?.castRemainingSec).toBeCloseTo(0.5);
+    expect(controller?.castAction?.isRunning()).toBe(true);
+    expect(controller?.idleAction?.getEffectiveWeight()).toBe(0);
+
+    updateMageAnimationController(controller!, 0.51);
+
+    expect(controller?.castRemainingSec).toBe(0);
+    expect(controller?.castAction?.isRunning()).toBe(false);
+    expect(controller?.idleAction?.isRunning()).toBe(true);
+    expect(controller?.idleAction?.getEffectiveWeight()).toBe(1);
+  });
+
+  it('treats a missing cast clip as a no-op', () => {
+    const object = objectWithClips([
+      new THREE.AnimationClip('idle', 1, [
+        new THREE.VectorKeyframeTrack('.position', [0, 1], [0, 0, 0, 0, 0.04, 0]),
+      ]),
+    ]);
+    const controller = createMageAnimationController(object);
+    expect(controller).not.toBeNull();
+
+    triggerMageCastAnimation(controller!);
+    updateMageAnimationController(controller!, 0.5);
+
+    expect(controller?.castRemainingSec).toBe(0);
+    expect(controller?.idleAction?.isRunning()).toBe(true);
+    expect(controller?.idleAction?.getEffectiveWeight()).toBe(1);
+  });
+});
+
+function objectWithClips(clips: THREE.AnimationClip[]): THREE.Object3D {
+  const object = new THREE.Object3D();
+  object.animations = clips;
+  return object;
+}

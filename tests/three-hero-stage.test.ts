@@ -6,11 +6,13 @@ import {
   isProjectileCastReady,
   isProjectileVisible,
   mageChargeMaterialSettings,
+  projectWorldPositionToLogicalHeroStage,
   projectileChargeProgress,
   projectileColor,
   projectileMaterialSettings,
   projectileParticleColorComponents,
   projectileQuadScale,
+  resolveMageParticleSourceLogicalPosition,
   resolveMageParticleSourceWorldPosition,
   resolveProjectileRenderOrigin,
   triggerActorOneShotAnimation,
@@ -115,6 +117,38 @@ describe('ThreeHeroStage projectile VFX', () => {
 
     expect(resolveMageParticleSourceWorldPosition(new THREE.Group())).toBeNull();
     expect(resolveProjectileRenderOrigin(projectile, new THREE.Group())).toBe(projectile);
+  });
+
+  it('projects the mage particleSource into logical hero-stage coordinates', () => {
+    const camera = new THREE.OrthographicCamera(-5.4, 5.4, 2.5, -2.5, 0.1, 100);
+    camera.position.set(0, 0, 10);
+    camera.lookAt(0, 0, 0);
+    camera.updateProjectionMatrix();
+    camera.updateMatrixWorld(true);
+    const mage = new THREE.Group();
+    const particleSource = new THREE.Object3D();
+    particleSource.name = 'particleSource';
+    particleSource.position.set(1, 1, 0);
+    mage.add(particleSource);
+
+    const centered = projectWorldPositionToLogicalHeroStage({ x: 0, y: 0, z: 0 }, camera, 1080, 500);
+    const projected = resolveMageParticleSourceLogicalPosition(mage, camera, 1080, 500);
+
+    expect(centered).toEqual({ x: 540, y: 250 });
+    expect(projected?.x).toBeCloseTo(640);
+    expect(projected?.y).toBeCloseTo(150);
+
+    particleSource.position.set(2, -0.5, 0);
+    const updated = resolveMageParticleSourceLogicalPosition(mage, camera, 1080, 500);
+    expect(updated?.x).toBeCloseTo(740);
+    expect(updated?.y).toBeCloseTo(300);
+  });
+
+  it('returns null for logical particleSource projection when the source is missing', () => {
+    const camera = new THREE.OrthographicCamera(-5.4, 5.4, 2.5, -2.5, 0.1, 100);
+    camera.updateProjectionMatrix();
+
+    expect(resolveMageParticleSourceLogicalPosition(new THREE.Group(), camera, 1080, 500)).toBeNull();
   });
 });
 

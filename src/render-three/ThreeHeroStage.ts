@@ -50,6 +50,18 @@ export class ThreeHeroStage {
     this.camera.updateProjectionMatrix();
   }
 
+  getMageParticleSourceLogicalPosition(
+    logicalWidth = 1080,
+    logicalHeight = 500,
+  ): { x: number; y: number } | null {
+    return resolveMageParticleSourceLogicalPosition(
+      this.objectCache.get('actor-mage'),
+      this.camera,
+      logicalWidth,
+      logicalHeight,
+    );
+  }
+
   dispose(): void {
     for (const [, object] of this.objectCache.entries()) {
       this.scene.remove(object);
@@ -586,6 +598,33 @@ export function resolveMageParticleSourceWorldPosition(mageObject?: THREE.Object
     y: position.y,
     z: position.z,
   };
+}
+
+export function projectWorldPositionToLogicalHeroStage(
+  position: ProjectileState['from'],
+  camera: THREE.Camera,
+  logicalWidth: number,
+  logicalHeight: number,
+): { x: number; y: number } | null {
+  const projected = new THREE.Vector3(position.x, position.y, position.z).project(camera);
+  if (!Number.isFinite(projected.x) || !Number.isFinite(projected.y)) {
+    return null;
+  }
+
+  return {
+    x: ((projected.x + 1) / 2) * logicalWidth,
+    y: ((1 - projected.y) / 2) * logicalHeight,
+  };
+}
+
+export function resolveMageParticleSourceLogicalPosition(
+  mageObject: THREE.Object3D | undefined,
+  camera: THREE.Camera,
+  logicalWidth: number,
+  logicalHeight: number,
+): { x: number; y: number } | null {
+  const position = resolveMageParticleSourceWorldPosition(mageObject);
+  return position == null ? null : projectWorldPositionToLogicalHeroStage(position, camera, logicalWidth, logicalHeight);
 }
 
 interface ProjectileParticleSystem {

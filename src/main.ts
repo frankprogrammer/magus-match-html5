@@ -1,6 +1,6 @@
 import './styles.css';
 import { MagusMatchGameApp } from './core/GameApp';
-import { LOGICAL_HEIGHT, LOGICAL_WIDTH } from './core/Layout';
+import { HERO_STAGE_HEIGHT, LOGICAL_HEIGHT, LOGICAL_WIDTH } from './core/Layout';
 import {
   BrowserInputAdapter,
   parseDebugLevelNumber,
@@ -100,7 +100,7 @@ function resizeLogicalStage(): void {
   const rect = gameShell.getBoundingClientRect();
   const scale = Math.min(rect.width / LOGICAL_WIDTH, rect.height / LOGICAL_HEIGHT);
   stageElement.style.transform = `scale(${scale})`;
-  heroStage.resize(1080, 500);
+  heroStage.resize(LOGICAL_WIDTH, HERO_STAGE_HEIGHT);
 }
 
 function renderHud(hud = getBrowserHudState()): void {
@@ -118,27 +118,30 @@ function tick(timeMs: number): void {
   audio?.setMuted(hudState.muted);
   handleEvents(app.drainEvents());
   renderHud(hudState);
+  heroStage.render(app.getHeroWorldState(), dtSec);
+  const matchEnergyTarget = heroStage.getMageParticleSourceLogicalPosition(LOGICAL_WIDTH, HERO_STAGE_HEIGHT) ?? undefined;
   renderFrame(
     renderer,
-    boardAnimationPresenter.present(app.getBoardRenderState(), timeMs / 1000),
+    boardAnimationPresenter.present(app.getBoardRenderState(), timeMs / 1000, { matchEnergyTarget }),
     hudState,
     timeMs / 1000,
     screenState,
   );
-  heroStage.render(app.getHeroWorldState(), dtSec);
   requestAnimationFrame(tick);
 }
 
 resizeLogicalStage();
 renderHud();
+heroStage.render(app.getHeroWorldState(), 0);
 renderFrame(
   renderer,
-  boardAnimationPresenter.present(app.getBoardRenderState(), 0),
+  boardAnimationPresenter.present(app.getBoardRenderState(), 0, {
+    matchEnergyTarget: heroStage.getMageParticleSourceLogicalPosition(LOGICAL_WIDTH, HERO_STAGE_HEIGHT) ?? undefined,
+  }),
   getBrowserHudState(),
   0,
   getBrowserScreenState(),
 );
-heroStage.render(app.getHeroWorldState(), 0);
 window.addEventListener('resize', resizeLogicalStage);
 window.addEventListener('beforeunload', () => heroStage.dispose());
 requestAnimationFrame(tick);

@@ -85,9 +85,33 @@ describe('BoardAnimationPresenter', () => {
     const popping = presenter.present(state, 0.14);
     const repeated = presenter.present(state, 0.14);
     const laterStreams = presenter.present(state, 0.25).matchEnergyStreams ?? [];
+    const nextFrameStreams = presenter.present(state, 0.29).matchEnergyStreams ?? [];
+    const acceleratedStreams = presenter.present(state, 0.36).matchEnergyStreams ?? [];
+    const nearTargetStreams = presenter.present(state, 0.45).matchEnergyStreams ?? [];
+    const shrinkingStreams = presenter.present(state, 0.55).matchEnergyStreams ?? [];
+    const afterArrivalStreams = presenter.present(state, 0.69).matchEnergyStreams ?? [];
+    const targetedPresenter = new BoardAnimationPresenter();
+    targetedPresenter.present(state, 0, { matchEnergyTarget: { x: 320, y: 160 } });
+    const targetedStreams = targetedPresenter.present(state, 0.45, { matchEnergyTarget: { x: 320, y: 160 } }).matchEnergyStreams ?? [];
     const early = new BoardAnimationPresenter();
     early.present(state, 0);
     const earlyPop = early.present(state, 0.121);
+    const earlyFireStream = popping.matchEnergyStreams?.find((stream) => stream.streamId === 'fire-energy-0');
+    const middleFireStream = laterStreams.find((stream) => stream.streamId === 'fire-energy-0');
+    const acceleratedFireStream = acceleratedStreams.find((stream) => stream.streamId === 'fire-energy-0');
+    const shrinkingFireStream = shrinkingStreams.find((stream) => stream.streamId === 'fire-energy-0');
+    const defaultNearTargetFireStream = nearTargetStreams.find((stream) => stream.streamId === 'fire-energy-0');
+    const targetedFireStream = targetedStreams.find((stream) => stream.streamId === 'fire-energy-0');
+    const fireStart = {
+      x: BOARD_RECT.x + BOARD_RECT.cellSize / 2,
+      y: BOARD_RECT.y + BOARD_RECT.cellSize / 2,
+    };
+    const mageTarget = { x: 120, y: 180 };
+    const totalTravelDistance = distance(fireStart, mageTarget);
+    const earlyTravel = distance(fireStart, earlyFireStream ?? fireStart);
+    const earlyProjection = projectedProgress(fireStart, mageTarget, earlyFireStream ?? fireStart);
+    const middleProjection = projectedProgress(fireStart, mageTarget, middleFireStream ?? fireStart);
+    const acceleratedProjection = projectedProgress(fireStart, mageTarget, acceleratedFireStream ?? fireStart);
 
     expect(popping.particles?.map((particle) => particle.color).sort()).toEqual([
       ...Array(12).fill('#27ae60'),
@@ -105,11 +129,32 @@ describe('BoardAnimationPresenter', () => {
       new Set(['#27ae60', '#38d5ff', '#eb5757', '#f2c94c']),
     );
     expect(popping.matchEnergyStreams).toEqual(repeated.matchEnergyStreams);
+    expect(popping.matchEnergyStreams?.every((stream) => stream.assetId === AssetIds.spritesheets.matchOrb)).toBe(true);
+    expect(popping.matchEnergyStreams?.every((stream) => stream.sourceWidth === 128 && stream.sourceHeight === 128)).toBe(true);
+    expect(popping.matchEnergyStreams?.every((stream) => stream.alpha === 1)).toBe(true);
     expect(Math.max(...laterStreams.map((stream) => stream.alpha))).toBeCloseTo(1);
     expect(laterStreams.filter((stream) => stream.alpha > 0.75).length).toBeGreaterThan(10);
+    expect(shrinkingStreams.length).toBeGreaterThan(0);
+    expect(shrinkingStreams.every((stream) => stream.alpha === 1)).toBe(true);
+    expect(afterArrivalStreams).toHaveLength(0);
     expect(Math.max(...(popping.matchEnergyStreams ?? []).map((stream) => stream.radius))).toBeGreaterThan(10);
+    expect(middleFireStream?.radius).toBeCloseTo(earlyFireStream?.radius ?? 0);
+    expect(acceleratedFireStream?.radius).toBeCloseTo(earlyFireStream?.radius ?? 0);
+    expect(shrinkingFireStream?.radius).toBeLessThan((earlyFireStream?.radius ?? 0) * 0.6);
+    expect(shrinkingFireStream?.radius).toBeGreaterThan(0);
+    expect(middleFireStream?.width).toBeCloseTo(earlyFireStream?.width ?? 0);
+    expect(acceleratedFireStream?.width).toBeCloseTo(earlyFireStream?.width ?? 0);
+    expect(shrinkingFireStream?.width).toBeLessThan((earlyFireStream?.width ?? 0) * 0.6);
+    expect(targetedFireStream?.x).toBeGreaterThan(defaultNearTargetFireStream?.x ?? 0);
     expect(laterStreams.some((stream) => stream.x < BOARD_RECT.width / 2)).toBe(true);
-    expect(laterStreams.some((stream) => stream.y < BOARD_RECT.y)).toBe(true);
+    expect(nearTargetStreams.some((stream) => stream.y < BOARD_RECT.y)).toBe(true);
+    expect(nextFrameStreams.length).toBeGreaterThan(0);
+    expect(nextFrameStreams[0]?.frameIndex).not.toBe(laterStreams[0]?.frameIndex);
+    expect(nextFrameStreams.every((stream) => stream.frameIndex >= 0 && stream.frameIndex <= 3)).toBe(true);
+    expect(laterStreams.some((stream) => stream.sourceY === 128)).toBe(true);
+    expect(earlyTravel).toBeLessThan(totalTravelDistance * 0.1);
+    expect(earlyProjection).toBeLessThan(0.1);
+    expect(acceleratedProjection - middleProjection).toBeGreaterThan(middleProjection - earlyProjection);
   });
 
   it('expands and fades the shockwave ring as it moves outward', () => {
@@ -821,6 +866,23 @@ function boardState(trace: BoardAnimationTrace): BoardRenderState {
     visualCues: [],
     animationTrace: trace,
   };
+}
+
+function distance(first: { x: number; y: number }, second: { x: number; y: number }): number {
+  return Math.hypot(second.x - first.x, second.y - first.y);
+}
+
+function projectedProgress(
+  start: { x: number; y: number },
+  target: { x: number; y: number },
+  point: { x: number; y: number },
+): number {
+  const travelX = target.x - start.x;
+  const travelY = target.y - start.y;
+  const pointX = point.x - start.x;
+  const pointY = point.y - start.y;
+  const travelLengthSquared = travelX * travelX + travelY * travelY;
+  return travelLengthSquared === 0 ? 1 : (pointX * travelX + pointY * travelY) / travelLengthSquared;
 }
 
 function snapshotCell(

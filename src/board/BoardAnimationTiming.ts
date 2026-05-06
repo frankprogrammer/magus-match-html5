@@ -9,6 +9,7 @@ import {
   INVALID_SWAP_FORWARD_MS,
   INVALID_SWAP_HOLD_MS,
   INVALID_SWAP_RETURN_MS,
+  MATCH_ENERGY_STREAM_DURATION_MS,
   ROCKET_CLOUD_SPRITE_DURATION_MS,
   ROCKET_CLOUD_SPRITE_RENDER_SIZE_PX,
   ROCKET_SWEEP_CLEAR_STAGGER_MS,
@@ -35,7 +36,8 @@ export function getBoardAnimationTraceDurationMs(trace: BoardAnimationTrace): nu
   }
 
   const stepTimings = getBoardAnimationStepTimings(trace);
-  return stepTimings.length === 0 ? TILE_SWAP_RETARGET_MS : stepTimings[stepTimings.length - 1].endMs;
+  const stepEndMs = stepTimings.length === 0 ? TILE_SWAP_RETARGET_MS : stepTimings[stepTimings.length - 1].endMs;
+  return Math.max(stepEndMs, getMatchEnergyStreamTraceEndMs(trace, stepTimings));
 }
 
 export function getBoardAnimationStepTimings(trace: BoardAnimationTrace): BoardAnimationStepTiming[] {
@@ -86,6 +88,30 @@ function getRocketCloudVisualDurationMs(step: BoardAnimationCascadeStep): number
     const visualDelayMs = (maxDistancePx / BOARD_RECT.cellSize) * ROCKET_SWEEP_CLEAR_STAGGER_MS;
     return Math.max(longest, (tile.clearDelayMs ?? 0) + visualDelayMs + ROCKET_CLOUD_SPRITE_DURATION_MS);
   }, 0);
+}
+
+function getMatchEnergyStreamTraceEndMs(
+  trace: BoardAnimationTrace,
+  stepTimings: readonly BoardAnimationStepTiming[],
+): number {
+  if (trace.kind === 'levelIntro') {
+    return 0;
+  }
+
+  return stepTimings.reduce((longest, timing) => {
+    const stepLongest = timing.step.clearedTiles.reduce((stepMax, tile) => {
+      if (!isStandardEnergyTile(tile.tileType)) {
+        return stepMax;
+      }
+
+      return Math.max(stepMax, timing.popStartMs + (tile.clearDelayMs ?? 0) + MATCH_ENERGY_STREAM_DURATION_MS);
+    }, 0);
+    return Math.max(longest, stepLongest);
+  }, 0);
+}
+
+function isStandardEnergyTile(tileType: string): boolean {
+  return tileType === 'FIRE' || tileType === 'ICE' || tileType === 'LIGHTNING' || tileType === 'EARTH';
 }
 
 function getStepFallDurationMs(step: BoardAnimationCascadeStep): number {

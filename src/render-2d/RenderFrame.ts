@@ -306,12 +306,28 @@ function drawParticles(renderer: GameRenderer, boardState: BoardRenderState): vo
 function drawMatchEnergyStreams(renderer: GameRenderer, boardState: BoardRenderState): void {
   const streams = [...(boardState.matchEnergyStreams ?? [])].sort((first, second) => first.zIndex - second.zIndex);
   for (const stream of streams) {
-    if (stream.alpha <= 0 || stream.radius <= 0) {
+    if (stream.alpha <= 0 || stream.width <= 0 || stream.height <= 0) {
+      continue;
+    }
+
+    const imageRef = { id: stream.assetId };
+    if (!renderer.hasImage(imageRef)) {
       continue;
     }
 
     renderer.pushAlpha(stream.alpha);
-    renderer.drawEllipse(stream.color, stream.x, stream.y, stream.radius, stream.radius);
+    renderer.drawTintedImageFrame(
+      imageRef,
+      stream.color,
+      stream.sourceX,
+      stream.sourceY,
+      stream.sourceWidth,
+      stream.sourceHeight,
+      stream.x - stream.width / 2,
+      stream.y - stream.height / 2,
+      stream.width,
+      stream.height,
+    );
     renderer.pop();
   }
 }

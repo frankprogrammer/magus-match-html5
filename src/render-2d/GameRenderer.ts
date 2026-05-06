@@ -44,6 +44,18 @@ export interface GameRenderer {
     width: number,
     height: number,
   ): void;
+  drawTintedImageFrame(
+    image: DrawImageRef,
+    color: string,
+    sourceX: number,
+    sourceY: number,
+    sourceWidth: number,
+    sourceHeight: number,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+  ): void;
   drawImageAlphaMaskFill(
     image: DrawImageRef,
     color: string,

@@ -139,7 +139,7 @@ describe('buildBoardCellVisuals', () => {
   });
 
   it('draws image assets when available', () => {
-    const renderer = new FakeRenderer(new Set(['tile.fire']));
+    const renderer = new FakeRenderer(new Set(['tile.fire', AssetIds.spritesheets.matchOrb]));
 
     renderFrame(renderer, oneTileState('tile.fire'), hudState(), 0);
 
@@ -335,7 +335,7 @@ describe('buildBoardCellVisuals', () => {
   });
 
   it('draws particles inside the clipped board layer after tiles and before the frame', () => {
-    const renderer = new FakeRenderer(new Set(['tile.fire']));
+    const renderer = new FakeRenderer(new Set(['tile.fire', AssetIds.spritesheets.matchOrb]));
     const state = oneTileState('tile.fire');
     state.burstRings = [
       {
@@ -363,15 +363,22 @@ describe('buildBoardCellVisuals', () => {
     state.matchEnergyStreams = [
       {
         streamId: 'energy-0',
+        assetId: AssetIds.spritesheets.matchOrb,
+        sourceX: 128,
+        sourceY: 0,
+        sourceWidth: 128,
+        sourceHeight: 128,
+        frameIndex: 1,
         x: BOARD_RECT.x + 80,
         y: BOARD_RECT.y + 80,
         radius: 10,
+        width: 40,
+        height: 40,
         color: '#38d5ff',
         alpha: 0.7,
         zIndex: 23,
       },
     ];
-
     renderFrame(renderer, state, hudState(), 0);
 
     const clipIndex = renderer.calls.indexOf(
@@ -380,7 +387,9 @@ describe('buildBoardCellVisuals', () => {
     const tileIndex = renderer.calls.indexOf('image:tile.fire');
     const ringIndex = renderer.calls.indexOf('ring:rgba(255, 255, 255, 0.85)');
     const particleIndex = renderer.calls.indexOf('ellipse:#eb5757');
-    const streamIndex = renderer.calls.indexOf('ellipse:#38d5ff');
+    const streamIndex = renderer.calls.indexOf(
+      `tintedImageFrame:${AssetIds.spritesheets.matchOrb}:#38d5ff:128,0,128,128:${BOARD_RECT.x + 60},${BOARD_RECT.y + 60},40,40`,
+    );
     const clippedLayerPopIndex = renderer.calls.indexOf('pop', particleIndex);
     const frameIndex = renderer.calls.indexOf(
       `rect:#c8a24b:${BOARD_RECT.x - 8},${BOARD_RECT.y - 8},${BOARD_RECT.width + 16},8`,
@@ -393,6 +402,35 @@ describe('buildBoardCellVisuals', () => {
     expect(clippedLayerPopIndex).toBeGreaterThan(particleIndex);
     expect(streamIndex).toBeGreaterThan(clippedLayerPopIndex);
     expect(frameIndex).toBeGreaterThan(streamIndex);
+  });
+
+  it('skips match energy stream sprites when the orb image is missing', () => {
+    const renderer = new FakeRenderer(new Set(['tile.fire']));
+    const state = oneTileState('tile.fire');
+    state.matchEnergyStreams = [
+      {
+        streamId: 'energy-0',
+        assetId: AssetIds.spritesheets.matchOrb,
+        sourceX: 0,
+        sourceY: 0,
+        sourceWidth: 128,
+        sourceHeight: 128,
+        frameIndex: 0,
+        x: BOARD_RECT.x + 80,
+        y: BOARD_RECT.y + 80,
+        radius: 10,
+        width: 20,
+        height: 20,
+        color: '#38d5ff',
+        alpha: 0.7,
+        zIndex: 23,
+      },
+    ];
+
+    renderFrame(renderer, state, hudState(), 0);
+
+    expect(renderer.calls.some((call) => call.startsWith(`tintedImageFrame:${AssetIds.spritesheets.matchOrb}`))).toBe(false);
+    expect(renderer.calls).not.toContain('ellipse:#38d5ff');
   });
 
   it('draws TNT explosion sprites inside the clipped board layer before match particles', () => {
@@ -655,6 +693,22 @@ class FakeRenderer implements GameRenderer {
   ): void {
     this.calls.push(`imageFrame:${image.id}`);
     this.calls.push(`imageFrame:${image.id}:${sourceX},${sourceY},${sourceWidth},${sourceHeight}:${x},${y},${width},${height}`);
+  }
+
+  drawTintedImageFrame(
+    image: DrawImageRef,
+    color: string,
+    sourceX: number,
+    sourceY: number,
+    sourceWidth: number,
+    sourceHeight: number,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+  ): void {
+    this.calls.push(`tintedImageFrame:${image.id}`);
+    this.calls.push(`tintedImageFrame:${image.id}:${color}:${sourceX},${sourceY},${sourceWidth},${sourceHeight}:${x},${y},${width},${height}`);
   }
 
   drawImageAlphaMaskFill(

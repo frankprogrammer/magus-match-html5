@@ -25,6 +25,7 @@ import {
   TILE_LANDING_SETTLE_MS,
   TILE_MATCH_SCALE_DOWN_MS,
   TILE_SWAP_RETARGET_MS,
+  MATCH_ENERGY_STREAM_DURATION_MS,
   ROCKET_CLOUD_SPRITE_DURATION_MS,
   ROCKET_CLOUD_SPRITE_RENDER_SIZE_PX,
   ROCKET_SWEEP_CLEAR_STAGGER_MS,
@@ -46,13 +47,19 @@ const MATCH_PARTICLE_MAX_DISTANCE_PX = 62;
 const MATCH_PARTICLE_START_RADIUS_PX = 12;
 const MATCH_PARTICLE_END_RADIUS_PX = 2.25;
 const MATCH_ENERGY_STREAMS_PER_TILE = 7;
-const MATCH_ENERGY_STREAM_DURATION_MS = 560;
 const MATCH_ENERGY_STREAM_TARGET_X_PX = 120;
 const MATCH_ENERGY_STREAM_TARGET_Y_PX = 180;
 const MATCH_ENERGY_STREAM_MAX_ARC_PX = 70;
 const MATCH_ENERGY_STREAM_START_RADIUS_PX = 14;
-const MATCH_ENERGY_STREAM_END_RADIUS_PX = 5;
 const MATCH_ENERGY_STREAM_MAX_ALPHA = 1;
+const MATCH_ENERGY_STREAM_STAGGER_PROGRESS = 0.045;
+const MATCH_ENERGY_STREAM_PROGRESS_SCALE = 1 + (MATCH_ENERGY_STREAMS_PER_TILE - 1) * MATCH_ENERGY_STREAM_STAGGER_PROGRESS;
+const MATCH_ORB_SPRITE_FRAME_SIZE_PX = 128;
+const MATCH_ORB_SPRITE_COLUMNS = 2;
+const MATCH_ORB_SPRITE_FRAME_COUNT = 4;
+const MATCH_ORB_SPRITE_FPS = 30;
+const MATCH_ORB_SPRITE_FRAME_MS = 1000 / MATCH_ORB_SPRITE_FPS;
+const MATCH_ORB_SPRITE_SIZE_MULTIPLIER = 2;
 const MATCH_BURST_RING_DURATION_MS = 220;
 const MATCH_BURST_RING_MAX_RADIUS_PX = 86;
 const MATCH_BURST_RING_START_LINE_WIDTH_PX = 7;
@@ -84,16 +91,24 @@ interface ActiveBoardAnimation {
   retargetStarts: Map<string, VisualSample>;
 }
 
+export interface BoardAnimationPresenterOptions {
+  matchEnergyTarget?: { x: number; y: number };
+}
+
 export class BoardAnimationPresenter {
   private activeAnimation: ActiveBoardAnimation | null = null;
   private lastRevisionId: number | null = null;
 
-  present(authoritativeState: BoardRenderState, elapsedSec: number): BoardRenderState {
+  present(
+    authoritativeState: BoardRenderState,
+    elapsedSec: number,
+    options: BoardAnimationPresenterOptions = {},
+  ): BoardRenderState {
     const trace = authoritativeState.animationTrace ?? null;
     if (trace != null && trace.revisionId !== this.lastRevisionId) {
       const currentState = this.activeAnimation == null || !shouldRetargetIntoTrace(trace)
         ? null
-        : this.sampleActiveAnimation(authoritativeState, elapsedSec);
+        : this.sampleActiveAnimation(authoritativeState, elapsedSec, options);
       this.activeAnimation = {
         trace,
         startSec: elapsedSec,
@@ -106,7 +121,7 @@ export class BoardAnimationPresenter {
       return authoritativeState;
     }
 
-    const animatedState = this.sampleActiveAnimation(authoritativeState, elapsedSec);
+    const animatedState = this.sampleActiveAnimation(authoritativeState, elapsedSec, options);
     if (this.isAnimationComplete(elapsedSec)) {
       this.activeAnimation = null;
       return authoritativeState;
@@ -115,7 +130,11 @@ export class BoardAnimationPresenter {
     return animatedState;
   }
 
-  private sampleActiveAnimation(authoritativeState: BoardRenderState, elapsedSec: number): BoardRenderState {
+  private sampleActiveAnimation(
+    authoritativeState: BoardRenderState,
+    elapsedSec: number,
+    options: BoardAnimationPresenterOptions,
+  ): BoardRenderState {
     if (this.activeAnimation == null) {
       return authoritativeState;
     }
@@ -125,7 +144,7 @@ export class BoardAnimationPresenter {
     const stepTimings = getBoardAnimationStepTimings(trace);
     const boardCells = sampleTraceCells(trace, stepTimings, elapsedMs, this.activeAnimation.retargetStarts);
     const particles = sampleTraceParticles(trace, stepTimings, elapsedMs);
-    const matchEnergyStreams = sampleTraceMatchEnergyStreams(trace, stepTimings, elapsedMs);
+    const matchEnergyStreams = sampleTraceMatchEnergyStreams(trace, stepTimings, elapsedMs, options.matchEnergyTarget);
     const burstRings = sampleTraceBurstRings(trace, stepTimings, elapsedMs);
     const tntExplosionSprites = sampleTraceTntExplosionSprites(trace, stepTimings, elapsedMs);
     const rocketCloudSprites = sampleTraceRocketCloudSprites(trace, stepTimings, elapsedMs);
@@ -193,22 +212,20 @@ function sampleTraceMatchEnergyStreams(
   trace: BoardAnimationTrace,
   stepTimings: readonly BoardAnimationStepTiming[],
   elapsedMs: number,
+  target?: { x: number; y: number },
 ): BoardMatchEnergyStreamVisualState[] {
   if (trace.kind === 'levelIntro' || trace.kind === 'invalidSwap') {
     return [];
   }
 
-  const activeStep = stepTimings.find((timing) => elapsedMs < timing.fallStartMs);
-  if (activeStep == null) {
-    return [];
-  }
+  return stepTimings.flatMap((timing) => {
+    const stepElapsedMs = elapsedMs - timing.popStartMs;
+    if (stepElapsedMs < 0) {
+      return [];
+    }
 
-  const stepElapsedMs = elapsedMs - activeStep.popStartMs;
-  if (stepElapsedMs < 0) {
-    return [];
-  }
-
-  return activeStep.step.clearedTiles.flatMap((tile) => sampleClearedTileEnergyStreams(tile, stepElapsedMs));
+    return timing.step.clearedTiles.flatMap((tile) => sampleClearedTileEnergyStreams(tile, stepElapsedMs, target));
+  });
 }
 
 function sampleTraceParticles(
@@ -307,6 +324,7 @@ function sampleTraceRocketCloudSprites(
 function sampleClearedTileEnergyStreams(
   tile: BoardAnimationCascadeStep['clearedTiles'][number],
   stepElapsedMs: number,
+  targetOverride?: { x: number; y: number },
 ): BoardMatchEnergyStreamVisualState[] {
   const color = particleColorForTileType(tile.tileType);
   if (color == null) {
@@ -320,14 +338,14 @@ function sampleClearedTileEnergyStreams(
 
   const progress = clamp01(localElapsedMs / MATCH_ENERGY_STREAM_DURATION_MS);
   const start = cellCenter(tile.coord);
-  const target = {
+  const target = targetOverride ?? {
     x: MATCH_ENERGY_STREAM_TARGET_X_PX,
     y: MATCH_ENERGY_STREAM_TARGET_Y_PX,
   };
 
   return Array.from({ length: MATCH_ENERGY_STREAMS_PER_TILE }, (_, index) => {
-    const offsetProgress = clamp01(progress * 1.18 - index * 0.045);
-    const offsetEased = easeOutCubic(offsetProgress);
+    const offsetProgress = clamp01(progress * MATCH_ENERGY_STREAM_PROGRESS_SCALE - index * MATCH_ENERGY_STREAM_STAGGER_PROGRESS);
+    const offsetEased = easeInCubic(offsetProgress);
     const seed = `${tile.tileId}:energy:${index}`;
     const side = deterministicUnit(`${seed}:side`) < 0.5 ? -1 : 1;
     const arc = lerp(18, MATCH_ENERGY_STREAM_MAX_ARC_PX, deterministicUnit(`${seed}:arc`)) * side;
@@ -335,20 +353,27 @@ function sampleClearedTileEnergyStreams(
     const jitterY = lerp(-10, 10, deterministicUnit(`${seed}:y`)) * Math.sin(offsetProgress * Math.PI * 2);
     const x = lerp(start.x, target.x, offsetEased) + arc * Math.sin(offsetProgress * Math.PI) + jitterX;
     const y = lerp(start.y, target.y, offsetEased) + jitterY;
-    const radius = lerp(
-      MATCH_ENERGY_STREAM_START_RADIUS_PX,
-      MATCH_ENERGY_STREAM_END_RADIUS_PX,
-      offsetProgress,
-    ) * (0.82 + deterministicUnit(`${seed}:size`) * 0.36);
-    const fadeIn = clamp01(offsetProgress / 0.08);
-    const fadeOut = clamp01((1 - offsetProgress) / 0.5);
+    const baseRadius = MATCH_ENERGY_STREAM_START_RADIUS_PX * (0.82 + deterministicUnit(`${seed}:size`) * 0.36);
+    const arrivalScale = 1 - clamp01((offsetProgress - 0.95) / 0.05);
+    const radius = baseRadius * arrivalScale;
+    const frameIndex = Math.floor(localElapsedMs / MATCH_ORB_SPRITE_FRAME_MS) % MATCH_ORB_SPRITE_FRAME_COUNT;
+    const sourceCol = frameIndex % MATCH_ORB_SPRITE_COLUMNS;
+    const sourceRow = Math.floor(frameIndex / MATCH_ORB_SPRITE_COLUMNS);
     return {
       streamId: `${tile.tileId}-energy-${index}`,
+      assetId: AssetIds.spritesheets.matchOrb,
+      sourceX: sourceCol * MATCH_ORB_SPRITE_FRAME_SIZE_PX,
+      sourceY: sourceRow * MATCH_ORB_SPRITE_FRAME_SIZE_PX,
+      sourceWidth: MATCH_ORB_SPRITE_FRAME_SIZE_PX,
+      sourceHeight: MATCH_ORB_SPRITE_FRAME_SIZE_PX,
+      frameIndex,
       x,
       y,
       radius,
+      width: radius * 2 * MATCH_ORB_SPRITE_SIZE_MULTIPLIER,
+      height: radius * 2 * MATCH_ORB_SPRITE_SIZE_MULTIPLIER,
       color,
-      alpha: MATCH_ENERGY_STREAM_MAX_ALPHA * Math.min(fadeIn, fadeOut),
+      alpha: MATCH_ENERGY_STREAM_MAX_ALPHA,
       zIndex: 23 + index / 100,
     };
   }).filter((stream) => stream.alpha > 0 && stream.radius > 0);
@@ -798,6 +823,10 @@ function landingScale(progress: number): number {
 
 function easeOutCubic(value: number): number {
   return 1 - Math.pow(1 - clamp01(value), 3);
+}
+
+function easeInCubic(value: number): number {
+  return Math.pow(clamp01(value), 3);
 }
 
 function lerp(from: number, to: number, progress: number): number {

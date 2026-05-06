@@ -197,8 +197,7 @@ function drawBoard(renderer: GameRenderer, boardState: BoardRenderState, elapsed
     drawCell(renderer, visual);
   }
   drawTntExplosionSprites(renderer, boardState);
-  drawRocketWavePuffs(renderer, boardState);
-  drawRocketWaveTrails(renderer, boardState);
+  drawRocketCloudSprites(renderer, boardState);
   drawBurstRings(renderer, boardState);
   drawParticles(renderer, boardState);
   renderer.pop();
@@ -345,30 +344,31 @@ function drawTntExplosionSprites(renderer: GameRenderer, boardState: BoardRender
   }
 }
 
-function drawRocketWavePuffs(renderer: GameRenderer, boardState: BoardRenderState): void {
-  const puffs = [...(boardState.rocketWavePuffs ?? [])].sort((first, second) => first.zIndex - second.zIndex);
-  for (const puff of puffs) {
-    if (puff.alpha <= 0 || puff.radiusX <= 0 || puff.radiusY <= 0) {
+function drawRocketCloudSprites(renderer: GameRenderer, boardState: BoardRenderState): void {
+  const sprites = [...(boardState.rocketCloudSprites ?? [])].sort((first, second) => first.zIndex - second.zIndex);
+  for (const sprite of sprites) {
+    if (sprite.alpha <= 0 || sprite.width <= 0 || sprite.height <= 0) {
       continue;
     }
 
-    renderer.pushAlpha(puff.alpha);
-    renderer.drawEllipse(puff.color, puff.x, puff.y, puff.radiusX, puff.radiusY);
-    renderer.pop();
-  }
-}
-
-function drawRocketWaveTrails(renderer: GameRenderer, boardState: BoardRenderState): void {
-  const trails = [...(boardState.rocketWaveTrails ?? [])].sort((first, second) => first.zIndex - second.zIndex);
-  for (const trail of trails) {
-    if (trail.alpha <= 0 || trail.length <= 0 || trail.width <= 0) {
+    const imageRef = { id: sprite.assetId };
+    if (!renderer.hasImage(imageRef)) {
       continue;
     }
 
-    renderer.pushAlpha(trail.alpha);
-    renderer.pushRotate(trail.angleDeg, trail.x, trail.y);
-    renderer.drawRect(trail.color, trail.x, trail.y - trail.width / 2, trail.length, trail.width);
-    renderer.drawEllipse(trail.color, trail.x + trail.length, trail.y, trail.width * 0.55, trail.width * 0.55);
+    renderer.pushAlpha(sprite.alpha);
+    renderer.pushRotate(sprite.angleDeg, sprite.originX, sprite.originY);
+    renderer.drawImageFrame(
+      imageRef,
+      sprite.sourceX,
+      sprite.sourceY,
+      sprite.sourceWidth,
+      sprite.sourceHeight,
+      sprite.x,
+      sprite.y,
+      sprite.width,
+      sprite.height,
+    );
     renderer.pop();
     renderer.pop();
   }

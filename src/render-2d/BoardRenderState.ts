@@ -63,25 +63,21 @@ export interface BoardTntExplosionSpriteVisualState {
   zIndex: number;
 }
 
-export interface BoardRocketWavePuffVisualState {
-  puffId: string;
+export interface BoardRocketCloudSpriteVisualState {
+  spriteId: string;
+  assetId: string;
+  sourceX: number;
+  sourceY: number;
+  sourceWidth: number;
+  sourceHeight: number;
   x: number;
   y: number;
-  radiusX: number;
-  radiusY: number;
-  color: string;
-  alpha: number;
-  zIndex: number;
-}
-
-export interface BoardRocketWaveTrailVisualState {
-  trailId: string;
-  x: number;
-  y: number;
-  angleDeg: number;
-  length: number;
   width: number;
-  color: string;
+  height: number;
+  originX: number;
+  originY: number;
+  angleDeg: number;
+  frameIndex: number;
   alpha: number;
   zIndex: number;
 }
@@ -115,8 +111,7 @@ export interface BoardRenderState {
   matchEnergyStreams?: readonly BoardMatchEnergyStreamVisualState[];
   burstRings?: readonly BoardBurstRingVisualState[];
   tntExplosionSprites?: readonly BoardTntExplosionSpriteVisualState[];
-  rocketWavePuffs?: readonly BoardRocketWavePuffVisualState[];
-  rocketWaveTrails?: readonly BoardRocketWaveTrailVisualState[];
+  rocketCloudSprites?: readonly BoardRocketCloudSpriteVisualState[];
   emptyCells?: readonly BoardEmptyCellVisualState[];
   pathCells: readonly CellCoord[];
   mageCell: CellCoord | null;

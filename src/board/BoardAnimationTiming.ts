@@ -9,6 +9,9 @@ import {
   INVALID_SWAP_FORWARD_MS,
   INVALID_SWAP_HOLD_MS,
   INVALID_SWAP_RETURN_MS,
+  ROCKET_CLOUD_SPRITE_DURATION_MS,
+  ROCKET_CLOUD_SPRITE_RENDER_SIZE_PX,
+  ROCKET_SWEEP_CLEAR_STAGGER_MS,
   TILE_FALL_DURATION_PER_ROW_MS,
   TILE_FALL_MAX_MS,
   TILE_FALL_MIN_MS,
@@ -16,6 +19,7 @@ import {
   TILE_MATCH_SCALE_DOWN_MS,
   TILE_SWAP_RETARGET_MS,
 } from '../data/tuning';
+import { BOARD_RECT } from '../core/Layout';
 
 export interface BoardAnimationStepTiming {
   step: BoardAnimationCascadeStep;
@@ -59,7 +63,29 @@ function getStepClearDurationMs(trace: BoardAnimationTrace, step: BoardAnimation
   }
 
   const maxDelayMs = Math.max(0, ...step.clearedTiles.map((tile) => tile.clearDelayMs ?? 0));
-  return maxDelayMs + TILE_MATCH_SCALE_DOWN_MS;
+  return Math.max(maxDelayMs + TILE_MATCH_SCALE_DOWN_MS, getRocketCloudVisualDurationMs(step));
+}
+
+function getRocketCloudVisualDurationMs(step: BoardAnimationCascadeStep): number {
+  return step.clearedTiles.reduce((longest, tile) => {
+    if (tile.tileType !== 'ROCKET_H' && tile.tileType !== 'ROCKET_V') {
+      return longest;
+    }
+
+    const centerX = BOARD_RECT.x + tile.coord.col * BOARD_RECT.cellSize + BOARD_RECT.cellSize / 2;
+    const centerY = BOARD_RECT.y + tile.coord.row * BOARD_RECT.cellSize + BOARD_RECT.cellSize / 2;
+    const maxDistancePx = tile.tileType === 'ROCKET_H'
+      ? Math.max(
+        centerX - (BOARD_RECT.x - ROCKET_CLOUD_SPRITE_RENDER_SIZE_PX),
+        BOARD_RECT.x + BOARD_RECT.width + ROCKET_CLOUD_SPRITE_RENDER_SIZE_PX - centerX,
+      )
+      : Math.max(
+        centerY - (BOARD_RECT.y - ROCKET_CLOUD_SPRITE_RENDER_SIZE_PX),
+        BOARD_RECT.y + BOARD_RECT.height + ROCKET_CLOUD_SPRITE_RENDER_SIZE_PX - centerY,
+      );
+    const visualDelayMs = (maxDistancePx / BOARD_RECT.cellSize) * ROCKET_SWEEP_CLEAR_STAGGER_MS;
+    return Math.max(longest, (tile.clearDelayMs ?? 0) + visualDelayMs + ROCKET_CLOUD_SPRITE_DURATION_MS);
+  }, 0);
 }
 
 function getStepFallDurationMs(step: BoardAnimationCascadeStep): number {

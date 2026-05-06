@@ -44,6 +44,7 @@ export const AssetIds = {
   },
   spritesheets: {
     tntExplosion: 'spritesheet.tntExplosion',
+    rocketCloud: 'spritesheet.rocketCloud',
   },
   sounds: {
     tileMatch: 'sound.tileMatch',

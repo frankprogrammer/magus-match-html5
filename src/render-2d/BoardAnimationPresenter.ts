@@ -25,6 +25,9 @@ import {
   TILE_LANDING_SETTLE_MS,
   TILE_MATCH_SCALE_DOWN_MS,
   TILE_SWAP_RETARGET_MS,
+  ROCKET_CLOUD_SPRITE_DURATION_MS,
+  ROCKET_CLOUD_SPRITE_RENDER_SIZE_PX,
+  ROCKET_SWEEP_CLEAR_STAGGER_MS,
 } from '../data/tuning';
 import type {
   BoardBurstRingVisualState,
@@ -32,8 +35,7 @@ import type {
   BoardMatchEnergyStreamVisualState,
   BoardParticleVisualState,
   BoardRenderState,
-  BoardRocketWavePuffVisualState,
-  BoardRocketWaveTrailVisualState,
+  BoardRocketCloudSpriteVisualState,
   BoardTntExplosionSpriteVisualState,
 } from './BoardRenderState';
 
@@ -62,10 +64,12 @@ const TNT_EXPLOSION_SPRITE_FPS = 30;
 const TNT_EXPLOSION_SPRITE_FRAME_MS = 1000 / TNT_EXPLOSION_SPRITE_FPS;
 const TNT_EXPLOSION_SPRITE_DURATION_MS = TNT_EXPLOSION_SPRITE_FRAME_COUNT * TNT_EXPLOSION_SPRITE_FRAME_MS;
 const TNT_EXPLOSION_SPRITE_RENDER_SIZE_PX = 405;
-const ROCKET_WAVE_PUFF_DURATION_MS = 220;
-const ROCKET_WAVE_TRAIL_DURATION_MS = 180;
-const ROCKET_WAVE_PUFFS_PER_CELL = 7;
-const ROCKET_WAVE_TRAILS_PER_CELL = 3;
+const ROCKET_CLOUD_SPRITE_FRAME_SIZE_PX = 128;
+const ROCKET_CLOUD_SPRITE_COLUMNS = 4;
+const ROCKET_CLOUD_SPRITE_FRAME_COUNT = 8;
+const ROCKET_CLOUD_SPRITE_FPS = 30;
+const ROCKET_CLOUD_SPRITE_FRAME_MS = 1000 / ROCKET_CLOUD_SPRITE_FPS;
+const ROCKET_CLOUD_SPRITE_SPAWN_SPACING_PX = BOARD_RECT.cellSize * 0.45;
 
 interface VisualSample {
   renderX: number;
@@ -124,8 +128,7 @@ export class BoardAnimationPresenter {
     const matchEnergyStreams = sampleTraceMatchEnergyStreams(trace, stepTimings, elapsedMs);
     const burstRings = sampleTraceBurstRings(trace, stepTimings, elapsedMs);
     const tntExplosionSprites = sampleTraceTntExplosionSprites(trace, stepTimings, elapsedMs);
-    const rocketWavePuffs = sampleTraceRocketWavePuffs(trace, stepTimings, elapsedMs);
-    const rocketWaveTrails = sampleTraceRocketWaveTrails(trace, stepTimings, elapsedMs);
+    const rocketCloudSprites = sampleTraceRocketCloudSprites(trace, stepTimings, elapsedMs);
 
     return {
       ...authoritativeState,
@@ -134,8 +137,7 @@ export class BoardAnimationPresenter {
       matchEnergyStreams,
       burstRings,
       tntExplosionSprites,
-      rocketWavePuffs,
-      rocketWaveTrails,
+      rocketCloudSprites,
     };
   }
 
@@ -280,11 +282,11 @@ function sampleTraceTntExplosionSprites(
     .filter((sprite): sprite is BoardTntExplosionSpriteVisualState => sprite != null);
 }
 
-function sampleTraceRocketWavePuffs(
+function sampleTraceRocketCloudSprites(
   trace: BoardAnimationTrace,
   stepTimings: readonly BoardAnimationStepTiming[],
   elapsedMs: number,
-): BoardRocketWavePuffVisualState[] {
+): BoardRocketCloudSpriteVisualState[] {
   if (trace.kind === 'levelIntro') {
     return [];
   }
@@ -299,33 +301,7 @@ function sampleTraceRocketWavePuffs(
     return [];
   }
 
-  return activeStep.step.clearedTiles.flatMap((tile) =>
-    sampleRocketWavePuffs(tile, activeStep.step.clearedTiles, stepElapsedMs),
-  );
-}
-
-function sampleTraceRocketWaveTrails(
-  trace: BoardAnimationTrace,
-  stepTimings: readonly BoardAnimationStepTiming[],
-  elapsedMs: number,
-): BoardRocketWaveTrailVisualState[] {
-  if (trace.kind === 'levelIntro') {
-    return [];
-  }
-
-  const activeStep = stepTimings.find((timing) => elapsedMs < timing.fallStartMs);
-  if (activeStep == null) {
-    return [];
-  }
-
-  const stepElapsedMs = elapsedMs - activeStep.popStartMs;
-  if (stepElapsedMs < 0) {
-    return [];
-  }
-
-  return activeStep.step.clearedTiles.flatMap((tile) =>
-    sampleRocketWaveTrails(tile, activeStep.step.clearedTiles, stepElapsedMs),
-  );
+  return activeStep.step.clearedTiles.flatMap((tile) => sampleRocketCloudSprites(tile, stepElapsedMs));
 }
 
 function sampleClearedTileEnergyStreams(
@@ -475,116 +451,88 @@ function sampleTntExplosionSprite(
   };
 }
 
-function sampleRocketWavePuffs(
+function sampleRocketCloudSprites(
   rocket: BoardAnimationCascadeStep['clearedTiles'][number],
-  clearedTiles: readonly BoardAnimationCascadeStep['clearedTiles'][number][],
   stepElapsedMs: number,
-): BoardRocketWavePuffVisualState[] {
+): BoardRocketCloudSpriteVisualState[] {
   if (rocket.tileType !== 'ROCKET_H' && rocket.tileType !== 'ROCKET_V') {
     return [];
   }
 
-  return rocketSweepTiles(rocket, clearedTiles).flatMap((tile) => {
-    const localElapsedMs = stepElapsedMs - (tile.clearDelayMs ?? 0);
-    if (localElapsedMs < 0 || localElapsedMs > ROCKET_WAVE_PUFF_DURATION_MS) {
-      return [];
-    }
-
-    const progress = clamp01(localElapsedMs / ROCKET_WAVE_PUFF_DURATION_MS);
-    const eased = easeOutCubic(progress);
-    const center = cellCenter(tile.coord);
-    const isHorizontal = rocket.tileType === 'ROCKET_H';
-    const directionSign = rocketDirectionSign(rocket, tile);
-
-    return Array.from({ length: ROCKET_WAVE_PUFFS_PER_CELL }, (_, index) => {
-      const alongJitter = lerp(-34, 34, deterministicUnit(`${rocket.tileId}:${tile.tileId}:rocket-puff:${index}:along`));
-      const crossJitter = lerp(-48, 48, deterministicUnit(`${rocket.tileId}:${tile.tileId}:rocket-puff:${index}:cross`));
-      const radius = lerp(22, 58, deterministicUnit(`${rocket.tileId}:${tile.tileId}:rocket-puff:${index}:radius`)) * (0.45 + eased * 0.7);
-      const squash = lerp(1.25, 2.1, deterministicUnit(`${rocket.tileId}:${tile.tileId}:rocket-puff:${index}:squash`));
-      return {
-        puffId: `${rocket.tileId}-${tile.tileId}-rocket-puff-${index}`,
-        x: center.x + (isHorizontal ? alongJitter + directionSign * eased * 16 : crossJitter),
-        y: center.y + (isHorizontal ? crossJitter : alongJitter + directionSign * eased * 16),
-        radiusX: isHorizontal ? radius * squash : radius * 0.82,
-        radiusY: isHorizontal ? radius * 0.82 : radius * squash,
-        color: rocketWavePuffColor(index),
-        alpha: 0.76 * Math.pow(1 - progress, 1.2),
-        zIndex: 26 + index / 100,
-      };
-    });
-  });
-}
-
-function sampleRocketWaveTrails(
-  rocket: BoardAnimationCascadeStep['clearedTiles'][number],
-  clearedTiles: readonly BoardAnimationCascadeStep['clearedTiles'][number][],
-  stepElapsedMs: number,
-): BoardRocketWaveTrailVisualState[] {
-  if (rocket.tileType !== 'ROCKET_H' && rocket.tileType !== 'ROCKET_V') {
-    return [];
-  }
-
-  return rocketSweepTiles(rocket, clearedTiles).flatMap((tile) => {
-    const localElapsedMs = stepElapsedMs - (tile.clearDelayMs ?? 0);
-    if (localElapsedMs < 0 || localElapsedMs > ROCKET_WAVE_TRAIL_DURATION_MS) {
-      return [];
-    }
-
-    const progress = clamp01(localElapsedMs / ROCKET_WAVE_TRAIL_DURATION_MS);
-    const eased = easeOutCubic(progress);
-    const center = cellCenter(tile.coord);
-    const isHorizontal = rocket.tileType === 'ROCKET_H';
-    const directionSign = rocketDirectionSign(rocket, tile);
-    const baseAngle = isHorizontal ? (directionSign >= 0 ? 0 : 180) : (directionSign >= 0 ? 90 : -90);
-
-    return Array.from({ length: ROCKET_WAVE_TRAILS_PER_CELL }, (_, index) => {
-      const jitterDeg = lerp(-12, 12, deterministicUnit(`${rocket.tileId}:${tile.tileId}:rocket-trail:${index}:jitter`));
-      const crossJitter = lerp(-34, 34, deterministicUnit(`${rocket.tileId}:${tile.tileId}:rocket-trail:${index}:cross`));
-      const travel = lerp(18, 48, deterministicUnit(`${rocket.tileId}:${tile.tileId}:rocket-trail:${index}:travel`)) * eased;
-      const length = lerp(42, 108, deterministicUnit(`${rocket.tileId}:${tile.tileId}:rocket-trail:${index}:length`)) * (0.35 + eased * 0.65);
-      return {
-        trailId: `${rocket.tileId}-${tile.tileId}-rocket-trail-${index}`,
-        x: center.x + (isHorizontal ? directionSign * travel : crossJitter),
-        y: center.y + (isHorizontal ? crossJitter : directionSign * travel),
-        angleDeg: baseAngle + jitterDeg,
-        length,
-        width: lerp(22, 7, progress),
-        color: rocketWaveTrailColor(index),
-        alpha: 0.9 * Math.pow(1 - progress, 1.1),
-        zIndex: 29 + index / 100,
-      };
-    });
-  });
-}
-
-function rocketSweepTiles(
-  rocket: BoardAnimationCascadeStep['clearedTiles'][number],
-  clearedTiles: readonly BoardAnimationCascadeStep['clearedTiles'][number][],
-): BoardAnimationCascadeStep['clearedTiles'][number][] {
+  const directions = rocketSweepDirections(rocket);
+  const isHorizontal = rocket.tileType === 'ROCKET_H';
+  const origin = cellCenter(rocket.coord);
   const activationDelayMs = rocket.clearDelayMs ?? 0;
-  return clearedTiles.filter((tile) => {
-    if (tile.coord.col === rocket.coord.col && tile.coord.row === rocket.coord.row) {
-      return true;
-    }
 
-    if ((tile.clearDelayMs ?? 0) < activationDelayMs) {
-      return false;
-    }
+  return directions.flatMap(({ directionSign, maxDistancePx }) => {
+    const spriteCount = Math.max(1, Math.ceil(maxDistancePx / ROCKET_CLOUD_SPRITE_SPAWN_SPACING_PX) + 1);
 
-    return rocket.tileType === 'ROCKET_H'
-      ? tile.coord.row === rocket.coord.row
-      : tile.coord.col === rocket.coord.col;
+    const sprites: Array<BoardRocketCloudSpriteVisualState | null> = Array.from({ length: spriteCount }, (_, index) => {
+      const distancePx = Math.min(maxDistancePx, index * ROCKET_CLOUD_SPRITE_SPAWN_SPACING_PX);
+      const spawnDelayMs = activationDelayMs + (distancePx / BOARD_RECT.cellSize) * ROCKET_SWEEP_CLEAR_STAGGER_MS;
+      const localElapsedMs = stepElapsedMs - spawnDelayMs;
+      if (localElapsedMs < 0 || localElapsedMs >= ROCKET_CLOUD_SPRITE_DURATION_MS) {
+        return null;
+      }
+
+      const frameIndex = Math.min(
+        ROCKET_CLOUD_SPRITE_FRAME_COUNT - 1,
+        Math.floor(localElapsedMs / ROCKET_CLOUD_SPRITE_FRAME_MS),
+      );
+      const sourceCol = frameIndex % ROCKET_CLOUD_SPRITE_COLUMNS;
+      const sourceRow = Math.floor(frameIndex / ROCKET_CLOUD_SPRITE_COLUMNS);
+      const originX = origin.x + (isHorizontal ? directionSign * distancePx : 0);
+      const originY = origin.y + (isHorizontal ? 0 : directionSign * distancePx);
+
+      return {
+        spriteId: `${rocket.tileId}-rocket-cloud-${directionSign}-${index}`,
+        assetId: AssetIds.spritesheets.rocketCloud,
+        sourceX: sourceCol * ROCKET_CLOUD_SPRITE_FRAME_SIZE_PX,
+        sourceY: sourceRow * ROCKET_CLOUD_SPRITE_FRAME_SIZE_PX,
+        sourceWidth: ROCKET_CLOUD_SPRITE_FRAME_SIZE_PX,
+        sourceHeight: ROCKET_CLOUD_SPRITE_FRAME_SIZE_PX,
+        x: originX - ROCKET_CLOUD_SPRITE_RENDER_SIZE_PX / 2,
+        y: originY - ROCKET_CLOUD_SPRITE_RENDER_SIZE_PX,
+        width: ROCKET_CLOUD_SPRITE_RENDER_SIZE_PX,
+        height: ROCKET_CLOUD_SPRITE_RENDER_SIZE_PX,
+        originX,
+        originY,
+        angleDeg: rocketCloudAngleDeg(rocket.tileType, directionSign),
+        frameIndex,
+        alpha: 1,
+        zIndex: 27 + index / 100,
+      };
+    });
+
+    return sprites.filter((sprite): sprite is BoardRocketCloudSpriteVisualState => sprite != null);
   });
 }
 
-function rocketDirectionSign(
+function rocketSweepDirections(
   rocket: BoardAnimationCascadeStep['clearedTiles'][number],
-  tile: BoardAnimationCascadeStep['clearedTiles'][number],
-): number {
-  const delta = rocket.tileType === 'ROCKET_H'
-    ? tile.coord.col - rocket.coord.col
-    : tile.coord.row - rocket.coord.row;
-  return delta < 0 ? -1 : 1;
+): Array<{ directionSign: number; maxDistancePx: number }> {
+  const center = cellCenter(rocket.coord);
+  return [-1, 1].map((directionSign) => {
+    const edgeDistancePx = rocket.tileType === 'ROCKET_H'
+      ? directionSign < 0
+        ? center.x - BOARD_RECT.x
+        : BOARD_RECT.x + BOARD_RECT.width - center.x
+      : directionSign < 0
+        ? center.y - BOARD_RECT.y
+        : BOARD_RECT.y + BOARD_RECT.height - center.y;
+    return {
+      directionSign,
+      maxDistancePx: edgeDistancePx + ROCKET_CLOUD_SPRITE_RENDER_SIZE_PX,
+    };
+  });
+}
+
+function rocketCloudAngleDeg(tileType: TileType, directionSign: number): number {
+  if (tileType === 'ROCKET_V') {
+    return directionSign >= 0 ? 0 : 180;
+  }
+
+  return directionSign >= 0 ? -90 : 90;
 }
 
 function cellCenter(coord: CellCoord): { x: number; y: number } {
@@ -904,14 +852,6 @@ function particleColorForTileType(type: TileType): string | null {
     case 'LIGHTBALL':
       return null;
   }
-}
-
-function rocketWavePuffColor(index: number): string {
-  return ['#fff4d6', '#f8c95d', '#f2994a', '#8d8580', '#d6d2c8'][index % 5];
-}
-
-function rocketWaveTrailColor(index: number): string {
-  return ['#fff8e8', '#ffd36a', '#f2994a'][index % 3];
 }
 
 function deterministicUnit(value: string): number {

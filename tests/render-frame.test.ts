@@ -449,8 +449,12 @@ describe('buildBoardCellVisuals', () => {
     expect(frameIndex).toBeGreaterThan(clippedLayerPopIndex);
   });
 
-  it('draws rocket wave puffs and trails inside the clipped board layer after TNT effects', () => {
-    const renderer = new FakeRenderer(new Set(['tile.fire', AssetIds.spritesheets.tntExplosion]));
+  it('draws rocket cloud sprites inside the clipped board layer after TNT effects', () => {
+    const renderer = new FakeRenderer(new Set([
+      'tile.fire',
+      AssetIds.spritesheets.tntExplosion,
+      AssetIds.spritesheets.rocketCloud,
+    ]));
     const state = oneTileState('tile.fire');
     state.tntExplosionSprites = [
       {
@@ -469,29 +473,24 @@ describe('buildBoardCellVisuals', () => {
         zIndex: 24,
       },
     ];
-    state.rocketWavePuffs = [
+    state.rocketCloudSprites = [
       {
-        puffId: 'rocket-puff-0',
-        x: BOARD_RECT.x + 50,
-        y: BOARD_RECT.y + 50,
-        radiusX: 90,
-        radiusY: 48,
-        color: '#f8c95d',
-        alpha: 0.8,
-        zIndex: 26,
-      },
-    ];
-    state.rocketWaveTrails = [
-      {
-        trailId: 'rocket-trail-0',
-        x: BOARD_RECT.x + 50,
-        y: BOARD_RECT.y + 50,
+        spriteId: 'rocket-cloud-0',
+        assetId: AssetIds.spritesheets.rocketCloud,
+        sourceX: 128,
+        sourceY: 0,
+        sourceWidth: 128,
+        sourceHeight: 128,
+        x: BOARD_RECT.x + 20,
+        y: BOARD_RECT.y + 30,
+        width: 220,
+        height: 220,
+        originX: BOARD_RECT.x + 130,
+        originY: BOARD_RECT.y + 250,
         angleDeg: 0,
-        length: 140,
-        width: 16,
-        color: '#ffd36a',
-        alpha: 0.9,
-        zIndex: 29,
+        frameIndex: 1,
+        alpha: 1,
+        zIndex: 27,
       },
     ];
     state.particles = [
@@ -515,19 +514,21 @@ describe('buildBoardCellVisuals', () => {
     const tntIndex = renderer.calls.indexOf(
       `imageFrame:${AssetIds.spritesheets.tntExplosion}:0,0,128,128:${BOARD_RECT.x + 10},${BOARD_RECT.y + 10},405,405`,
     );
-    const rocketPuffIndex = renderer.calls.indexOf('ellipse:#f8c95d');
-    const rocketTrailIndex = renderer.calls.indexOf('rect:#ffd36a');
+    const rocketRotateIndex = renderer.calls.indexOf(`pushRotate:0,${BOARD_RECT.x + 130},${BOARD_RECT.y + 250}`);
+    const rocketSpriteIndex = renderer.calls.indexOf(
+      `imageFrame:${AssetIds.spritesheets.rocketCloud}:128,0,128,128:${BOARD_RECT.x + 20},${BOARD_RECT.y + 30},220,220`,
+    );
     const particleIndex = renderer.calls.indexOf('ellipse:#eb5757');
     const clippedLayerPopIndex = renderer.calls.indexOf('pop', particleIndex);
     const frameIndex = renderer.calls.indexOf(
       `rect:#c8a24b:${BOARD_RECT.x - 8},${BOARD_RECT.y - 8},${BOARD_RECT.width + 16},8`,
     );
 
-    expect(rocketPuffIndex).toBeGreaterThan(tntIndex);
-    expect(rocketTrailIndex).toBeGreaterThan(rocketPuffIndex);
-    expect(particleIndex).toBeGreaterThan(rocketTrailIndex);
-    expect(rocketPuffIndex).toBeGreaterThan(tileIndex);
-    expect(rocketPuffIndex).toBeGreaterThan(clipIndex);
+    expect(rocketRotateIndex).toBeGreaterThan(tntIndex);
+    expect(rocketSpriteIndex).toBeGreaterThan(rocketRotateIndex);
+    expect(particleIndex).toBeGreaterThan(rocketSpriteIndex);
+    expect(rocketSpriteIndex).toBeGreaterThan(tileIndex);
+    expect(rocketSpriteIndex).toBeGreaterThan(clipIndex);
     expect(frameIndex).toBeGreaterThan(clippedLayerPopIndex);
   });
 
@@ -602,8 +603,9 @@ class FakeRenderer implements GameRenderer {
     this.calls.push('pushScale');
   }
 
-  pushRotate(): void {
+  pushRotate(angleDeg: number, originX: number, originY: number): void {
     this.calls.push('pushRotate');
+    this.calls.push(`pushRotate:${angleDeg},${originX},${originY}`);
   }
 
   pushAlpha(): void {

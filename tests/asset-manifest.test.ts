@@ -87,6 +87,12 @@ describe("AssetManifest", () => {
     expect(AssetManifest[AssetIds.spritesheets.tntExplosion].runtimeSize).toBe(
       "512x256, 8 frames at 128x128",
     );
+    expect(AssetManifest[AssetIds.spritesheets.rocketCloud].browserUrl).toBe(
+      "/assets/spritesheets/rocketCloud.png",
+    );
+    expect(AssetManifest[AssetIds.spritesheets.rocketCloud].runtimeSize).toBe(
+      "512x256, 8 frames at 128x128",
+    );
   });
 
   it("maps the temporary mage rig to the dropped FBX player model", () => {

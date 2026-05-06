@@ -69,6 +69,8 @@ const BOARD_BACKGROUND_NOTES =
   "Runtime 1080x1080 PNG for the board base; drawn behind board cells with flat-color fallback.";
 const TNT_EXPLOSION_SPRITE_NOTES =
   "Runtime 512x256 transparent PNG spritesheet. Two rows by four columns, eight 128x128 frames, played at 30 FPS for TNT detonations.";
+const ROCKET_CLOUD_SPRITE_NOTES =
+  "Runtime transparent PNG spritesheet. Two rows by four columns, eight 128x128 frames, bottom-center origin, played at 30 FPS for rocket blast waves.";
 
 export const AssetManifest: Record<string, AssetManifestEntry> = {
   [AssetIds.tiles.fire]: texture(
@@ -202,6 +204,14 @@ export const AssetManifest: Record<string, AssetManifestEntry> = {
     "Assets/Textures/Spritesheets/explosion-sprite.png",
     "prompt.powerups.standard",
     TNT_EXPLOSION_SPRITE_NOTES,
+    "512x256, 8 frames at 128x128",
+  ),
+  [AssetIds.spritesheets.rocketCloud]: texture(
+    AssetIds.spritesheets.rocketCloud,
+    "/assets/spritesheets/rocketCloud.png",
+    "Assets/Textures/Spritesheets/rocketCloud.png",
+    "prompt.powerups.standard",
+    ROCKET_CLOUD_SPRITE_NOTES,
     "512x256, 8 frames at 128x128",
   ),
   [AssetIds.rigs.prince]: rig(

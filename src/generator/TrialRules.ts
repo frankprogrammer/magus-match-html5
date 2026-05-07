@@ -51,6 +51,7 @@ export const TRIAL_MONSTER_RANDOM_Y_OFFSET_AMPLITUDE = 0.16;
 export const SPELL_CAST_WINDUP_SEC = 0.5;
 export const KOBOLD_DEFEAT_ANIMATION_SEC = 1.0;
 export const KOBOLD_DEFEAT_FADE_SEC = 0.15;
+export const TRIAL_ICE_FREEZE_SEC = 1.5;
 
 export interface ActiveTrialMonster {
   monsterId: string;
@@ -74,6 +75,9 @@ export interface ActiveTrialMonster {
   hitShakeDurationSec?: number;
   healthBarHp?: number;
   healthBarUpdateQueue?: readonly TrialHealthBarUpdate[];
+  iceFreezeRemainingSec?: number;
+  iceFreezeDurationSec?: number;
+  iceFreezeDelayQueueSec?: readonly number[];
 }
 
 export interface TrialHealthBarUpdate {
@@ -174,15 +178,22 @@ export function updateTrialRuntime(
   const visualRuntime = expireProjectiles(runtime, elapsedSec);
   const shakeRuntime = advanceHitShakes(visualRuntime, elapsedSec);
   const healthBarRuntime = advanceHealthBarUpdates(shakeRuntime, elapsedSec);
-  const defeatRuntime = advancePendingDefeats(healthBarRuntime, elapsedSec);
+  const freezeRuntime = advanceIceFreezes(healthBarRuntime, elapsedSec);
+  const defeatRuntime = advancePendingDefeats(freezeRuntime, elapsedSec);
   const movedRuntime = {
     ...defeatRuntime,
     elapsedMs,
     monsters: defeatRuntime.monsters.map((monster) =>
-      monster.hp > 0
+      monster.hp > 0 && (monster.iceFreezeRemainingSec ?? 0) <= 0
         ? {
             ...monster,
-            x: monster.x - monster.walkSpeed * elapsedSec,
+            x:
+              monster.x -
+              monster.walkSpeed *
+                movementElapsedSecForTrialMonster(
+                  healthBarRuntime.monsters.find((candidate) => candidate.monsterId === monster.monsterId) ?? monster,
+                  elapsedSec,
+                ),
           }
         : monster,
     ),
@@ -194,6 +205,19 @@ export function updateTrialRuntime(
     ...spawnedRuntime,
     result,
   };
+}
+
+function movementElapsedSecForTrialMonster(monster: ActiveTrialMonster, elapsedSec: number): number {
+  if ((monster.iceFreezeRemainingSec ?? 0) > TRIAL_DEFEAT_TIMER_EPSILON_SEC) {
+    return 0;
+  }
+
+  const nextFreezeDelaySec = monster.iceFreezeDelayQueueSec?.[0];
+  if (nextFreezeDelaySec != null && nextFreezeDelaySec <= elapsedSec) {
+    return Math.max(0, nextFreezeDelaySec);
+  }
+
+  return elapsedSec;
 }
 
 export function updateTrialVisuals(runtime: TrialRuntimeState, dtSec: number): TrialRuntimeState {
@@ -433,6 +457,7 @@ function applyDamageSources(
               defeatDelaySec: defeated ? impactDelaySec : monster.defeatDelaySec,
               ...scheduleHitShake(monster, impactDelaySec),
               ...scheduleHealthBarUpdate(monster, impactDelaySec, nextHp),
+              ...(source.schoolId === 'ice' && !defeated ? scheduleIceFreeze(monster, impactDelaySec) : {}),
             }
           : monster,
       );
@@ -878,6 +903,19 @@ function scheduleHealthBarUpdate(
   };
 }
 
+function scheduleIceFreeze(
+  monster: ActiveTrialMonster,
+  impactDelaySec: number,
+): Pick<ActiveTrialMonster, 'iceFreezeDelayQueueSec' | 'iceFreezeDurationSec'> {
+  return {
+    iceFreezeDelayQueueSec: [
+      ...(monster.iceFreezeDelayQueueSec ?? []),
+      Math.max(0, impactDelaySec),
+    ].sort((first, second) => first - second),
+    iceFreezeDurationSec: TRIAL_ICE_FREEZE_SEC,
+  };
+}
+
 function advanceHitShakes(runtime: TrialRuntimeState, dtSec: number): TrialRuntimeState {
   const elapsed = Math.max(0, dtSec);
   return {
@@ -891,6 +929,58 @@ function advanceHealthBarUpdates(runtime: TrialRuntimeState, dtSec: number): Tri
   return {
     ...runtime,
     monsters: runtime.monsters.map((monster) => advanceMonsterHealthBarUpdates(monster, elapsed)),
+  };
+}
+
+function advanceIceFreezes(runtime: TrialRuntimeState, dtSec: number): TrialRuntimeState {
+  const elapsed = Math.max(0, dtSec);
+  return {
+    ...runtime,
+    monsters: runtime.monsters.map((monster) => advanceMonsterIceFreeze(monster, elapsed)),
+  };
+}
+
+function advanceMonsterIceFreeze(monster: ActiveTrialMonster, elapsedSec: number): ActiveTrialMonster {
+  const queuedDelays = monster.iceFreezeDelayQueueSec ?? [];
+  const sortedDelays = [...queuedDelays].sort((first, second) => first - second);
+  const futureQueue: number[] = [];
+  const iceFreezeDurationSec = monster.iceFreezeDurationSec ?? TRIAL_ICE_FREEZE_SEC;
+  let iceFreezeRemainingSec = monster.iceFreezeRemainingSec ?? 0;
+  let previousArrivalSec = 0;
+
+  for (const delaySec of sortedDelays) {
+    if (delaySec > elapsedSec) {
+      futureQueue.push(delaySec - elapsedSec);
+      continue;
+    }
+
+    const segmentSec = Math.max(0, delaySec - previousArrivalSec);
+    if (segmentSec > 0) {
+      iceFreezeRemainingSec = Math.max(0, iceFreezeRemainingSec - segmentSec);
+    }
+    previousArrivalSec = Math.max(previousArrivalSec, delaySec);
+    iceFreezeRemainingSec += iceFreezeDurationSec;
+  }
+
+  const tailElapsedSec = Math.max(0, elapsedSec - previousArrivalSec);
+  if (tailElapsedSec > 0) {
+    iceFreezeRemainingSec = Math.max(0, iceFreezeRemainingSec - tailElapsedSec);
+  }
+
+  if (iceFreezeRemainingSec <= TRIAL_DEFEAT_TIMER_EPSILON_SEC && futureQueue.length <= 0) {
+    return {
+      ...monster,
+      iceFreezeRemainingSec: undefined,
+      iceFreezeDurationSec: undefined,
+      iceFreezeDelayQueueSec: undefined,
+    };
+  }
+
+  return {
+    ...monster,
+    iceFreezeRemainingSec: iceFreezeRemainingSec > TRIAL_DEFEAT_TIMER_EPSILON_SEC ? iceFreezeRemainingSec : undefined,
+    iceFreezeDurationSec,
+    iceFreezeDelayQueueSec: futureQueue.length > 0 ? futureQueue : undefined,
   };
 }
 

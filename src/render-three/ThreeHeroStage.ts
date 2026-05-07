@@ -5,6 +5,14 @@ import { orthographicBoundsForAspect, ThreeCameraController } from './ThreeCamer
 import { ThreeObjectFactory } from './ThreeObjectFactory';
 import { ThreeObjectCache } from './ThreePools';
 
+type OverrideableMaterial = THREE.MeshStandardMaterial | THREE.MeshBasicMaterial;
+
+const originalMaterialState = new WeakMap<OverrideableMaterial, {
+  color: THREE.Color;
+  opacity: number;
+  transparent: boolean;
+}>();
+
 export class ThreeHeroStage {
   private readonly scene = new THREE.Scene();
   private readonly camera = createHeroStageCamera(1080 / 500);
@@ -196,7 +204,7 @@ export class ThreeHeroStage {
       seen.add(objectState.objectId);
       const object = this.getOrCreateObject(objectState);
       applyWorldObjectState(object, objectState, this.elapsedSec);
-      this.syncObjectAnimation(objectState.objectId, objectState.animationId);
+      this.syncObjectAnimation(objectState.objectId, objectState.animationId, objectState.animationPaused);
     }
 
     for (const [objectId, object] of [...this.objectCache.entries()]) {
@@ -252,7 +260,7 @@ export class ThreeHeroStage {
     triggerMageCastAnimation(controller);
   }
 
-  private syncObjectAnimation(objectId: string, animationId?: string): void {
+  private syncObjectAnimation(objectId: string, animationId?: string, animationPaused?: boolean): void {
     const controller = this.animationControllers.get(objectId);
     if (controller == null) {
       return;
@@ -265,6 +273,7 @@ export class ThreeHeroStage {
 
     if (animationId === 'walk' || animationId === 'idle') {
       playActorLoopAnimation(controller, animationId);
+      setActorLoopAnimationPaused(controller, animationPaused === true);
     }
   }
 
@@ -288,6 +297,7 @@ export interface MageAnimationController {
   defeatRemainingSec: number;
   activeLoopId?: 'idle' | 'walk';
   activeOneShotId?: 'cast' | 'defeat';
+  loopPaused: boolean;
 }
 
 export function createMageAnimationController(object: THREE.Object3D): MageAnimationController | null {
@@ -333,6 +343,7 @@ export function createMageAnimationController(object: THREE.Object3D): MageAnima
     defeatDurationSec: defeatClip?.duration ?? 0,
     defeatRemainingSec: 0,
     activeLoopId,
+    loopPaused: false,
   };
   playActorLoopAnimation(controller, activeLoopId);
   return controller;
@@ -367,6 +378,7 @@ export function triggerActorOneShotAnimation(
 
   controller.idleAction?.setEffectiveWeight(0);
   controller.walkAction?.setEffectiveWeight(0);
+  setActorLoopAnimationPaused(controller, false);
 
   action.reset();
   action.setLoop(THREE.LoopOnce, 1);
@@ -405,6 +417,25 @@ export function playActorLoopAnimation(
   controller.walkAction?.setEffectiveWeight(fallbackAction === controller.walkAction ? 1 : 0);
   fallbackAction.enabled = true;
   fallbackAction.play();
+  fallbackAction.paused = controller.loopPaused;
+}
+
+export function setActorLoopAnimationPaused(controller: MageAnimationController, paused: boolean): void {
+  controller.loopPaused = paused;
+  if (controller.activeOneShotId != null) {
+    return;
+  }
+
+  if (controller.activeLoopId === 'walk') {
+    if (controller.walkAction != null) {
+      controller.walkAction.paused = paused;
+    }
+    return;
+  }
+
+  if (controller.idleAction != null) {
+    controller.idleAction.paused = paused;
+  }
 }
 
 export function updateMageAnimationController(controller: MageAnimationController, dtSec: number): void {
@@ -449,6 +480,7 @@ function stopMageCastAnimation(controller: MageAnimationController): void {
   controller.activeOneShotId = undefined;
 
   playActorLoopAnimation(controller, controller.activeLoopId ?? 'idle');
+  setActorLoopAnimationPaused(controller, controller.loopPaused);
 }
 
 function createHeroStageCamera(aspect: number): THREE.OrthographicCamera {
@@ -497,14 +529,12 @@ function applyWorldObjectState(object: THREE.Object3D, objectState: WorldObjectS
   object.traverse((child) => {
     if (child instanceof THREE.Mesh) {
       child.renderOrder = objectState.renderOrder ?? 0;
-      if (objectState.opacity != null || objectState.tintHex != null) {
-        applyMaterialOverrides(child.material, objectState.tintHex, objectState.opacity);
-      }
+      applyMaterialOverrides(child.material, objectState.tintHex, objectState.opacity);
     }
   });
 }
 
-function applyMaterialOverrides(
+export function applyMaterialOverrides(
   material: THREE.Material | THREE.Material[],
   tintHex?: string,
   opacity?: number,
@@ -512,15 +542,40 @@ function applyMaterialOverrides(
   const materials = Array.isArray(material) ? material : [material];
   for (const item of materials) {
     if (item instanceof THREE.MeshStandardMaterial || item instanceof THREE.MeshBasicMaterial) {
+      const original = originalStateForMaterial(item);
       if (tintHex != null) {
         item.color.set(tintHex);
+      } else {
+        item.color.copy(original.color);
       }
       if (opacity != null) {
         item.opacity = opacity;
         item.transparent = opacity < 1;
+      } else {
+        item.opacity = original.opacity;
+        item.transparent = original.transparent;
       }
     }
   }
+}
+
+function originalStateForMaterial(material: OverrideableMaterial): {
+  color: THREE.Color;
+  opacity: number;
+  transparent: boolean;
+} {
+  const existing = originalMaterialState.get(material);
+  if (existing != null) {
+    return existing;
+  }
+
+  const original = {
+    color: material.color.clone(),
+    opacity: material.opacity,
+    transparent: material.transparent,
+  };
+  originalMaterialState.set(material, original);
+  return original;
 }
 
 export function projectileColor(schoolId: ProjectileState['schoolId']): string {

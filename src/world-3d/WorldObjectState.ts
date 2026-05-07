@@ -16,5 +16,6 @@ export interface WorldObjectState {
   opacity?: number;
   animationId?: string;
   animationTimeSec?: number;
+  animationPaused?: boolean;
   tags?: readonly string[];
 }

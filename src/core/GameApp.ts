@@ -1178,6 +1178,8 @@ export class MagusMatchGameApp implements GameApp {
             renderOrder: 4,
             animationId: animationForTrialMonster(monster, this.phase),
             opacity: opacityForTrialMonster(monster),
+            tintHex: tintForTrialMonster(monster, this.trialRuntime.elapsedMs / 1000),
+            animationPaused: animationPausedForTrialMonster(monster),
           },
         ),
         ...createTrialMonsterHealthBarObjects(monster, monsterPosition),
@@ -1314,6 +1316,19 @@ function opacityForTrialMonster(monster: ActiveTrialMonster): number | undefined
   return Math.max(0, Math.min(1, fadeRemainingSec / fadeDurationSec));
 }
 
+function animationPausedForTrialMonster(monster: ActiveTrialMonster): boolean | undefined {
+  return monster.hp > 0 && (monster.iceFreezeRemainingSec ?? 0) > 0 ? true : undefined;
+}
+
+function tintForTrialMonster(monster: ActiveTrialMonster, elapsedSec: number): string | undefined {
+  if ((monster.iceFreezeRemainingSec ?? 0) <= 0) {
+    return undefined;
+  }
+
+  const pulse = 0.5 + Math.sin(elapsedSec * Math.PI * 6) * 0.5;
+  return blendHexColor("#38d5ff", "#aaf5ff", pulse * 0.45);
+}
+
 export function createTrialMonsterHealthBarObjects(
   monster: ActiveTrialMonster,
   monsterPosition: TransformState["position"],
@@ -1394,6 +1409,34 @@ function healthRatioForTrialMonster(monster: ActiveTrialMonster): number {
   return Math.max(0, Math.min(1, displayedHp / monster.maxHp));
 }
 
+function blendHexColor(fromHex: string, toHex: string, amount: number): string {
+  const from = parseHexColor(fromHex);
+  const to = parseHexColor(toHex);
+  const clampedAmount = Math.max(0, Math.min(1, amount));
+  return rgbToHex({
+    r: Math.round(from.r + (to.r - from.r) * clampedAmount),
+    g: Math.round(from.g + (to.g - from.g) * clampedAmount),
+    b: Math.round(from.b + (to.b - from.b) * clampedAmount),
+  });
+}
+
+function parseHexColor(hex: string): { r: number; g: number; b: number } {
+  const normalized = hex.replace("#", "");
+  return {
+    r: Number.parseInt(normalized.slice(0, 2), 16),
+    g: Number.parseInt(normalized.slice(2, 4), 16),
+    b: Number.parseInt(normalized.slice(4, 6), 16),
+  };
+}
+
+function rgbToHex(color: { r: number; g: number; b: number }): string {
+  return `#${hexByte(color.r)}${hexByte(color.g)}${hexByte(color.b)}`;
+}
+
+function hexByte(value: number): string {
+  return Math.max(0, Math.min(255, value)).toString(16).padStart(2, "0");
+}
+
 function healthBarYOffsetForTrialMonster(): number {
   return TRIAL_KOBOLD_HEALTH_BAR_Y_OFFSET;
 }
@@ -1431,6 +1474,7 @@ function createWorldObject(
     renderOrder?: number;
     replication?: WorldObjectState["replication"];
     animationId?: string;
+    animationPaused?: boolean;
     tintHex?: string;
     opacity?: number;
   },
@@ -1451,6 +1495,7 @@ function createWorldObject(
     tintHex: options.tintHex,
     opacity: options.opacity,
     animationId: options.animationId,
+    animationPaused: options.animationPaused,
   };
 }
 

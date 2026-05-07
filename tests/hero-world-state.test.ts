@@ -300,7 +300,33 @@ describe('HeroWorldState', () => {
 
     expect(monster?.transform.scale).toEqual(MAGE_WORLD_SCALE);
     expect(monster?.tintHex).toBeUndefined();
+    expect(monster?.animationPaused).toBeUndefined();
     expect(monster?.transform.position.y).toBeCloseTo((baseMonsterPosition?.y ?? -0.85) - 0.74 + visualYOffset);
+  });
+
+  it('emits a pulsing cyan tint for frozen Trial enemies without tinting health bars', () => {
+    const app = new MagusMatchGameApp(789);
+    const runtime = app.getTrialRuntimeForDebug();
+    if (runtime == null) {
+      throw new Error('Expected Trial runtime.');
+    }
+
+    setTrialRuntimeForDebug(app, {
+      ...runtime,
+      elapsedMs: 0,
+      monsters: [{ ...runtime.monsters[0], hp: 15, maxHp: 30, iceFreezeRemainingSec: 1, iceFreezeDurationSec: 1.5 }],
+    });
+
+    const state = app.getHeroWorldState();
+    const monster = state.objects.find((object) => object.templateId === HeroStageTemplateIds.monsterPlaceholder);
+    const track = state.objects.find((object) => object.templateId === HeroStageTemplateIds.healthBarTrack);
+    const fill = state.objects.find((object) => object.templateId === HeroStageTemplateIds.healthBarFill);
+
+    expect(monster?.tintHex).toBe('#52dcff');
+    expect(monster?.animationPaused).toBe(true);
+    expect(track).toBeDefined();
+    expect(track?.tintHex).toBeUndefined();
+    expect(fill?.tintHex).toBe('#f2c94c');
   });
 
   it('uses walk animation for living and projectile-pending defeated Trial monsters', () => {
@@ -349,6 +375,7 @@ describe('HeroWorldState', () => {
     const monster = state.objects.find((object) => object.templateId === HeroStageTemplateIds.monsterPlaceholder);
 
     expect(monster?.animationId).toBe('defeat');
+    expect(monster?.animationPaused).toBeUndefined();
     expect(state.objects.some((object) => object.templateId === HeroStageTemplateIds.healthBarTrack)).toBe(false);
     expect(state.objects.some((object) => object.templateId === HeroStageTemplateIds.healthBarFill)).toBe(false);
   });

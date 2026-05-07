@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import {
+  applyMaterialOverrides,
   createMageAnimationController,
   isProjectileChargeVisible,
   isProjectileCastReady,
@@ -15,6 +16,7 @@ import {
   resolveMageParticleSourceLogicalPosition,
   resolveMageParticleSourceWorldPosition,
   resolveProjectileRenderOrigin,
+  setActorLoopAnimationPaused,
   triggerActorOneShotAnimation,
   triggerMageCastAnimation,
   updateMageAnimationController,
@@ -152,6 +154,26 @@ describe('ThreeHeroStage projectile VFX', () => {
   });
 });
 
+describe('ThreeHeroStage material overrides', () => {
+  it('restores original material color and opacity after temporary tint and fade overrides clear', () => {
+    const material = new THREE.MeshStandardMaterial({
+      color: '#8a6a42',
+      opacity: 1,
+      transparent: false,
+    });
+
+    applyMaterialOverrides(material, '#38d5ff', 0.5);
+    expect(material.color.getHexString()).toBe('38d5ff');
+    expect(material.opacity).toBeCloseTo(0.5);
+    expect(material.transparent).toBe(true);
+
+    applyMaterialOverrides(material);
+    expect(material.color.getHexString()).toBe('8a6a42');
+    expect(material.opacity).toBe(1);
+    expect(material.transparent).toBe(false);
+  });
+});
+
 describe('ThreeHeroStage mage animation controller', () => {
   it('starts the idle clip by default', () => {
     const object = objectWithClips([
@@ -251,6 +273,58 @@ describe('ThreeHeroStage mage animation controller', () => {
     expect(controller?.walkAction?.isRunning()).toBe(true);
     expect(controller?.walkAction?.getEffectiveWeight()).toBe(1);
     expect(controller?.defeatRemainingSec).toBe(0);
+  });
+
+  it('pauses and resumes kobold walk loops without resetting animation time', () => {
+    const object = objectWithClips([
+      new THREE.AnimationClip('walk', 1, [
+        new THREE.VectorKeyframeTrack('.position', [0, 1], [0, 0, 0, 0, 0, 0.1]),
+      ]),
+    ]);
+    const controller = createMageAnimationController(object);
+    expect(controller).not.toBeNull();
+
+    updateMageAnimationController(controller!, 0.25);
+    const timeBeforePause = controller!.walkAction?.time ?? 0;
+    expect(timeBeforePause).toBeGreaterThan(0);
+
+    setActorLoopAnimationPaused(controller!, true);
+    updateMageAnimationController(controller!, 0.4);
+
+    expect(controller?.walkAction?.paused).toBe(true);
+    expect(controller?.walkAction?.time).toBeCloseTo(timeBeforePause);
+
+    setActorLoopAnimationPaused(controller!, false);
+    updateMageAnimationController(controller!, 0.25);
+
+    expect(controller?.walkAction?.paused).toBe(false);
+    expect(controller?.walkAction?.time ?? 0).toBeGreaterThan(timeBeforePause);
+  });
+
+  it('plays kobold defeat normally after a paused walk loop', () => {
+    const object = objectWithClips([
+      new THREE.AnimationClip('walk', 1, [
+        new THREE.VectorKeyframeTrack('.position', [0, 1], [0, 0, 0, 0, 0, 0.1]),
+      ]),
+      new THREE.AnimationClip('defeat', 1, [
+        new THREE.VectorKeyframeTrack('.position', [0, 1], [0, 0, 0, 0, -0.3, 0]),
+      ]),
+    ]);
+    const controller = createMageAnimationController(object);
+    expect(controller).not.toBeNull();
+
+    updateMageAnimationController(controller!, 0.25);
+    setActorLoopAnimationPaused(controller!, true);
+    triggerActorOneShotAnimation(controller!, 'defeat');
+
+    expect(controller?.walkAction?.paused).toBe(false);
+    expect(controller?.defeatAction?.paused).toBe(false);
+    expect(controller?.defeatRemainingSec).toBeCloseTo(1);
+
+    updateMageAnimationController(controller!, 0.5);
+
+    expect(object.position.y).toBeLessThan(0);
+    expect(controller?.defeatRemainingSec).toBeCloseTo(0.5);
   });
 
   it('plays kobold defeat as a clamped one-shot', () => {

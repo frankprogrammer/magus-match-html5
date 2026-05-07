@@ -24,6 +24,7 @@ import {
   KOBOLD_DEFEAT_ANIMATION_SEC,
   KOBOLD_DEFEAT_FADE_SEC,
   SPELL_CAST_WINDUP_SEC,
+  TRIAL_ICE_FREEZE_SEC,
   TRIAL_MONSTER_RANDOM_Y_OFFSET_AMPLITUDE,
   TRIAL_NEXT_MONSTER_SPAWN_PROGRESS_RATIO,
   updateTrialRuntime,
@@ -272,6 +273,86 @@ describe('TrialRules', () => {
     expect(updated.projectiles).toHaveLength(0);
     expect(updated.monsters[0]?.hitShakeRemainingSec).toBeUndefined();
     expect(updated.monsters[0]?.hp).toBeLessThan(50);
+  });
+
+  it('starts ice freeze when the ice projectile visually impacts and stops movement while frozen', () => {
+    const board = iceMatchSwapBoard();
+    const level = testTrialLevel([monster({ maxHp: 50, walkSpeed: 0.2 })], board);
+    const runtime = createTrialRuntime(level);
+
+    const result = processTrialSwap(
+      board,
+      runtime,
+      level,
+      { col: 1, row: 0 },
+      { col: 1, row: 1 },
+      new SeededRng(99),
+    );
+
+    expect(result.valid).toBe(true);
+    expect(result.damageEvents.some((event) => event.schoolId === 'ice')).toBe(true);
+    expect(result.runtime.monsters[0].hp).toBeLessThan(50);
+    expect(result.runtime.monsters[0].iceFreezeRemainingSec).toBeUndefined();
+    const impactDelaySec = result.runtime.monsters[0].iceFreezeDelayQueueSec?.[0] ?? 0;
+    expect(impactDelaySec).toBeGreaterThan(0);
+
+    const beforeImpact = updateTrialRuntime(result.runtime, level, impactDelaySec - 0.001);
+    expect(beforeImpact.monsters[0].iceFreezeRemainingSec).toBeUndefined();
+    expect(beforeImpact.monsters[0].x).toBeLessThan(result.runtime.monsters[0].x);
+
+    const impact = updateTrialRuntime(beforeImpact, level, 0.002);
+    const frozenX = impact.monsters[0].x;
+    expect(impact.monsters[0].iceFreezeRemainingSec).toBeCloseTo(TRIAL_ICE_FREEZE_SEC - 0.001);
+    expect(impact.monsters[0].iceFreezeDelayQueueSec).toBeUndefined();
+    expect(impact.monsters[0].x).toBeCloseTo(beforeImpact.monsters[0].x - impact.monsters[0].walkSpeed * 0.001);
+
+    const frozen = updateTrialRuntime(impact, level, 0.4);
+    expect(frozen.monsters[0].x).toBeCloseTo(frozenX);
+    expect(frozen.monsters[0].iceFreezeRemainingSec).toBeCloseTo(TRIAL_ICE_FREEZE_SEC - 0.4);
+
+    const resumed = updateTrialRuntime(updateTrialRuntime(frozen, level, TRIAL_ICE_FREEZE_SEC - 0.4), level, 0.1);
+    expect(resumed.monsters[0].iceFreezeRemainingSec).toBeUndefined();
+    expect(resumed.monsters[0].x).toBeLessThan(frozenX);
+  });
+
+  it('adds additional ice impacts onto an active freeze timer', () => {
+    const level = testTrialLevel([monster({ monsterId: 'frozen-target', maxHp: 50 })]);
+    const runtime = {
+      ...createTrialRuntime(level),
+      monsters: [
+        {
+          ...createTrialRuntime(level).monsters[0],
+          monsterId: 'frozen-target',
+          hp: 35,
+          maxHp: 50,
+          iceFreezeRemainingSec: 1,
+          iceFreezeDurationSec: TRIAL_ICE_FREEZE_SEC,
+          iceFreezeDelayQueueSec: [0.2],
+        },
+      ],
+    };
+
+    const updated = updateTrialRuntime(runtime, level, 0.2);
+
+    expect(updated.monsters[0].iceFreezeRemainingSec).toBeCloseTo(1 - 0.2 + TRIAL_ICE_FREEZE_SEC);
+  });
+
+  it('does not queue ice freeze for lethal ice hits', () => {
+    const board = iceMatchSwapBoard();
+    const level = testTrialLevel([monster({ monsterId: 'ice-lethal', maxHp: 5 })], board);
+    const result = processTrialSwap(
+      board,
+      createTrialRuntime(level),
+      level,
+      { col: 1, row: 0 },
+      { col: 1, row: 1 },
+      new SeededRng(99),
+    );
+
+    expect(result.valid).toBe(true);
+    expect(result.runtime.monsters[0]).toMatchObject({ monsterId: 'ice-lethal', hp: 0 });
+    expect(result.runtime.monsters[0].iceFreezeDelayQueueSec).toBeUndefined();
+    expect(result.runtime.monsters[0].iceFreezeRemainingSec).toBeUndefined();
   });
 
   it('plays queued hit shakes for later cascade-step impact timings', () => {
@@ -587,6 +668,7 @@ describe('TrialRules', () => {
     expect(result.runtime.monsters[0].healthBarUpdateQueue?.[0]?.delaySec).toBeCloseTo(
       TILE_SWAP_RETARGET_MS / 1000 + SPELL_CAST_WINDUP_SEC + SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
     );
+    expect(result.runtime.monsters[0].iceFreezeDelayQueueSec).toBeUndefined();
     expect(result.runtime.monsters[0].hitShakeDelaySec).toBeCloseTo(
       TILE_SWAP_RETARGET_MS / 1000 + SPELL_CAST_WINDUP_SEC + SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
     );
@@ -863,5 +945,13 @@ function matchSwapBoard() {
     ['FIRE', 'ICE', 'FIRE'],
     ['ICE', 'FIRE', 'ICE'],
     ['LIGHTNING', 'FIRE', 'EARTH'],
+  ]);
+}
+
+function iceMatchSwapBoard() {
+  return createBoardFromTileTypes([
+    ['ICE', 'FIRE', 'ICE'],
+    ['FIRE', 'ICE', 'FIRE'],
+    ['LIGHTNING', 'ICE', 'EARTH'],
   ]);
 }

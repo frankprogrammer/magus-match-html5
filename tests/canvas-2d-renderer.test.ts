@@ -127,34 +127,110 @@ describe('Canvas2DRenderer', () => {
     });
 
     try {
-      const image = {} as HTMLImageElement;
+      const image = { naturalWidth: 64, naturalHeight: 64 } as HTMLImageElement;
       const renderer = new Canvas2DRenderer(ctx.asCanvasContext(), { 'power.orb': image }, 1080, 1920);
 
       renderer.drawTintedImage({ id: 'power.orb' }, '#00ff3f', 10, 20, 30, 40);
 
-      expect(tintCanvas.width).toBe(30);
-      expect(tintCanvas.height).toBe(40);
+      expect(tintCanvas.width).toBe(64);
+      expect(tintCanvas.height).toBe(64);
       expect(tintCtx.drawImageCalls[0]).toMatchObject({
         image,
         x: 0,
         y: 0,
-        width: 30,
-        height: 40,
+        width: 64,
+        height: 64,
       });
       expect(tintCtx.globalCompositeOperationHistory).toContain('multiply');
       expect(tintCtx.globalCompositeOperationHistory).toContain('destination-in');
       expect(tintCtx.fillStyle).toBe('#00ff3f');
       expect(ctx.drawImageCalls[0]).toMatchObject({
         image: tintCanvas,
-        sx: 0,
-        sy: 0,
-        sWidth: 30,
-        sHeight: 40,
         x: 10,
         y: 20,
         width: 30,
         height: 40,
       });
+    } finally {
+      Object.defineProperty(globalThis, 'document', {
+        value: originalDocument,
+        configurable: true,
+      });
+    }
+  });
+
+  it('reuses cached tinted static images for repeated image and color draws', () => {
+    const ctx = new FakeCanvasContext();
+    const tintCtx = new FakeCanvasContext();
+    const tintCanvas = new FakeCanvas(tintCtx);
+    const originalDocument = globalThis.document;
+    Object.defineProperty(globalThis, 'document', {
+      value: {
+        createElement: () => tintCanvas,
+      },
+      configurable: true,
+    });
+
+    try {
+      const image = { naturalWidth: 64, naturalHeight: 64 } as HTMLImageElement;
+      const renderer = new Canvas2DRenderer(ctx.asCanvasContext(), { 'power.orb': image }, 1080, 1920);
+
+      renderer.drawTintedImage({ id: 'power.orb' }, '#00ff3f', 10, 20, 30, 40);
+      renderer.drawTintedImage({ id: 'power.orb' }, '#00ff3f', 50, 60, 70, 80);
+
+      expect(tintCtx.globalCompositeOperationHistory.filter((operation) => operation === 'multiply')).toHaveLength(1);
+      expect(tintCtx.globalCompositeOperationHistory.filter((operation) => operation === 'destination-in')).toHaveLength(1);
+      expect(tintCtx.drawImageCalls).toHaveLength(2);
+      expect(ctx.drawImageCalls).toHaveLength(2);
+      expect(ctx.drawImageCalls[1]).toMatchObject({
+        image: tintCanvas,
+        x: 50,
+        y: 60,
+        width: 70,
+        height: 80,
+      });
+    } finally {
+      Object.defineProperty(globalThis, 'document', {
+        value: originalDocument,
+        configurable: true,
+      });
+    }
+  });
+
+  it('creates separate cached tinted static images per color and clears them when images change', () => {
+    const ctx = new FakeCanvasContext();
+    const createdCanvases: FakeCanvas[] = [];
+    const originalDocument = globalThis.document;
+    Object.defineProperty(globalThis, 'document', {
+      value: {
+        createElement: () => {
+          const tintCtx = new FakeCanvasContext();
+          const canvas = new FakeCanvas(tintCtx);
+          createdCanvases.push(canvas);
+          return canvas;
+        },
+      },
+      configurable: true,
+    });
+
+    try {
+      const image = { naturalWidth: 64, naturalHeight: 64 } as HTMLImageElement;
+      const nextImage = { naturalWidth: 64, naturalHeight: 64 } as HTMLImageElement;
+      const renderer = new Canvas2DRenderer(ctx.asCanvasContext(), { 'power.orb': image }, 1080, 1920);
+
+      renderer.drawTintedImage({ id: 'power.orb' }, '#00ff3f', 0, 0, 30, 30);
+      renderer.drawTintedImage({ id: 'power.orb' }, '#ff1f14', 0, 0, 30, 30);
+      renderer.drawTintedImage({ id: 'power.orb' }, '#00ff3f', 0, 0, 30, 30);
+      renderer.setImages({ 'power.orb': nextImage });
+      renderer.drawTintedImage({ id: 'power.orb' }, '#00ff3f', 0, 0, 30, 30);
+
+      expect(createdCanvases).toHaveLength(3);
+      expect(ctx.drawImageCalls.map((call) => call.image)).toEqual([
+        createdCanvases[0],
+        createdCanvases[1],
+        createdCanvases[0],
+        createdCanvases[2],
+      ]);
     } finally {
       Object.defineProperty(globalThis, 'document', {
         value: originalDocument,

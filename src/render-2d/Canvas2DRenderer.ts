@@ -3,6 +3,7 @@ import type { DrawImageRef, GameRenderer, TextStyle } from './GameRenderer';
 export class Canvas2DRenderer implements GameRenderer {
   private maskCanvas: HTMLCanvasElement | null = null;
   private maskCtx: CanvasRenderingContext2D | null = null;
+  private readonly tintedImageCache = new Map<string, HTMLCanvasElement>();
 
   constructor(
     private readonly ctx: CanvasRenderingContext2D,
@@ -13,6 +14,7 @@ export class Canvas2DRenderer implements GameRenderer {
 
   setImages(images: Record<string, HTMLImageElement>): void {
     this.images = images;
+    this.tintedImageCache.clear();
   }
 
   clear(): void {
@@ -107,26 +109,12 @@ export class Canvas2DRenderer implements GameRenderer {
       return;
     }
 
-    const tintWidth = Math.ceil(width);
-    const tintHeight = Math.ceil(height);
-    const tintCtx = this.getMaskContext(tintWidth, tintHeight);
-    if (tintCtx == null) {
+    const tintedCanvas = this.getTintedImageCanvas(image, img, color);
+    if (tintedCanvas == null) {
       return;
     }
 
-    tintCtx.clearRect(0, 0, tintWidth, tintHeight);
-    tintCtx.globalCompositeOperation = 'source-over';
-    tintCtx.globalAlpha = 1;
-    tintCtx.drawImage(img, 0, 0, tintWidth, tintHeight);
-    tintCtx.globalCompositeOperation = 'multiply';
-    tintCtx.fillStyle = color;
-    tintCtx.fillRect(0, 0, tintWidth, tintHeight);
-    tintCtx.globalCompositeOperation = 'destination-in';
-    tintCtx.drawImage(img, 0, 0, tintWidth, tintHeight);
-    tintCtx.globalCompositeOperation = 'source-over';
-    tintCtx.globalAlpha = 1;
-
-    this.ctx.drawImage(tintCtx.canvas, 0, 0, tintWidth, tintHeight, x, y, width, height);
+    this.ctx.drawImage(tintedCanvas, x, y, width, height);
   }
 
   drawImageFrame(
@@ -259,6 +247,47 @@ export class Canvas2DRenderer implements GameRenderer {
     }
 
     return this.maskCtx;
+  }
+
+  private getTintedImageCanvas(
+    imageRef: DrawImageRef,
+    image: HTMLImageElement,
+    color: string,
+  ): HTMLCanvasElement | null {
+    const cacheKey = `${imageRef.id}|${color}`;
+    const cachedCanvas = this.tintedImageCache.get(cacheKey);
+    if (cachedCanvas != null) {
+      return cachedCanvas;
+    }
+
+    if (typeof document === 'undefined') {
+      return null;
+    }
+
+    const width = Math.max(1, image.naturalWidth || image.width);
+    const height = Math.max(1, image.naturalHeight || image.height);
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (context == null) {
+      return null;
+    }
+
+    context.clearRect(0, 0, width, height);
+    context.globalCompositeOperation = 'source-over';
+    context.globalAlpha = 1;
+    context.drawImage(image, 0, 0, width, height);
+    context.globalCompositeOperation = 'multiply';
+    context.fillStyle = color;
+    context.fillRect(0, 0, width, height);
+    context.globalCompositeOperation = 'destination-in';
+    context.drawImage(image, 0, 0, width, height);
+    context.globalCompositeOperation = 'source-over';
+    context.globalAlpha = 1;
+
+    this.tintedImageCache.set(cacheKey, canvas);
+    return canvas;
   }
 }
 

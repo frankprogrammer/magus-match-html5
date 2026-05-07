@@ -87,7 +87,7 @@ describe('BoardAnimationPresenter', () => {
     const laterStreams = presenter.present(state, 0.25).matchEnergyStreams ?? [];
     const acceleratedStreams = presenter.present(state, 0.36).matchEnergyStreams ?? [];
     const nearTargetStreams = presenter.present(state, 0.45).matchEnergyStreams ?? [];
-    const shrinkingStreams = presenter.present(state, 0.55).matchEnergyStreams ?? [];
+    const shrinkingStreams = presenter.present(state, 0.585).matchEnergyStreams ?? [];
     const afterArrivalStreams = presenter.present(state, 0.69).matchEnergyStreams ?? [];
     const targetedPresenter = new BoardAnimationPresenter();
     targetedPresenter.present(state, 0, { matchEnergyTarget: { x: 320, y: 160 } });
@@ -124,6 +124,7 @@ describe('BoardAnimationPresenter', () => {
     expect(popping.burstRings).toHaveLength(4);
     expect(popping.burstRings?.every((ring) => ring.color === 'rgba(255, 255, 255, 0.85)')).toBe(true);
     expect(popping.burstRings?.every((ring) => ring.radius > 0)).toBe(true);
+    expect(popping.matchEnergyStreams).toHaveLength(20);
     expect(new Set(popping.matchEnergyStreams?.map((stream) => stream.color))).toEqual(
       new Set(['#00ff3f', '#00d8ff', '#ff1f14', '#ffd400']),
     );

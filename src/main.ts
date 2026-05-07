@@ -7,6 +7,7 @@ import {
   parseDebugLevelType,
   parseDebugSeed,
 } from './platform-browser/BrowserInputAdapter';
+import { isMobileFullscreenTarget, shouldRequestGameFullscreen } from './platform-browser/FullscreenPolicy';
 import { loadBrowserImages } from './platform-browser/BrowserImageLoader';
 import { LocalLeaderboardStore } from './platform-browser/LocalLeaderboardStore';
 import { BoardAnimationPresenter } from './render-2d/BoardAnimationPresenter';
@@ -107,7 +108,12 @@ function resizeLogicalStage(): void {
 }
 
 function requestGameFullscreen(): void {
-  if (fullscreenRequestAttempted || document.fullscreenElement != null || gameShell.requestFullscreen == null) {
+  if (!shouldRequestGameFullscreen({
+    requestAttempted: fullscreenRequestAttempted,
+    fullscreenElement: document.fullscreenElement,
+    canRequestFullscreen: gameShell.requestFullscreen != null,
+    isMobileFullscreenTarget: isMobileFullscreenTarget(window.matchMedia.bind(window)),
+  })) {
     return;
   }
 

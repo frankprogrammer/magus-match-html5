@@ -80,6 +80,7 @@ let leaderboardRows: readonly LeaderboardEntry[] = leaderboardStore.load();
 let highlightedRank: number | null = null;
 
 const input = new BrowserInputAdapter(gameShell);
+let fullscreenRequestAttempted = false;
 
 void loadBrowserImages().then((images) => {
   renderer.setImages(images);
@@ -96,11 +97,31 @@ if (ENABLE_BROWSER_AUDIO) {
   });
 }
 
+gameShell.addEventListener('pointerdown', requestGameFullscreen, { passive: true });
+
 function resizeLogicalStage(): void {
   const rect = gameShell.getBoundingClientRect();
   const scale = Math.min(rect.width / LOGICAL_WIDTH, rect.height / LOGICAL_HEIGHT);
   stageElement.style.transform = `scale(${scale})`;
   heroStage.resize(LOGICAL_WIDTH, HERO_STAGE_HEIGHT);
+}
+
+function requestGameFullscreen(): void {
+  if (fullscreenRequestAttempted || document.fullscreenElement != null || gameShell.requestFullscreen == null) {
+    return;
+  }
+
+  fullscreenRequestAttempted = true;
+  void gameShell.requestFullscreen().catch(() => {
+    fullscreenRequestAttempted = false;
+  });
+}
+
+function handleFullscreenChange(): void {
+  if (document.fullscreenElement == null) {
+    fullscreenRequestAttempted = false;
+  }
+  resizeLogicalStage();
 }
 
 function renderHud(hud = getBrowserHudState()): void {
@@ -143,6 +164,7 @@ renderFrame(
   getBrowserScreenState(),
 );
 window.addEventListener('resize', resizeLogicalStage);
+document.addEventListener('fullscreenchange', handleFullscreenChange);
 window.addEventListener('beforeunload', () => heroStage.dispose());
 requestAnimationFrame(tick);
 

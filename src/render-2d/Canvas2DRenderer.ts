@@ -4,6 +4,7 @@ export class Canvas2DRenderer implements GameRenderer {
   private maskCanvas: HTMLCanvasElement | null = null;
   private maskCtx: CanvasRenderingContext2D | null = null;
   private readonly tintedImageCache = new Map<string, HTMLCanvasElement>();
+  private readonly imageFrameCache = new Map<string, HTMLCanvasElement>();
 
   constructor(
     private readonly ctx: CanvasRenderingContext2D,
@@ -15,6 +16,7 @@ export class Canvas2DRenderer implements GameRenderer {
   setImages(images: Record<string, HTMLImageElement>): void {
     this.images = images;
     this.tintedImageCache.clear();
+    this.imageFrameCache.clear();
   }
 
   clear(): void {
@@ -133,7 +135,13 @@ export class Canvas2DRenderer implements GameRenderer {
       return;
     }
 
-    this.ctx.drawImage(img, sourceX, sourceY, sourceWidth, sourceHeight, x, y, width, height);
+    const frameCanvas = this.getImageFrameCanvas(image, img, sourceX, sourceY, sourceWidth, sourceHeight);
+    if (frameCanvas == null) {
+      this.ctx.drawImage(img, sourceX, sourceY, sourceWidth, sourceHeight, x, y, width, height);
+      return;
+    }
+
+    this.ctx.drawImage(frameCanvas, x, y, width, height);
   }
 
   drawTintedImageFrame(
@@ -287,6 +295,39 @@ export class Canvas2DRenderer implements GameRenderer {
     context.globalAlpha = 1;
 
     this.tintedImageCache.set(cacheKey, canvas);
+    return canvas;
+  }
+
+  private getImageFrameCanvas(
+    imageRef: DrawImageRef,
+    image: HTMLImageElement,
+    sourceX: number,
+    sourceY: number,
+    sourceWidth: number,
+    sourceHeight: number,
+  ): HTMLCanvasElement | null {
+    const cacheKey = `${imageRef.id}|${sourceX}|${sourceY}|${sourceWidth}|${sourceHeight}`;
+    const cachedCanvas = this.imageFrameCache.get(cacheKey);
+    if (cachedCanvas != null) {
+      return cachedCanvas;
+    }
+
+    if (typeof document === 'undefined') {
+      return null;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = sourceWidth;
+    canvas.height = sourceHeight;
+    const context = canvas.getContext('2d');
+    if (context == null) {
+      return null;
+    }
+
+    context.clearRect(0, 0, sourceWidth, sourceHeight);
+    context.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, sourceWidth, sourceHeight);
+
+    this.imageFrameCache.set(cacheKey, canvas);
     return canvas;
   }
 }

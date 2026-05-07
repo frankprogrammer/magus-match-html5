@@ -43,22 +43,89 @@ describe('Canvas2DRenderer', () => {
 
   it('draws image frames with a source rectangle', () => {
     const ctx = new FakeCanvasContext();
+    const frameCtx = new FakeCanvasContext();
+    const frameCanvas = new FakeCanvas(frameCtx);
+    const originalDocument = globalThis.document;
+    Object.defineProperty(globalThis, 'document', {
+      value: {
+        createElement: () => frameCanvas,
+      },
+      configurable: true,
+    });
     const image = {} as HTMLImageElement;
     const renderer = new Canvas2DRenderer(ctx.asCanvasContext(), { 'sprite.tnt': image }, 1080, 1920);
 
-    renderer.drawImageFrame({ id: 'sprite.tnt' }, 128, 0, 128, 128, 10, 20, 270, 270);
+    try {
+      renderer.drawImageFrame({ id: 'sprite.tnt' }, 128, 0, 128, 128, 10, 20, 270, 270);
 
-    expect(ctx.drawImageCalls[0]).toMatchObject({
-      image,
-      sx: 128,
-      sy: 0,
-      sWidth: 128,
-      sHeight: 128,
-      x: 10,
-      y: 20,
-      width: 270,
-      height: 270,
+      expect(frameCanvas.width).toBe(128);
+      expect(frameCanvas.height).toBe(128);
+      expect(frameCtx.drawImageCalls[0]).toMatchObject({
+        image,
+        sx: 128,
+        sy: 0,
+        sWidth: 128,
+        sHeight: 128,
+        x: 0,
+        y: 0,
+        width: 128,
+        height: 128,
+      });
+      expect(ctx.drawImageCalls[0]).toMatchObject({
+        image: frameCanvas,
+        x: 10,
+        y: 20,
+        width: 270,
+        height: 270,
+      });
+    } finally {
+      Object.defineProperty(globalThis, 'document', {
+        value: originalDocument,
+        configurable: true,
+      });
+    }
+  });
+
+  it('reuses cached image frames and clears them when images change', () => {
+    const ctx = new FakeCanvasContext();
+    const createdCanvases: FakeCanvas[] = [];
+    const originalDocument = globalThis.document;
+    Object.defineProperty(globalThis, 'document', {
+      value: {
+        createElement: () => {
+          const frameCtx = new FakeCanvasContext();
+          const canvas = new FakeCanvas(frameCtx);
+          createdCanvases.push(canvas);
+          return canvas;
+        },
+      },
+      configurable: true,
     });
+
+    try {
+      const image = {} as HTMLImageElement;
+      const nextImage = {} as HTMLImageElement;
+      const renderer = new Canvas2DRenderer(ctx.asCanvasContext(), { 'sprite.rocket': image }, 1080, 1920);
+
+      renderer.drawImageFrame({ id: 'sprite.rocket' }, 0, 0, 128, 128, 10, 20, 220, 220);
+      renderer.drawImageFrame({ id: 'sprite.rocket' }, 0, 0, 128, 128, 20, 30, 220, 220);
+      renderer.drawImageFrame({ id: 'sprite.rocket' }, 128, 0, 128, 128, 30, 40, 220, 220);
+      renderer.setImages({ 'sprite.rocket': nextImage });
+      renderer.drawImageFrame({ id: 'sprite.rocket' }, 0, 0, 128, 128, 40, 50, 220, 220);
+
+      expect(createdCanvases).toHaveLength(3);
+      expect(ctx.drawImageCalls.map((call) => call.image)).toEqual([
+        createdCanvases[0],
+        createdCanvases[0],
+        createdCanvases[1],
+        createdCanvases[2],
+      ]);
+    } finally {
+      Object.defineProperty(globalThis, 'document', {
+        value: originalDocument,
+        configurable: true,
+      });
+    }
   });
 
   it('draws tinted image frames through an offscreen canvas preserving active source and alpha', () => {

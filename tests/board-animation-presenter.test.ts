@@ -239,6 +239,7 @@ describe('BoardAnimationPresenter', () => {
     const afterWave = presenter.present(state, 1.0);
 
     expect(originWave.rocketCloudSprites?.length).toBeGreaterThan(0);
+    expect(delayedWave.rocketCloudSprites).toHaveLength(10);
     expect(originWave.rocketCloudSprites?.every((sprite) => sprite.originY > BOARD_RECT.y && sprite.originY < BOARD_RECT.y + BOARD_RECT.cellSize)).toBe(true);
     expect(delayedWave.rocketCloudSprites?.some((sprite) => sprite.originX > BOARD_RECT.x + BOARD_RECT.cellSize * 1.5)).toBe(true);
     expect(delayedWave.rocketCloudSprites?.some((sprite) => sprite.originX < BOARD_RECT.x + BOARD_RECT.cellSize * 1.5)).toBe(true);

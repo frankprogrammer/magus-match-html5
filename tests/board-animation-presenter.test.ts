@@ -126,7 +126,7 @@ describe('BoardAnimationPresenter', () => {
     expect(popping.burstRings?.every((ring) => ring.radius > 0)).toBe(true);
     expect(popping.matchEnergyStreams).toHaveLength(20);
     expect(new Set(popping.matchEnergyStreams?.map((stream) => stream.color))).toEqual(
-      new Set(['#00ff3f', '#00d8ff', '#ff1f14', '#ffd400']),
+      new Set(['#00ff3f', '#00d8ff', '#ff7000', '#fff000']),
     );
     expect(popping.matchEnergyStreams).toEqual(repeated.matchEnergyStreams);
     expect(popping.matchEnergyStreams?.every((stream) => stream.assetId === AssetIds.powerUps.orb)).toBe(true);
@@ -184,7 +184,7 @@ describe('BoardAnimationPresenter', () => {
     expect(duringDelayedPop.burstRings).toHaveLength(1);
     expect(duringDelayedPop.burstRings?.[0]?.alpha).toBeLessThanOrEqual(0.42);
     expect(duringDelayedPop.matchEnergyStreams?.length).toBeGreaterThan(0);
-    expect(duringDelayedPop.matchEnergyStreams?.every((stream) => stream.color === '#ff1f14')).toBe(true);
+    expect(duringDelayedPop.matchEnergyStreams?.every((stream) => stream.color === '#ff7000')).toBe(true);
 
     const afterParticleWindow = presenter.present(state, 0.5);
     expect(afterParticleWindow.particles ?? []).toHaveLength(0);

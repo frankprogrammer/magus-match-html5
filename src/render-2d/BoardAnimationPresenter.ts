@@ -873,11 +873,11 @@ function particleColorForTileType(type: TileType): string | null {
 function matchEnergyOrbColorForTileType(type: TileType): string | null {
   switch (type) {
     case 'FIRE':
-      return '#ff1f14';
+      return '#ff7000';
     case 'ICE':
       return '#00d8ff';
     case 'LIGHTNING':
-      return '#ffd400';
+      return '#fff000';
     case 'EARTH':
       return '#00ff3f';
     case 'LAND':

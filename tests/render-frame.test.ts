@@ -139,7 +139,7 @@ describe('buildBoardCellVisuals', () => {
   });
 
   it('draws image assets when available', () => {
-    const renderer = new FakeRenderer(new Set(['tile.fire', AssetIds.spritesheets.matchOrb]));
+    const renderer = new FakeRenderer(new Set(['tile.fire']));
 
     renderFrame(renderer, oneTileState('tile.fire'), hudState(), 0);
 
@@ -335,7 +335,7 @@ describe('buildBoardCellVisuals', () => {
   });
 
   it('draws particles inside the clipped board layer after tiles and before the frame', () => {
-    const renderer = new FakeRenderer(new Set(['tile.fire', AssetIds.spritesheets.matchOrb]));
+    const renderer = new FakeRenderer(new Set(['tile.fire', AssetIds.powerUps.orb]));
     const state = oneTileState('tile.fire');
     state.burstRings = [
       {
@@ -363,18 +363,13 @@ describe('buildBoardCellVisuals', () => {
     state.matchEnergyStreams = [
       {
         streamId: 'energy-0',
-        assetId: AssetIds.spritesheets.matchOrb,
-        sourceX: 128,
-        sourceY: 0,
-        sourceWidth: 128,
-        sourceHeight: 128,
-        frameIndex: 1,
+        assetId: AssetIds.powerUps.orb,
         x: BOARD_RECT.x + 80,
         y: BOARD_RECT.y + 80,
         radius: 10,
         width: 40,
         height: 40,
-        color: '#38d5ff',
+        color: '#00d8ff',
         alpha: 0.7,
         zIndex: 23,
       },
@@ -388,8 +383,9 @@ describe('buildBoardCellVisuals', () => {
     const ringIndex = renderer.calls.indexOf('ring:rgba(255, 255, 255, 0.85)');
     const particleIndex = renderer.calls.indexOf('ellipse:#eb5757');
     const streamIndex = renderer.calls.indexOf(
-      `tintedImageFrame:${AssetIds.spritesheets.matchOrb}:#38d5ff:128,0,128,128:${BOARD_RECT.x + 60},${BOARD_RECT.y + 60},40,40`,
+      `tintedImage:${AssetIds.powerUps.orb}:#00d8ff:${BOARD_RECT.x + 60},${BOARD_RECT.y + 60},40,40`,
     );
+    const streamAlphaIndex = renderer.calls.indexOf('pushAlpha:0.7');
     const clippedLayerPopIndex = renderer.calls.indexOf('pop', particleIndex);
     const frameIndex = renderer.calls.indexOf(
       `rect:#c8a24b:${BOARD_RECT.x - 8},${BOARD_RECT.y - 8},${BOARD_RECT.width + 16},8`,
@@ -400,6 +396,10 @@ describe('buildBoardCellVisuals', () => {
     expect(particleIndex).toBeGreaterThan(tileIndex);
     expect(particleIndex).toBeGreaterThan(clipIndex);
     expect(clippedLayerPopIndex).toBeGreaterThan(particleIndex);
+    expect(streamAlphaIndex).toBeGreaterThan(clippedLayerPopIndex);
+    expect(renderer.calls).not.toContain('blend:lighter');
+    expect(streamIndex).toBeGreaterThan(streamAlphaIndex);
+    expect(renderer.calls[streamIndex + 1]).toBe('pop');
     expect(streamIndex).toBeGreaterThan(clippedLayerPopIndex);
     expect(frameIndex).toBeGreaterThan(streamIndex);
   });
@@ -410,12 +410,7 @@ describe('buildBoardCellVisuals', () => {
     state.matchEnergyStreams = [
       {
         streamId: 'energy-0',
-        assetId: AssetIds.spritesheets.matchOrb,
-        sourceX: 0,
-        sourceY: 0,
-        sourceWidth: 128,
-        sourceHeight: 128,
-        frameIndex: 0,
+        assetId: AssetIds.powerUps.orb,
         x: BOARD_RECT.x + 80,
         y: BOARD_RECT.y + 80,
         radius: 10,
@@ -429,7 +424,7 @@ describe('buildBoardCellVisuals', () => {
 
     renderFrame(renderer, state, hudState(), 0);
 
-    expect(renderer.calls.some((call) => call.startsWith(`tintedImageFrame:${AssetIds.spritesheets.matchOrb}`))).toBe(false);
+    expect(renderer.calls.some((call) => call.startsWith(`tintedImage:${AssetIds.powerUps.orb}`))).toBe(false);
     expect(renderer.calls).not.toContain('ellipse:#38d5ff');
   });
 
@@ -646,8 +641,9 @@ class FakeRenderer implements GameRenderer {
     this.calls.push(`pushRotate:${angleDeg},${originX},${originY}`);
   }
 
-  pushAlpha(): void {
+  pushAlpha(alpha: number): void {
     this.calls.push('pushAlpha');
+    this.calls.push(`pushAlpha:${alpha}`);
   }
 
   pushClipRect(x: number, y: number, width: number, height: number): void {
@@ -678,6 +674,18 @@ class FakeRenderer implements GameRenderer {
   drawImage(image: DrawImageRef, x: number, y: number, width: number, height: number): void {
     this.calls.push(`image:${image.id}`);
     this.calls.push(`image:${image.id}:${x},${y},${width},${height}`);
+  }
+
+  drawTintedImage(
+    image: DrawImageRef,
+    color: string,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+  ): void {
+    this.calls.push(`tintedImage:${image.id}`);
+    this.calls.push(`tintedImage:${image.id}:${color}:${x},${y},${width},${height}`);
   }
 
   drawImageFrame(

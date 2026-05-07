@@ -316,13 +316,9 @@ function drawMatchEnergyStreams(renderer: GameRenderer, boardState: BoardRenderS
     }
 
     renderer.pushAlpha(stream.alpha);
-    renderer.drawTintedImageFrame(
+    renderer.drawTintedImage(
       imageRef,
       stream.color,
-      stream.sourceX,
-      stream.sourceY,
-      stream.sourceWidth,
-      stream.sourceHeight,
       stream.x - stream.width / 2,
       stream.y - stream.height / 2,
       stream.width,

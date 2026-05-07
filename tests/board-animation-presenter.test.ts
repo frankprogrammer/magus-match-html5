@@ -85,7 +85,6 @@ describe('BoardAnimationPresenter', () => {
     const popping = presenter.present(state, 0.14);
     const repeated = presenter.present(state, 0.14);
     const laterStreams = presenter.present(state, 0.25).matchEnergyStreams ?? [];
-    const nextFrameStreams = presenter.present(state, 0.29).matchEnergyStreams ?? [];
     const acceleratedStreams = presenter.present(state, 0.36).matchEnergyStreams ?? [];
     const nearTargetStreams = presenter.present(state, 0.45).matchEnergyStreams ?? [];
     const shrinkingStreams = presenter.present(state, 0.55).matchEnergyStreams ?? [];
@@ -126,11 +125,10 @@ describe('BoardAnimationPresenter', () => {
     expect(popping.burstRings?.every((ring) => ring.color === 'rgba(255, 255, 255, 0.85)')).toBe(true);
     expect(popping.burstRings?.every((ring) => ring.radius > 0)).toBe(true);
     expect(new Set(popping.matchEnergyStreams?.map((stream) => stream.color))).toEqual(
-      new Set(['#27ae60', '#38d5ff', '#eb5757', '#f2c94c']),
+      new Set(['#00ff3f', '#00d8ff', '#ff1f14', '#ffd400']),
     );
     expect(popping.matchEnergyStreams).toEqual(repeated.matchEnergyStreams);
-    expect(popping.matchEnergyStreams?.every((stream) => stream.assetId === AssetIds.spritesheets.matchOrb)).toBe(true);
-    expect(popping.matchEnergyStreams?.every((stream) => stream.sourceWidth === 128 && stream.sourceHeight === 128)).toBe(true);
+    expect(popping.matchEnergyStreams?.every((stream) => stream.assetId === AssetIds.powerUps.orb)).toBe(true);
     expect(popping.matchEnergyStreams?.every((stream) => stream.alpha === 1)).toBe(true);
     expect(Math.max(...laterStreams.map((stream) => stream.alpha))).toBeCloseTo(1);
     expect(laterStreams.filter((stream) => stream.alpha > 0.75).length).toBeGreaterThan(10);
@@ -148,10 +146,6 @@ describe('BoardAnimationPresenter', () => {
     expect(targetedFireStream?.x).toBeGreaterThan(defaultNearTargetFireStream?.x ?? 0);
     expect(laterStreams.some((stream) => stream.x < BOARD_RECT.width / 2)).toBe(true);
     expect(nearTargetStreams.some((stream) => stream.y < BOARD_RECT.y)).toBe(true);
-    expect(nextFrameStreams.length).toBeGreaterThan(0);
-    expect(nextFrameStreams[0]?.frameIndex).not.toBe(laterStreams[0]?.frameIndex);
-    expect(nextFrameStreams.every((stream) => stream.frameIndex >= 0 && stream.frameIndex <= 3)).toBe(true);
-    expect(laterStreams.some((stream) => stream.sourceY === 128)).toBe(true);
     expect(earlyTravel).toBeLessThan(totalTravelDistance * 0.1);
     expect(earlyProjection).toBeLessThan(0.1);
     expect(acceleratedProjection - middleProjection).toBeGreaterThan(middleProjection - earlyProjection);
@@ -189,7 +183,7 @@ describe('BoardAnimationPresenter', () => {
     expect(duringDelayedPop.burstRings).toHaveLength(1);
     expect(duringDelayedPop.burstRings?.[0]?.alpha).toBeLessThanOrEqual(0.42);
     expect(duringDelayedPop.matchEnergyStreams?.length).toBeGreaterThan(0);
-    expect(duringDelayedPop.matchEnergyStreams?.every((stream) => stream.color === '#eb5757')).toBe(true);
+    expect(duringDelayedPop.matchEnergyStreams?.every((stream) => stream.color === '#ff1f14')).toBe(true);
 
     const afterParticleWindow = presenter.present(state, 0.5);
     expect(afterParticleWindow.particles ?? []).toHaveLength(0);

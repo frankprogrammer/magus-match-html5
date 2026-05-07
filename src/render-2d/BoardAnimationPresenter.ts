@@ -54,11 +54,6 @@ const MATCH_ENERGY_STREAM_START_RADIUS_PX = 14;
 const MATCH_ENERGY_STREAM_MAX_ALPHA = 1;
 const MATCH_ENERGY_STREAM_STAGGER_PROGRESS = 0.045;
 const MATCH_ENERGY_STREAM_PROGRESS_SCALE = 1 + (MATCH_ENERGY_STREAMS_PER_TILE - 1) * MATCH_ENERGY_STREAM_STAGGER_PROGRESS;
-const MATCH_ORB_SPRITE_FRAME_SIZE_PX = 128;
-const MATCH_ORB_SPRITE_COLUMNS = 2;
-const MATCH_ORB_SPRITE_FRAME_COUNT = 4;
-const MATCH_ORB_SPRITE_FPS = 30;
-const MATCH_ORB_SPRITE_FRAME_MS = 1000 / MATCH_ORB_SPRITE_FPS;
 const MATCH_ORB_SPRITE_SIZE_MULTIPLIER = 2;
 const MATCH_BURST_RING_DURATION_MS = 220;
 const MATCH_BURST_RING_MAX_RADIUS_PX = 86;
@@ -326,7 +321,7 @@ function sampleClearedTileEnergyStreams(
   stepElapsedMs: number,
   targetOverride?: { x: number; y: number },
 ): BoardMatchEnergyStreamVisualState[] {
-  const color = particleColorForTileType(tile.tileType);
+  const color = matchEnergyOrbColorForTileType(tile.tileType);
   if (color == null) {
     return [];
   }
@@ -356,17 +351,9 @@ function sampleClearedTileEnergyStreams(
     const baseRadius = MATCH_ENERGY_STREAM_START_RADIUS_PX * (0.82 + deterministicUnit(`${seed}:size`) * 0.36);
     const arrivalScale = 1 - clamp01((offsetProgress - 0.95) / 0.05);
     const radius = baseRadius * arrivalScale;
-    const frameIndex = Math.floor(localElapsedMs / MATCH_ORB_SPRITE_FRAME_MS) % MATCH_ORB_SPRITE_FRAME_COUNT;
-    const sourceCol = frameIndex % MATCH_ORB_SPRITE_COLUMNS;
-    const sourceRow = Math.floor(frameIndex / MATCH_ORB_SPRITE_COLUMNS);
     return {
       streamId: `${tile.tileId}-energy-${index}`,
-      assetId: AssetIds.spritesheets.matchOrb,
-      sourceX: sourceCol * MATCH_ORB_SPRITE_FRAME_SIZE_PX,
-      sourceY: sourceRow * MATCH_ORB_SPRITE_FRAME_SIZE_PX,
-      sourceWidth: MATCH_ORB_SPRITE_FRAME_SIZE_PX,
-      sourceHeight: MATCH_ORB_SPRITE_FRAME_SIZE_PX,
-      frameIndex,
+      assetId: AssetIds.powerUps.orb,
       x,
       y,
       radius,
@@ -874,6 +861,25 @@ function particleColorForTileType(type: TileType): string | null {
       return '#f2c94c';
     case 'EARTH':
       return '#27ae60';
+    case 'LAND':
+    case 'ROCKET_H':
+    case 'ROCKET_V':
+    case 'TNT':
+    case 'LIGHTBALL':
+      return null;
+  }
+}
+
+function matchEnergyOrbColorForTileType(type: TileType): string | null {
+  switch (type) {
+    case 'FIRE':
+      return '#ff1f14';
+    case 'ICE':
+      return '#00d8ff';
+    case 'LIGHTNING':
+      return '#ffd400';
+    case 'EARTH':
+      return '#00ff3f';
     case 'LAND':
     case 'ROCKET_H':
     case 'ROCKET_V':

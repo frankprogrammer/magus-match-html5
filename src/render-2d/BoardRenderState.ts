@@ -29,11 +29,6 @@ export interface BoardParticleVisualState {
 export interface BoardMatchEnergyStreamVisualState {
   streamId: string;
   assetId: string;
-  sourceX: number;
-  sourceY: number;
-  sourceWidth: number;
-  sourceHeight: number;
-  frameIndex: number;
   x: number;
   y: number;
   radius: number;

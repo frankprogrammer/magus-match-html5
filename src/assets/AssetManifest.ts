@@ -71,8 +71,8 @@ const TNT_EXPLOSION_SPRITE_NOTES =
   "Runtime 512x256 transparent PNG spritesheet. Two rows by four columns, eight 128x128 frames, played at 30 FPS for TNT detonations.";
 const ROCKET_CLOUD_SPRITE_NOTES =
   "Runtime transparent PNG spritesheet. Two rows by four columns, eight 128x128 frames, bottom-center origin, played at 30 FPS for rocket blast waves.";
-const MATCH_ORB_SPRITE_NOTES =
-  "Runtime transparent PNG spritesheet. Two rows by two columns, four 128x128 frames, color-tinted and looped for match energy streams.";
+const MATCH_ORB_NOTES =
+  "Runtime transparent static PNG, color-tinted for match energy streams flying from the board to the mage staff.";
 
 export const AssetManifest: Record<string, AssetManifestEntry> = {
   [AssetIds.tiles.fire]: texture(
@@ -152,6 +152,13 @@ export const AssetManifest: Record<string, AssetManifestEntry> = {
     "prompt.powerups.standard",
     TILE_NOTES,
   ),
+  [AssetIds.powerUps.orb]: texture(
+    AssetIds.powerUps.orb,
+    "/assets/powerups/orb.png",
+    "Assets/Textures/PowerUps/orb.png",
+    "prompt.powerups.standard",
+    MATCH_ORB_NOTES,
+  ),
   [AssetIds.backdrops.forest]: texture(
     AssetIds.backdrops.forest,
     "/assets/backdrops/backdrop-forest.png",
@@ -215,14 +222,6 @@ export const AssetManifest: Record<string, AssetManifestEntry> = {
     "prompt.powerups.standard",
     ROCKET_CLOUD_SPRITE_NOTES,
     "512x256, 8 frames at 128x128",
-  ),
-  [AssetIds.spritesheets.matchOrb]: texture(
-    AssetIds.spritesheets.matchOrb,
-    "/assets/spritesheets/orb.png",
-    "Assets/Textures/Spritesheets/orb.png",
-    "prompt.tiles.standard",
-    MATCH_ORB_SPRITE_NOTES,
-    "256x256, 4 frames at 128x128",
   ),
   [AssetIds.rigs.prince]: rig(
     AssetIds.rigs.prince,

@@ -13,6 +13,7 @@ export const AssetIds = {
     rocketV: 'power.rocketV',
     tnt: 'power.tnt',
     lightball: 'power.lightball',
+    orb: 'power.orb',
   },
   backdrops: {
     forest: 'backdrop.forest',
@@ -45,7 +46,6 @@ export const AssetIds = {
   spritesheets: {
     tntExplosion: 'spritesheet.tntExplosion',
     rocketCloud: 'spritesheet.rocketCloud',
-    matchOrb: 'spritesheet.matchOrb',
   },
   sounds: {
     tileMatch: 'sound.tileMatch',

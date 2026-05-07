@@ -114,6 +114,55 @@ describe('Canvas2DRenderer', () => {
     }
   });
 
+  it('draws tinted static images through an offscreen canvas preserving image alpha', () => {
+    const ctx = new FakeCanvasContext();
+    const tintCtx = new FakeCanvasContext();
+    const tintCanvas = new FakeCanvas(tintCtx);
+    const originalDocument = globalThis.document;
+    Object.defineProperty(globalThis, 'document', {
+      value: {
+        createElement: () => tintCanvas,
+      },
+      configurable: true,
+    });
+
+    try {
+      const image = {} as HTMLImageElement;
+      const renderer = new Canvas2DRenderer(ctx.asCanvasContext(), { 'power.orb': image }, 1080, 1920);
+
+      renderer.drawTintedImage({ id: 'power.orb' }, '#00ff3f', 10, 20, 30, 40);
+
+      expect(tintCanvas.width).toBe(30);
+      expect(tintCanvas.height).toBe(40);
+      expect(tintCtx.drawImageCalls[0]).toMatchObject({
+        image,
+        x: 0,
+        y: 0,
+        width: 30,
+        height: 40,
+      });
+      expect(tintCtx.globalCompositeOperationHistory).toContain('multiply');
+      expect(tintCtx.globalCompositeOperationHistory).toContain('destination-in');
+      expect(tintCtx.fillStyle).toBe('#00ff3f');
+      expect(ctx.drawImageCalls[0]).toMatchObject({
+        image: tintCanvas,
+        sx: 0,
+        sy: 0,
+        sWidth: 30,
+        sHeight: 40,
+        x: 10,
+        y: 20,
+        width: 30,
+        height: 40,
+      });
+    } finally {
+      Object.defineProperty(globalThis, 'document', {
+        value: originalDocument,
+        configurable: true,
+      });
+    }
+  });
+
   it('draws image alpha mask fills through an offscreen canvas', () => {
     const ctx = new FakeCanvasContext();
     const maskCtx = new FakeCanvasContext();

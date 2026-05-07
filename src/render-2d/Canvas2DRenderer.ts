@@ -94,6 +94,41 @@ export class Canvas2DRenderer implements GameRenderer {
     this.ctx.drawImage(img, x, y, width, height);
   }
 
+  drawTintedImage(
+    image: DrawImageRef,
+    color: string,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+  ): void {
+    const img = this.images[image.id];
+    if (img == null || width <= 0 || height <= 0) {
+      return;
+    }
+
+    const tintWidth = Math.ceil(width);
+    const tintHeight = Math.ceil(height);
+    const tintCtx = this.getMaskContext(tintWidth, tintHeight);
+    if (tintCtx == null) {
+      return;
+    }
+
+    tintCtx.clearRect(0, 0, tintWidth, tintHeight);
+    tintCtx.globalCompositeOperation = 'source-over';
+    tintCtx.globalAlpha = 1;
+    tintCtx.drawImage(img, 0, 0, tintWidth, tintHeight);
+    tintCtx.globalCompositeOperation = 'multiply';
+    tintCtx.fillStyle = color;
+    tintCtx.fillRect(0, 0, tintWidth, tintHeight);
+    tintCtx.globalCompositeOperation = 'destination-in';
+    tintCtx.drawImage(img, 0, 0, tintWidth, tintHeight);
+    tintCtx.globalCompositeOperation = 'source-over';
+    tintCtx.globalAlpha = 1;
+
+    this.ctx.drawImage(tintCtx.canvas, 0, 0, tintWidth, tintHeight, x, y, width, height);
+  }
+
   drawImageFrame(
     image: DrawImageRef,
     sourceX: number,

@@ -33,6 +33,14 @@ export interface GameRenderer {
   ): void;
   hasImage(image: DrawImageRef): boolean;
   drawImage(image: DrawImageRef, x: number, y: number, width: number, height: number): void;
+  drawTintedImage(
+    image: DrawImageRef,
+    color: string,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+  ): void;
   drawImageFrame(
     image: DrawImageRef,
     sourceX: number,

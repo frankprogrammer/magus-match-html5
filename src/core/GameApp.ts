@@ -31,6 +31,7 @@ import { getBoardAnimationTraceDurationMs } from "../board/BoardAnimationTiming"
 import { findStandardMatchHints } from "../board/BoardHints";
 import type { TileType } from "../board/TileTypes";
 import { AssetIds } from "../assets/AssetIds";
+import { heroStageBackdropAssetIdForLevel } from "./HeroStageBackdrop";
 import type { GeneratedLevel } from "../generator/LevelGenerator";
 import { generateLevel } from "../generator/LevelGenerator";
 import type { JourneyRuntimeState } from "../generator/JourneyRules";
@@ -1174,9 +1175,8 @@ export class MagusMatchGameApp implements GameApp {
       : `Moves ${this.journeyRuntime.movesRemaining}`;
   }
 
-  /** Default hero-stage backdrop; `backdrop.castle` maps to `bg1.png`. Swap for `bg2` / `bg3` to preview those assets. */
   private getHeroStageBackdropAssetId(): string {
-    return AssetIds.backdrops.castle;
+    return heroStageBackdropAssetIdForLevel(this.run.levelNumber);
   }
 
   private getHeroWorldObjects(): WorldObjectState[] {

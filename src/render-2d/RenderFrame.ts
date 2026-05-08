@@ -36,6 +36,7 @@ import {
   TRIAL_FILLBAR_FILL_OFFSET_Y_PX,
   TRIAL_FILLBAR_INNER_PAD_X_FRAC,
   TRIAL_FILLBAR_INNER_WIDTH_FRAC,
+  gameOverTitleBannerRect,
   hudObjectiveTextLayoutLegacy,
 } from '../core/Layout';
 import type { CellCoord } from '../core/Layout';
@@ -650,7 +651,21 @@ function drawTitleScreen(renderer: GameRenderer, screenState: ScreenRenderState)
 
 function drawGameOverScreen(renderer: GameRenderer, screenState: ScreenRenderState): void {
   renderer.drawRect('rgba(20, 14, 32, 0.86)', 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
-  renderer.drawText('GAME OVER', 120, 185, 840, 110, {
+  const titleBanner = gameOverTitleBannerRect();
+  const titlePanelImage = { id: AssetIds.ui.levelTitlePanel };
+  if (renderer.hasImage(titlePanelImage)) {
+    renderer.drawImage(titlePanelImage, titleBanner.x, titleBanner.y, titleBanner.width, titleBanner.height);
+  } else {
+    renderer.drawRect(
+      'rgba(36, 24, 50, 0.92)',
+      titleBanner.x,
+      titleBanner.y,
+      titleBanner.width,
+      titleBanner.height,
+    );
+  }
+
+  renderer.drawText('GAME OVER', titleBanner.x, titleBanner.y, titleBanner.width, titleBanner.height, {
     fontSize: 72,
     fontWeight: 'bold',
     color: '#f5e9c9',

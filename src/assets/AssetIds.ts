@@ -22,6 +22,10 @@ export const AssetIds = {
     castle: 'backdrop.castle',
     bg2: 'backdrop.bg2',
     bg3: 'backdrop.bg3',
+    bg4: 'backdrop.bg4',
+    bg5: 'backdrop.bg5',
+    bg6: 'backdrop.bg6',
+    bg7: 'backdrop.bg7',
   },
   rigs: {
     mage: 'rig.mage',

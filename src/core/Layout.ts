@@ -18,6 +18,38 @@ export const LEVEL_PANEL_TEXT_X =
 export const LEVEL_PANEL_TEXT_WIDTH =
   LEVEL_PANEL_WIDTH - 2 * LEVEL_PANEL_WIDTH * LEVEL_PANEL_TEXT_INSET_FRAC;
 
+/** Game-over header ribbon (`ui title.png`), same aspect as `LEVEL_PANEL_NATURAL_SIZE`. */
+export const GAME_OVER_TITLE_NATURAL_SIZE = LEVEL_PANEL_NATURAL_SIZE;
+/** Minimum horizontal inset from left/right logical screen edges for the title ribbon. */
+export const GAME_OVER_TITLE_SCREEN_PADDING_X = 20;
+/** Minimum band height so “GAME OVER” fits before width clamping. */
+export const GAME_OVER_TITLE_BAND_MIN_HEIGHT_PX = 150;
+/** Legacy title row layout (center line preserved when sizing the ribbon). */
+export const GAME_OVER_TITLE_TEXT_TOP_Y = 185;
+export const GAME_OVER_TITLE_TEXT_LAYOUT_HEIGHT = 110;
+export const GAME_OVER_TITLE_TEXT_CENTER_Y =
+  GAME_OVER_TITLE_TEXT_TOP_Y + GAME_OVER_TITLE_TEXT_LAYOUT_HEIGHT / 2;
+
+export function gameOverTitleBannerRect(): {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+} {
+  const maxWidth = LOGICAL_WIDTH - 2 * GAME_OVER_TITLE_SCREEN_PADDING_X;
+  const aspect = GAME_OVER_TITLE_NATURAL_SIZE.width / GAME_OVER_TITLE_NATURAL_SIZE.height;
+  let height = GAME_OVER_TITLE_BAND_MIN_HEIGHT_PX;
+  let width = height * aspect;
+  if (width > maxWidth) {
+    width = maxWidth;
+    height = width / aspect;
+  }
+
+  const x = (LOGICAL_WIDTH - width) / 2;
+  const y = GAME_OVER_TITLE_TEXT_CENTER_Y - height / 2;
+  return { x, y, width, height };
+}
+
 export const HUD_HEIGHT = 150;
 /** Matches `RenderFrame` HUD text inset from the logical left edge. */
 export const HUD_CONTENT_PADDING_X = 56;

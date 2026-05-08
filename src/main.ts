@@ -12,7 +12,7 @@ import { loadBrowserImages } from './platform-browser/BrowserImageLoader';
 import { LocalLeaderboardStore } from './platform-browser/LocalLeaderboardStore';
 import { BoardAnimationPresenter } from './render-2d/BoardAnimationPresenter';
 import { Canvas2DRenderer } from './render-2d/Canvas2DRenderer';
-import { renderFrame } from './render-2d/RenderFrame';
+import { renderFrame, type HeartLossWobbleState } from './render-2d/RenderFrame';
 import { ThreeHeroStage } from './render-three/ThreeHeroStage';
 import type { GameEvent } from './core/GameEvents';
 import type { HudRenderState } from './render-2d/HudRenderState';
@@ -26,6 +26,7 @@ import {
   insertLeaderboardEntry,
   type LeaderboardEntry,
 } from './run/Leaderboard';
+import { INITIAL_LIVES } from './run/RunProgression';
 
 const ENABLE_BROWSER_AUDIO = true;
 
@@ -143,6 +144,9 @@ function renderHud(hud = getBrowserHudState()): void {
 }
 
 let lastTimeMs = 0;
+let lastHudLives = INITIAL_LIVES;
+let heartLossAnim: { slotIndex: number; startedAtSec: number } | null = null;
+const HEART_LOSS_WOBBLE_SEC = 0.45;
 
 function tick(timeMs: number): void {
   const dtSec = lastTimeMs === 0 ? 0 : Math.min((timeMs - lastTimeMs) / 1000, 1 / 30);
@@ -150,6 +154,25 @@ function tick(timeMs: number): void {
   app.update(dtSec, input.drainCommands());
   const hudState = getBrowserHudState();
   const screenState = getBrowserScreenState();
+  const nowSec = timeMs / 1000;
+  const prevLives = lastHudLives;
+  if (hudState.lives < prevLives) {
+    heartLossAnim = { slotIndex: prevLives - 1, startedAtSec: nowSec };
+  }
+  if (hudState.lives > prevLives) {
+    heartLossAnim = null;
+  }
+  lastHudLives = hudState.lives;
+
+  let heartLossWobble: HeartLossWobbleState | undefined;
+  if (heartLossAnim != null) {
+    const progress01 = Math.min(1, (nowSec - heartLossAnim.startedAtSec) / HEART_LOSS_WOBBLE_SEC);
+    heartLossWobble = { slotIndex: heartLossAnim.slotIndex, progress01 };
+    if (progress01 >= 1) {
+      heartLossAnim = null;
+    }
+  }
+
   handleEvents(app.drainEvents());
   audio?.setMuted(hudState.muted);
   audio?.setBackgroundMusicMuted(hudState.bgmMuted);
@@ -163,6 +186,7 @@ function tick(timeMs: number): void {
     hudState,
     timeMs / 1000,
     screenState,
+    heartLossWobble,
   );
   requestAnimationFrame(tick);
 }

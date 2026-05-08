@@ -1,7 +1,92 @@
 export const LOGICAL_WIDTH = 1080;
 export const LOGICAL_HEIGHT = 1920;
 export const HERO_STAGE_HEIGHT = 500;
+
+/** Level title strip (`ui title.png`), scaled to ~60% width; native asset pixel size. */
+export const LEVEL_PANEL_NATURAL_SIZE = { width: 950, height: 156 } as const;
+export const LEVEL_PANEL_WIDTH_FRAC = 0.6;
+export const LEVEL_PANEL_WIDTH = LOGICAL_WIDTH * LEVEL_PANEL_WIDTH_FRAC;
+export const LEVEL_PANEL_HEIGHT =
+  (LEVEL_PANEL_WIDTH * LEVEL_PANEL_NATURAL_SIZE.height) / LEVEL_PANEL_NATURAL_SIZE.width;
+/** Gap between the logical screen top and the title strip. */
+export const LEVEL_PANEL_TOP = 18;
+export const LEVEL_PANEL_X = (LOGICAL_WIDTH - LEVEL_PANEL_WIDTH) / 2;
+/** Keeps labels off decorative ends of the title art. */
+export const LEVEL_PANEL_TEXT_INSET_FRAC = 0.14;
+export const LEVEL_PANEL_TEXT_X =
+  LEVEL_PANEL_X + LEVEL_PANEL_WIDTH * LEVEL_PANEL_TEXT_INSET_FRAC;
+export const LEVEL_PANEL_TEXT_WIDTH =
+  LEVEL_PANEL_WIDTH - 2 * LEVEL_PANEL_WIDTH * LEVEL_PANEL_TEXT_INSET_FRAC;
+
 export const HUD_HEIGHT = 150;
+/** Matches `RenderFrame` HUD text inset from the logical left edge. */
+export const HUD_CONTENT_PADDING_X = 56;
+/** HUD banner overlaps the hero strip slightly (matches `RenderFrame` placement). */
+export const HUD_VISUAL_OVERLAP_PX = 10;
+export const HUD_BAND_TOP_Y = HERO_STAGE_HEIGHT - HUD_VISUAL_OVERLAP_PX;
+
+/** Three-up heart strip in the HUD band (`heart-fill` / `heart-empty`). */
+export const HUD_HEART_COUNT = 3;
+export const HUD_HEART_NATURAL_WIDTH = 254;
+export const HUD_HEART_NATURAL_HEIGHT = 233;
+export const HUD_HEART_DISPLAY_HEIGHT = 74;
+export const HUD_HEART_DISPLAY_WIDTH =
+  (HUD_HEART_DISPLAY_HEIGHT * HUD_HEART_NATURAL_WIDTH) / HUD_HEART_NATURAL_HEIGHT;
+export const HUD_HEART_GAP = 12;
+/** Positive = shift heart strip toward screen center from `HUD_CONTENT_PADDING_X`. */
+export const HUD_HEART_TOWARD_CENTER_NUDGE_PX = 20;
+export const HUD_HEART_GROUP_LEFT = HUD_CONTENT_PADDING_X + HUD_HEART_TOWARD_CENTER_NUDGE_PX;
+export const HUD_SCORE_TEXT_X =
+  HUD_HEART_GROUP_LEFT +
+  HUD_HEART_COUNT * HUD_HEART_DISPLAY_WIDTH +
+  (HUD_HEART_COUNT - 1) * HUD_HEART_GAP +
+  24;
+
+/** Top row height for the “Score” label (see `HUD_SCORE_LABEL_VALUE_GAP_PX` + value row). */
+export const HUD_SCORE_LABEL_ROW_HEIGHT = 100;
+/** Vertical gap between the label row and the numeric score (smaller = tighter). */
+export const HUD_SCORE_LABEL_VALUE_GAP_PX = -50;
+export const HUD_SCORE_VALUE_ROW_HEIGHT =
+  HUD_HEIGHT - HUD_SCORE_LABEL_ROW_HEIGHT - HUD_SCORE_LABEL_VALUE_GAP_PX;
+export const HUD_SCORE_LABEL_COLOR = '#FBBC45';
+export const HUD_SCORE_LABEL_FONT_SIZE = 26;
+export const HUD_SCORE_LABEL_MIN_FONT_SIZE = 18;
+export const HUD_SCORE_VALUE_FONT_SIZE = 34;
+export const HUD_SCORE_VALUE_MIN_FONT_SIZE = 20;
+
+/** Trial monster HUD fill bar (`ui-fillbar-bg` / `ui-fillbar-fill`), same height as hearts. */
+export const HUD_TRIAL_FILLBAR_BG_NATURAL_SIZE = { width: 2155, height: 563 } as const;
+export const HUD_TRIAL_FILLBAR_FRAME_HEIGHT = HUD_HEART_DISPLAY_HEIGHT;
+export const HUD_TRIAL_FILLBAR_FRAME_WIDTH =
+  (HUD_TRIAL_FILLBAR_FRAME_HEIGHT * HUD_TRIAL_FILLBAR_BG_NATURAL_SIZE.width) /
+  HUD_TRIAL_FILLBAR_BG_NATURAL_SIZE.height;
+export const HUD_TRIAL_FILLBAR_RIGHT_MARGIN = 50;
+/** Positive = shift fill bar toward screen center (leftward). */
+export const HUD_TRIAL_FILLBAR_TOWARD_CENTER_NUDGE_PX = 20;
+export const HUD_TRIAL_FILLBAR_LEFT_X =
+  LOGICAL_WIDTH -
+  HUD_TRIAL_FILLBAR_RIGHT_MARGIN -
+  HUD_TRIAL_FILLBAR_FRAME_WIDTH -
+  HUD_TRIAL_FILLBAR_TOWARD_CENTER_NUDGE_PX;
+/** Kobold badge on trial monster bar; height relative to fill bar frame. */
+export const HUD_TRIAL_FILLBAR_KOBOLD_NATURAL_SIZE = { width: 447, height: 429 } as const;
+export const HUD_TRIAL_FILLBAR_KOBOLD_HEIGHT_FRAC = 0.8;
+/** Horizontal inset for purple fill inside the gold frame (trial HUD bar). */
+export const TRIAL_FILLBAR_INNER_PAD_X_FRAC = 0.06;
+export const TRIAL_FILLBAR_INNER_WIDTH_FRAC = 0.91;
+/** Fill sprite height as a fraction of full frame height (centered vertically). */
+export const TRIAL_FILLBAR_FILL_HEIGHT_FRAC = 0.645;
+/** Fine-tune painted fill vs frame (positive = right). Applied to fill draw and RTL clip together. */
+export const TRIAL_FILLBAR_FILL_OFFSET_X_PX = -5;
+/** Fine-tune painted fill vs frame (negative = up). Applied to fill draw and RTL clip together. */
+export const TRIAL_FILLBAR_FILL_OFFSET_Y_PX = -2;
+/** Journey / non-trial objective column (legacy layout). */
+export function hudObjectiveTextLayoutLegacy(): { x: number; width: number } {
+  const x = 670;
+  const width = LOGICAL_WIDTH - HUD_CONTENT_PADDING_X - x;
+  return { x, width };
+}
+
 export const BOARD_SECTION_HEIGHT = 1270;
 export const BOARD_SIZE = 8;
 export const BOARD_SECTION_TOP = HERO_STAGE_HEIGHT + HUD_HEIGHT;

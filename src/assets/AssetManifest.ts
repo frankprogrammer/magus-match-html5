@@ -67,6 +67,16 @@ const UI_BANNER_NOTES =
   "Runtime 1080x150 PNG for the fixed middle HUD band; drawn full-width behind HUD text.";
 const BOARD_BACKGROUND_NOTES =
   "Runtime 1080x1080 PNG for the board base; drawn behind board cells with flat-color fallback.";
+const UI_LEVEL_TITLE_NOTES =
+  "Runtime ~950x156 PNG title ribbon; scaled to 60% logical width, centered near top for level label.";
+const UI_HEART_NOTES =
+  "Runtime ~254x233 transparent PNG; HUD lives strip uses scaled instances.";
+const UI_TRIAL_FILLBAR_BG_NOTES =
+  "Runtime PNG frame for trial monster progress bar; scaled to heart row height.";
+const UI_TRIAL_FILLBAR_FILL_NOTES =
+  "Runtime PNG fill art; drawn clipped right-to-left inside the frame inner track.";
+const UI_TRIAL_KOBOLD_ICON_NOTES =
+  "Runtime ~447x429 transparent PNG; badge on bottom-right of trial enemy fill bar.";
 const TNT_EXPLOSION_SPRITE_NOTES =
   "Runtime 512x256 transparent PNG spritesheet. Two rows by four columns, eight 128x128 frames, played at 30 FPS for TNT detonations.";
 const ROCKET_CLOUD_SPRITE_NOTES =
@@ -322,6 +332,48 @@ export const AssetManifest: Record<string, AssetManifestEntry> = {
     "Assets/Textures/UI/board-background.png",
     BOARD_BACKGROUND_NOTES,
     "1080x1080",
+  ),
+  [AssetIds.ui.levelTitlePanel]: ui(
+    AssetIds.ui.levelTitlePanel,
+    "/assets/ui/ui%20title.png",
+    "Assets/Textures/UI/ui-title.png",
+    UI_LEVEL_TITLE_NOTES,
+    "950x156",
+  ),
+  [AssetIds.ui.heartFill]: ui(
+    AssetIds.ui.heartFill,
+    "/assets/ui/heart-fill.png",
+    "Assets/Textures/UI/heart-fill.png",
+    UI_HEART_NOTES,
+    "254x233",
+  ),
+  [AssetIds.ui.heartEmpty]: ui(
+    AssetIds.ui.heartEmpty,
+    "/assets/ui/heart-empty.png",
+    "Assets/Textures/UI/heart-empty.png",
+    UI_HEART_NOTES,
+    "254x233",
+  ),
+  [AssetIds.ui.trialFillBarBg]: ui(
+    AssetIds.ui.trialFillBarBg,
+    "/assets/ui/ui-fillbar-bg.png",
+    "Assets/Textures/UI/ui-fillbar-bg.png",
+    UI_TRIAL_FILLBAR_BG_NOTES,
+    "2155x563",
+  ),
+  [AssetIds.ui.trialFillBarFill]: ui(
+    AssetIds.ui.trialFillBarFill,
+    "/assets/ui/ui-fillbar-fill.png",
+    "Assets/Textures/UI/ui-fillbar-fill.png",
+    UI_TRIAL_FILLBAR_FILL_NOTES,
+    "1952x359",
+  ),
+  [AssetIds.ui.trialFillBarKoboldIcon]: ui(
+    AssetIds.ui.trialFillBarKoboldIcon,
+    "/assets/ui/ui-icon-kobold.png",
+    "Assets/Textures/UI/ui-icon-kobold.png",
+    UI_TRIAL_KOBOLD_ICON_NOTES,
+    "447x429",
   ),
   ...Object.fromEntries(
     Object.values(SoundManifest).map((entry) => [entry.id, audio(entry)]),

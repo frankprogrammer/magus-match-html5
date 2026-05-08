@@ -40,6 +40,12 @@ export const AssetIds = {
   ui: {
     hudBanner: 'ui.hudBanner',
     boardBackground: 'ui.boardBackground',
+    levelTitlePanel: 'ui.levelTitlePanel',
+    heartFill: 'ui.heartFill',
+    heartEmpty: 'ui.heartEmpty',
+    trialFillBarBg: 'ui.trialFillBarBg',
+    trialFillBarFill: 'ui.trialFillBarFill',
+    trialFillBarKoboldIcon: 'ui.trialFillBarKoboldIcon',
   },
   materials: {
     mageTexture: 'material.mageTexture',

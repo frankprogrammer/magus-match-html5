@@ -279,9 +279,10 @@ export class MagusMatchGameApp implements GameApp {
     return {
       phase: this.phase,
       levelText: `Level ${this.run.levelNumber}`,
-      livesText: `Lives ${this.run.lives}`,
+      lives: this.run.lives,
       scoreText: `${this.run.score}`,
       objectiveText: this.getObjectiveText(),
+      trialMonsterFill: this.getTrialMonsterFill(),
       muted: this.muted,
       bgmMuted: this.bgmMuted,
       debugText: `Seed ${this.run.seed}`,
@@ -1133,17 +1134,20 @@ export class MagusMatchGameApp implements GameApp {
     };
   }
 
+  private getTrialMonsterFill(): { remaining: number; total: number } | null {
+    if (this.currentLevel?.type !== "TRIAL" || this.trialRuntime == null) {
+      return null;
+    }
+
+    const total = this.trialRuntime.totalMonsters;
+    const defeated = this.trialRuntime.defeatedMonsterIds.length;
+    const remaining = Math.max(0, total - defeated);
+    return { remaining, total };
+  }
+
   private getObjectiveText(): string {
     if (this.currentLevel?.type === "TRIAL" && this.trialRuntime != null) {
-      if (this.trialRuntime.result === "won") {
-        return "Trial cleared";
-      }
-
-      if (this.trialRuntime.result === "lost") {
-        return "Monsters broke through";
-      }
-
-      return `Monsters ${this.trialRuntime.defeatedMonsterIds.length}/${this.trialRuntime.totalMonsters}`;
+      return "";
     }
 
     if (this.currentLevel?.type !== "JOURNEY" || this.journeyRuntime == null) {

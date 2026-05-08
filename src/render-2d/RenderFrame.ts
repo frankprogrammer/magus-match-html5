@@ -1,5 +1,43 @@
 import { AssetIds } from '../assets/AssetIds';
-import { BOARD_RECT, HERO_STAGE_HEIGHT, HUD_BGM_TOGGLE_RECT, HUD_HEIGHT, LOGICAL_HEIGHT, LOGICAL_WIDTH } from '../core/Layout';
+import {
+  BOARD_RECT,
+  HERO_STAGE_HEIGHT,
+  HUD_BGM_TOGGLE_RECT,
+  HUD_BAND_TOP_Y,
+  HUD_HEIGHT,
+  HUD_HEART_COUNT,
+  HUD_SCORE_LABEL_COLOR,
+  HUD_SCORE_LABEL_FONT_SIZE,
+  HUD_SCORE_LABEL_MIN_FONT_SIZE,
+  HUD_SCORE_LABEL_ROW_HEIGHT,
+  HUD_SCORE_LABEL_VALUE_GAP_PX,
+  HUD_SCORE_VALUE_FONT_SIZE,
+  HUD_SCORE_VALUE_MIN_FONT_SIZE,
+  HUD_SCORE_VALUE_ROW_HEIGHT,
+  HUD_HEART_DISPLAY_HEIGHT,
+  HUD_HEART_DISPLAY_WIDTH,
+  HUD_HEART_GAP,
+  HUD_HEART_GROUP_LEFT,
+  HUD_TRIAL_FILLBAR_FRAME_HEIGHT,
+  HUD_TRIAL_FILLBAR_FRAME_WIDTH,
+  HUD_TRIAL_FILLBAR_KOBOLD_HEIGHT_FRAC,
+  HUD_TRIAL_FILLBAR_KOBOLD_NATURAL_SIZE,
+  HUD_TRIAL_FILLBAR_LEFT_X,
+  LEVEL_PANEL_HEIGHT,
+  LEVEL_PANEL_TEXT_WIDTH,
+  LEVEL_PANEL_TEXT_X,
+  LEVEL_PANEL_TOP,
+  LEVEL_PANEL_WIDTH,
+  LEVEL_PANEL_X,
+  LOGICAL_HEIGHT,
+  LOGICAL_WIDTH,
+  TRIAL_FILLBAR_FILL_HEIGHT_FRAC,
+  TRIAL_FILLBAR_FILL_OFFSET_X_PX,
+  TRIAL_FILLBAR_FILL_OFFSET_Y_PX,
+  TRIAL_FILLBAR_INNER_PAD_X_FRAC,
+  TRIAL_FILLBAR_INNER_WIDTH_FRAC,
+  hudObjectiveTextLayoutLegacy,
+} from '../core/Layout';
 import type { CellCoord } from '../core/Layout';
 import type { TileType } from '../board/TileTypes';
 import { MATCH_HINT_BOUNCE_DISTANCE_PX } from '../data/tuning';
@@ -8,9 +46,6 @@ import type { BoardRenderState } from './BoardRenderState';
 import type { GameRenderer } from './GameRenderer';
 import type { ScreenRenderState } from './ScreenRenderState';
 
-const HUD_VISUAL_OVERLAP_PX = 10;
-const HUD_VISUAL_Y = HERO_STAGE_HEIGHT - HUD_VISUAL_OVERLAP_PX;
-const HUD_CONTENT_PADDING_X = 56;
 const HUD_TEXT_COLOR = '#ffffff';
 
 export interface BoardCellVisual {
@@ -36,16 +71,24 @@ export interface BoardCellVisual {
   zIndex: number;
 }
 
+export interface HeartLossWobbleState {
+  slotIndex: number;
+  /** 0 at start of loss animation, 1 when the heart switches to empty. */
+  progress01: number;
+}
+
 export function renderFrame(
   renderer: GameRenderer,
   boardState: BoardRenderState,
   hudState: HudRenderState,
   elapsedSec: number,
   screenState?: ScreenRenderState,
+  heartLossWobble?: HeartLossWobbleState,
 ): void {
   renderer.clear();
   drawCanvasBands(renderer);
-  drawHud(renderer, hudState);
+  drawLevelTitlePanel(renderer, hudState);
+  drawHud(renderer, hudState, heartLossWobble);
   drawBoard(renderer, boardState, elapsedSec);
   if (screenState != null) {
     drawScreenOverlay(renderer, screenState);
@@ -141,41 +184,168 @@ function hintBounceOffset(direction: CellCoord, progress: number): { x: number; 
 function drawCanvasBands(renderer: GameRenderer): void {
   const hudBanner = { id: AssetIds.ui.hudBanner };
   if (renderer.hasImage(hudBanner)) {
-    renderer.drawImage(hudBanner, 0, HUD_VISUAL_Y, LOGICAL_WIDTH, HUD_HEIGHT);
+    renderer.drawImage(hudBanner, 0, HUD_BAND_TOP_Y, LOGICAL_WIDTH, HUD_HEIGHT);
   }
   renderer.drawRect('#1f1830', 0, HERO_STAGE_HEIGHT + HUD_HEIGHT, LOGICAL_WIDTH, LOGICAL_HEIGHT - HERO_STAGE_HEIGHT - HUD_HEIGHT);
 }
 
-function drawHud(renderer: GameRenderer, hudState: HudRenderState): void {
-  const y = HUD_VISUAL_Y;
-  renderer.drawText(hudState.levelText, HUD_CONTENT_PADDING_X, y, 190, HUD_HEIGHT, {
-    fontSize: 34,
+function drawLevelTitlePanel(renderer: GameRenderer, hudState: HudRenderState): void {
+  const panelImage = { id: AssetIds.ui.levelTitlePanel };
+  if (renderer.hasImage(panelImage)) {
+    renderer.drawImage(panelImage, LEVEL_PANEL_X, LEVEL_PANEL_TOP, LEVEL_PANEL_WIDTH, LEVEL_PANEL_HEIGHT);
+  } else {
+    renderer.drawRect(
+      'rgba(36, 24, 50, 0.92)',
+      LEVEL_PANEL_X,
+      LEVEL_PANEL_TOP,
+      LEVEL_PANEL_WIDTH,
+      LEVEL_PANEL_HEIGHT,
+    );
+  }
+
+  renderer.drawText(hudState.levelText, LEVEL_PANEL_TEXT_X, LEVEL_PANEL_TOP, LEVEL_PANEL_TEXT_WIDTH, LEVEL_PANEL_HEIGHT, {
+    fontSize: 38,
     minFontSize: 22,
     fontWeight: 'bold',
     color: HUD_TEXT_COLOR,
-    align: 'left',
+    align: 'center',
   });
-  renderer.drawText(hudState.livesText, 270, y, 190, HUD_HEIGHT, {
-    fontSize: 34,
-    minFontSize: 22,
+}
+
+function drawHudHearts(
+  renderer: GameRenderer,
+  hudState: HudRenderState,
+  heartLossWobble?: HeartLossWobbleState,
+): void {
+  const fillRef = { id: AssetIds.ui.heartFill };
+  const emptyRef = { id: AssetIds.ui.heartEmpty };
+  const y = HUD_BAND_TOP_Y + (HUD_HEIGHT - HUD_HEART_DISPLAY_HEIGHT) / 2;
+
+  for (let slot = 0; slot < HUD_HEART_COUNT; slot++) {
+    const x = HUD_HEART_GROUP_LEFT + slot * (HUD_HEART_DISPLAY_WIDTH + HUD_HEART_GAP);
+    const centerX = x + HUD_HEART_DISPLAY_WIDTH / 2;
+    const centerY = y + HUD_HEART_DISPLAY_HEIGHT / 2;
+
+    const inWobble =
+      heartLossWobble != null &&
+      heartLossWobble.slotIndex === slot &&
+      heartLossWobble.progress01 < 1;
+
+    const useFilled = slot < hudState.lives || inWobble;
+    const imageRef = useFilled ? fillRef : emptyRef;
+
+    if (!renderer.hasImage(imageRef)) {
+      continue;
+    }
+
+    if (inWobble && heartLossWobble != null) {
+      const t = heartLossWobble.progress01;
+      const wobbleDeg = Math.sin(t * Math.PI * 2 * 5) * (1 - t) * (1 - t) * 16;
+      renderer.pushRotate(wobbleDeg, centerX, centerY);
+      renderer.drawImage(imageRef, x, y, HUD_HEART_DISPLAY_WIDTH, HUD_HEART_DISPLAY_HEIGHT);
+      renderer.pop();
+    } else {
+      renderer.drawImage(imageRef, x, y, HUD_HEART_DISPLAY_WIDTH, HUD_HEART_DISPLAY_HEIGHT);
+    }
+  }
+}
+
+function drawTrialMonsterFillBar(
+  renderer: GameRenderer,
+  trialMonsterFill: { remaining: number; total: number },
+): void {
+  const frameRef = { id: AssetIds.ui.trialFillBarBg };
+  const fillRef = { id: AssetIds.ui.trialFillBarFill };
+  const koboldRef = { id: AssetIds.ui.trialFillBarKoboldIcon };
+
+  const frameX = HUD_TRIAL_FILLBAR_LEFT_X;
+  const frameW = HUD_TRIAL_FILLBAR_FRAME_WIDTH;
+  const frameH = HUD_TRIAL_FILLBAR_FRAME_HEIGHT;
+  const frameY = HUD_BAND_TOP_Y + (HUD_HEIGHT - frameH) / 2;
+
+  if (renderer.hasImage(frameRef)) {
+    renderer.drawImage(frameRef, frameX, frameY, frameW, frameH);
+  }
+
+  const innerX = frameX + frameW * TRIAL_FILLBAR_INNER_PAD_X_FRAC;
+  const innerW = frameW * TRIAL_FILLBAR_INNER_WIDTH_FRAC;
+  const fillH = frameH * TRIAL_FILLBAR_FILL_HEIGHT_FRAC;
+  const fillY = frameY + (frameH - fillH) / 2;
+
+  const total = trialMonsterFill.total;
+  const remaining = Math.max(0, trialMonsterFill.remaining);
+  const ratio = total > 0 ? Math.min(1, remaining / total) : 0;
+
+  if (ratio > 0 && renderer.hasImage(fillRef)) {
+    const fillDrawX = innerX + TRIAL_FILLBAR_FILL_OFFSET_X_PX;
+    const fillDrawY = fillY + TRIAL_FILLBAR_FILL_OFFSET_Y_PX;
+    const clipW = innerW * ratio;
+    const clipX = innerX + innerW - clipW + TRIAL_FILLBAR_FILL_OFFSET_X_PX;
+
+    renderer.pushClipRect(clipX, fillDrawY, clipW, fillH);
+    renderer.drawImage(fillRef, fillDrawX, fillDrawY, innerW, fillH);
+    renderer.pop();
+  }
+
+  if (renderer.hasImage(koboldRef)) {
+    const iconH = frameH * HUD_TRIAL_FILLBAR_KOBOLD_HEIGHT_FRAC;
+    const iconW =
+      iconH *
+      (HUD_TRIAL_FILLBAR_KOBOLD_NATURAL_SIZE.width / HUD_TRIAL_FILLBAR_KOBOLD_NATURAL_SIZE.height);
+    const iconX = frameX + frameW - iconW;
+    const iconY = frameY + frameH - iconH;
+    renderer.drawImage(koboldRef, iconX, iconY, iconW, iconH);
+  }
+}
+
+function drawHudScoreColumn(renderer: GameRenderer, bandTopY: number, scoreText: string): void {
+  const labelH = HUD_SCORE_LABEL_ROW_HEIGHT;
+  const gap = HUD_SCORE_LABEL_VALUE_GAP_PX;
+  const valueH = HUD_SCORE_VALUE_ROW_HEIGHT;
+  const valueY = bandTopY + labelH + gap;
+
+  renderer.drawText('Score', 0, bandTopY, LOGICAL_WIDTH, labelH, {
+    fontSize: HUD_SCORE_LABEL_FONT_SIZE,
+    minFontSize: HUD_SCORE_LABEL_MIN_FONT_SIZE,
     fontWeight: 'bold',
-    color: HUD_TEXT_COLOR,
-    align: 'left',
+    color: HUD_SCORE_LABEL_COLOR,
+    align: 'center',
   });
-  renderer.drawText(`Score ${hudState.scoreText}`, 480, y, 280, HUD_HEIGHT, {
-    fontSize: 34,
-    minFontSize: 20,
-    fontWeight: 'bold',
+  renderer.drawText(scoreText, 0, valueY, LOGICAL_WIDTH, valueH, {
+    fontSize: HUD_SCORE_VALUE_FONT_SIZE,
+    minFontSize: HUD_SCORE_VALUE_MIN_FONT_SIZE,
+    fontWeight: 'normal',
     color: HUD_TEXT_COLOR,
-    align: 'left',
+    align: 'center',
   });
-  renderer.drawText(hudState.objectiveText, 772, y, LOGICAL_WIDTH - HUD_CONTENT_PADDING_X - 772, HUD_HEIGHT, {
-    fontSize: 28,
-    minFontSize: 18,
-    fontWeight: 'bold',
-    color: HUD_TEXT_COLOR,
-    align: 'right',
-  });
+}
+
+function drawHud(
+  renderer: GameRenderer,
+  hudState: HudRenderState,
+  heartLossWobble?: HeartLossWobbleState,
+): void {
+  const y = HUD_BAND_TOP_Y;
+  drawHudHearts(renderer, hudState, heartLossWobble);
+
+  if (hudState.trialMonsterFill != null) {
+    drawHudScoreColumn(renderer, y, hudState.scoreText);
+    drawTrialMonsterFillBar(renderer, hudState.trialMonsterFill);
+    return;
+  }
+
+  drawHudScoreColumn(renderer, y, hudState.scoreText);
+
+  if (hudState.objectiveText.length > 0) {
+    const objective = hudObjectiveTextLayoutLegacy();
+    renderer.drawText(hudState.objectiveText, objective.x, y, objective.width, HUD_HEIGHT, {
+      fontSize: 28,
+      minFontSize: 18,
+      fontWeight: 'bold',
+      color: HUD_TEXT_COLOR,
+      align: 'right',
+    });
+  }
 }
 
 function drawHudBgmToggle(renderer: GameRenderer, hudState: HudRenderState): void {

@@ -49,10 +49,10 @@ export class ThreeObjectFactory {
     this.startKoboldModelLoad();
   }
 
-  create(templateId: string): THREE.Object3D {
+  create(templateId: string, backdropTextureId?: string): THREE.Object3D {
     switch (templateId) {
       case HeroStageTemplateIds.backdropForest:
-        return createBackdrop();
+        return createBackdrop(backdropTextureId ?? AssetIds.backdrops.castle);
       case HeroStageTemplateIds.mage:
         return this.createMage();
       case HeroStageTemplateIds.princeCage:
@@ -74,7 +74,11 @@ export class ThreeObjectFactory {
     }
   }
 
-  getTemplateVersion(templateId: string): number {
+  getTemplateVersion(templateId: string, backdropTextureId?: string): number {
+    if (templateId === HeroStageTemplateIds.backdropForest) {
+      return hashBackdropAssetId(backdropTextureId ?? AssetIds.backdrops.castle);
+    }
+
     if (templateId === HeroStageTemplateIds.mage) {
       return this.mageTemplateVersion;
     }
@@ -374,7 +378,7 @@ export function applyKoboldModelFacingCorrection(object: THREE.Object3D): void {
   modelRoot.rotation.y = KOBOLD_MODEL_Y_ROTATION_RAD;
 }
 
-function createBackdrop(): THREE.Object3D {
+function createBackdrop(backdropAssetId: string): THREE.Object3D {
   const group = new THREE.Group();
   const geometry = new THREE.PlaneGeometry(1, 1);
   const material = new THREE.MeshBasicMaterial({
@@ -389,8 +393,17 @@ function createBackdrop(): THREE.Object3D {
     HERO_BACKDROP_VIEW_WIDTH / HERO_BACKDROP_VIEW_HEIGHT,
   );
   group.add(plane);
-  startCastleBackdropTextureLoad(plane);
+  startBackdropTextureLoad(plane, backdropAssetId);
   return group;
+}
+
+function hashBackdropAssetId(assetId: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < assetId.length; index += 1) {
+    hash ^= assetId.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
 }
 
 export interface BackdropCoverSize {
@@ -432,12 +445,12 @@ function applyBackdropCoverSize(
   plane.position.y = size.centerY;
 }
 
-function startCastleBackdropTextureLoad(plane: THREE.Mesh): void {
+function startBackdropTextureLoad(plane: THREE.Mesh, backdropAssetId: string): void {
   if (typeof window === "undefined") {
     return;
   }
 
-  const entry = getAssetManifestEntry(AssetIds.backdrops.castle);
+  const entry = getAssetManifestEntry(backdropAssetId);
   if (entry == null) {
     return;
   }
@@ -464,7 +477,7 @@ function startCastleBackdropTextureLoad(plane: THREE.Mesh): void {
     undefined,
     (error) => {
       console.warn(
-        `Failed to load castle backdrop texture from ${backdropUrl}`,
+        `Failed to load hero-stage backdrop texture (${backdropAssetId}) from ${backdropUrl}`,
         error,
       );
     },

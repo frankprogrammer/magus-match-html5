@@ -255,7 +255,7 @@ export class MagusMatchGameApp implements GameApp {
     const objects = this.getHeroWorldObjects();
     return {
       levelType: this.currentLevel?.type ?? "JOURNEY",
-      backdropId: AssetIds.backdrops.castle,
+      backdropId: this.getHeroStageBackdropAssetId(),
       cinematicState: phaseToCinematicState(this.phase),
       objects,
       activeProjectiles: this.trialRuntime?.projectiles ?? [],
@@ -1068,11 +1068,17 @@ export class MagusMatchGameApp implements GameApp {
       : `Moves ${this.journeyRuntime.movesRemaining}`;
   }
 
+  /** Default hero-stage backdrop; `backdrop.castle` maps to `bg1.png`. Swap for `bg2` / `bg3` to preview those assets. */
+  private getHeroStageBackdropAssetId(): string {
+    return AssetIds.backdrops.castle;
+  }
+
   private getHeroWorldObjects(): WorldObjectState[] {
     const objects: WorldObjectState[] = [
       createWorldObject("stage-backdrop", HeroStageTemplateIds.backdropForest, {
         position: { x: 0, y: 0, z: -0.2 },
         scale: { x: 1, y: 1, z: 1 },
+        backdropTextureId: this.getHeroStageBackdropAssetId(),
       }),
     ];
 
@@ -1471,6 +1477,7 @@ function createWorldObject(
   options: {
     position: TransformState["position"];
     scale: TransformState["scale"];
+    backdropTextureId?: string;
     renderOrder?: number;
     replication?: WorldObjectState["replication"];
     animationId?: string;
@@ -1482,6 +1489,7 @@ function createWorldObject(
   return {
     objectId,
     templateId,
+    backdropTextureId: options.backdropTextureId,
     transform: {
       position: options.position,
       rotation: { x: 0, y: 0, z: 0, w: 1 },

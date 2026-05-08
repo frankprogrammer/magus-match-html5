@@ -64,7 +64,7 @@ describe("AssetManifest", () => {
       "2160x1000",
     );
     expect(AssetManifest[AssetIds.backdrops.castle].browserUrl).toBe(
-      "/assets/backdrops/backdrop-castle.png",
+      "/assets/backdrops/bg1.png",
     );
     expect(AssetManifest[AssetIds.backdrops.castle].runtimeSize).toBe(
       "cover 1080x500 hero stage",

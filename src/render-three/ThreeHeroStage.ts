@@ -219,7 +219,10 @@ export class ThreeHeroStage {
 
   private getOrCreateObject(objectState: WorldObjectState): THREE.Object3D {
     const existing = this.objectCache.get(objectState.objectId);
-    const templateVersion = this.factory.getTemplateVersion(objectState.templateId);
+    const templateVersion = this.factory.getTemplateVersion(
+      objectState.templateId,
+      objectState.backdropTextureId,
+    );
     if (
       existing != null &&
       this.objectCache.getTemplateId(objectState.objectId) === objectState.templateId &&
@@ -235,7 +238,7 @@ export class ThreeHeroStage {
       this.objectCache.delete(objectState.objectId);
     }
 
-    const object = this.factory.create(objectState.templateId);
+    const object = this.factory.create(objectState.templateId, objectState.backdropTextureId);
     this.objectCache.set(objectState.objectId, objectState.templateId, templateVersion, object);
     this.attachAnimationController(objectState.objectId, object);
     this.scene.add(object);

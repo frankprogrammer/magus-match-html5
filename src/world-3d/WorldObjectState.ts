@@ -6,6 +6,8 @@ export type WorldObjectReplication = 'sharedGameplay' | 'localCosmetic';
 export interface WorldObjectState {
   objectId: string;
   templateId: string;
+  /** Hero-stage backdrop texture asset id (e.g. `AssetIds.backdrops.castle`). */
+  backdropTextureId?: string;
   transform: TransformState;
   visible: boolean;
   lifetime: WorldObjectLifetime;

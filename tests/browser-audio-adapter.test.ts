@@ -22,14 +22,14 @@ describe('BrowserAudioAdapter', () => {
     expect(context.oscillatorStarts).toBe(0);
   });
 
-  it('uses synth fallback when no audio file is loaded', async () => {
+  it('does not play audio when no decoded buffer is available (no synth)', async () => {
     const context = fakeAudioContext();
     const adapter = new BrowserAudioAdapter({ contextFactory: () => context });
 
     await expect(
       adapter.play({ type: 'soundRequested', soundId: AssetIds.sounds.tileMatch }),
-    ).resolves.toBe(true);
-    expect(context.oscillatorStarts).toBe(1);
+    ).resolves.toBe(false);
+    expect(context.oscillatorStarts).toBe(0);
   });
 });
 

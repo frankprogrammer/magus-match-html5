@@ -614,6 +614,7 @@ function hudState(overrides: Partial<HudRenderState> = {}): HudRenderState {
     scoreText: '0',
     objectiveText: 'Moves 20',
     muted: false,
+    bgmMuted: false,
     ...overrides,
   };
 }
@@ -659,7 +660,13 @@ class FakeRenderer implements GameRenderer {
     this.calls.push(`rect:${color}:${x},${y},${width},${height}`);
   }
 
-  drawEllipse(color: string): void {
+  drawEllipse(
+    color: string,
+    _centerX: number,
+    _centerY: number,
+    _radiusX: number,
+    _radiusY: number,
+  ): void {
     this.calls.push(`ellipse:${color}`);
   }
 

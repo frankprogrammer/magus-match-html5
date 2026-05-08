@@ -244,6 +244,8 @@ describe('TrialRules', () => {
     expect(result.runtime.monsters[0]?.hitShakeDelaySec).toBeCloseTo(hitDelaySec);
     expect(result.runtime.monsters[0]?.hitShakeQueueSec).toHaveLength(result.runtime.projectiles.length);
     expect(result.runtime.monsters[0]?.hitShakeQueueSec?.[0]).toBeCloseTo(hitDelaySec);
+    expect(result.damageEvents[0]?.impactDelaySec).toBeCloseTo(hitDelaySec);
+    expect(result.damageEvents[0]?.castActivationDelaySec).toBeCloseTo(TILE_SWAP_RETARGET_MS / 1000);
     expect(result.runtime.monsters[0]?.hitShakeDurationSec).toBeCloseTo(0.18);
     expect(result.runtime.monsters[0]?.hitShakeRemainingSec).toBe(0);
     expect(result.runtime.monsters[0]?.healthBarHp).toBe(50);

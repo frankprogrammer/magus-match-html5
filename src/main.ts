@@ -18,19 +18,27 @@ import type { GameEvent } from './core/GameEvents';
 import type { HudRenderState } from './render-2d/HudRenderState';
 import type { ScreenRenderState } from './render-2d/ScreenRenderState';
 import {
+  getSoundManifestEntriesForBrowserPreload,
+  type SoundManifestEntry,
+} from './audio/SoundManifest';
+import {
   createLeaderboardEntry,
   insertLeaderboardEntry,
   type LeaderboardEntry,
 } from './run/Leaderboard';
 
-const ENABLE_BROWSER_AUDIO = false;
+const ENABLE_BROWSER_AUDIO = true;
 
 type SoundRequestEvent = Extract<GameEvent, { type: 'soundRequested' }>;
 interface BrowserAudio {
   setMuted(muted: boolean): void;
-  preload(): Promise<void>;
+  setBackgroundMusicMuted(bgmMuted: boolean): void;
+  preload(entries?: readonly SoundManifestEntry[]): Promise<void>;
   resume(): Promise<void>;
   play(event: SoundRequestEvent): Promise<boolean>;
+  syncTrialWalkLoops(activeMonsterIds: readonly string[]): void;
+  stopTrialWalkLoop(): void;
+  stopBackgroundMusic(): void;
 }
 
 const root = document.querySelector<HTMLDivElement>('#app');
@@ -90,7 +98,7 @@ void loadBrowserImages().then((images) => {
 if (ENABLE_BROWSER_AUDIO) {
   void import('./platform-browser/BrowserAudioAdapter').then(({ BrowserAudioAdapter }) => {
     audio = new BrowserAudioAdapter();
-    return audio.preload();
+    return audio.preload(getSoundManifestEntriesForBrowserPreload());
   });
 
   gameShell.addEventListener('pointerdown', () => {
@@ -142,8 +150,10 @@ function tick(timeMs: number): void {
   app.update(dtSec, input.drainCommands());
   const hudState = getBrowserHudState();
   const screenState = getBrowserScreenState();
-  audio?.setMuted(hudState.muted);
   handleEvents(app.drainEvents());
+  audio?.setMuted(hudState.muted);
+  audio?.setBackgroundMusicMuted(hudState.bgmMuted);
+  audio?.syncTrialWalkLoops(app.getTrialWalkingMonsterIds());
   renderHud(hudState);
   heroStage.render(app.getHeroWorldState(), dtSec);
   const matchEnergyTarget = heroStage.getMageParticleSourceLogicalPosition(LOGICAL_WIDTH, HERO_STAGE_HEIGHT) ?? undefined;
@@ -171,7 +181,11 @@ renderFrame(
 );
 window.addEventListener('resize', resizeLogicalStage);
 document.addEventListener('fullscreenchange', handleFullscreenChange);
-window.addEventListener('beforeunload', () => heroStage.dispose());
+window.addEventListener('beforeunload', () => {
+  heroStage.dispose();
+  audio?.stopTrialWalkLoop();
+  audio?.stopBackgroundMusic();
+});
 requestAnimationFrame(tick);
 
 function handleEvents(events: readonly GameEvent[]): void {

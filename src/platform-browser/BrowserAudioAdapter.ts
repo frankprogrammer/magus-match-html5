@@ -1,8 +1,8 @@
 import type { GameEvent } from '../core/GameEvents';
+import { AssetIds } from '../assets/AssetIds';
 import {
   getSoundManifestEntries,
   getSoundManifestEntry,
-  type FallbackSynthProfile,
   type SoundManifestEntry,
 } from '../audio/SoundManifest';
 import { resolveBrowserAssetUrl } from './BrowserAssetUrl';
@@ -17,13 +17,219 @@ export interface BrowserAudioAdapterOptions {
 export class BrowserAudioAdapter {
   private audioContext: AudioContext | null = null;
   private muted = false;
+  private bgmUserMuted = false;
   private readonly loadedBuffers = new Map<string, AudioBuffer>();
   private readonly missingSoundIds = new Set<string>();
+  private readonly walkLoopsByMonsterId = new Map<string, { source: AudioBufferSourceNode; gain: GainNode }>();
+  private readonly walkLoopStartPending = new Set<string>();
+  private backgroundLoop: { source: AudioBufferSourceNode; gain: GainNode } | null = null;
+  private backgroundMusicStartInFlight = false;
 
   constructor(private readonly options: BrowserAudioAdapterOptions = {}) {}
 
   setMuted(muted: boolean): void {
     this.muted = muted;
+    if (muted) {
+      this.stopTrialWalkLoop();
+      this.stopBackgroundMusic();
+    } else {
+      void this.ensureBackgroundMusicPlaying();
+    }
+  }
+
+  /** Mutes only the looping background music (SFX still follow {@link setMuted}). */
+  setBackgroundMusicMuted(bgmMuted: boolean): void {
+    if (this.bgmUserMuted === bgmMuted) {
+      return;
+    }
+    this.bgmUserMuted = bgmMuted;
+    if (bgmMuted) {
+      this.stopBackgroundMusic();
+    } else if (!this.muted) {
+      void this.ensureBackgroundMusicPlaying();
+    }
+  }
+
+  /**
+   * One looping Walking.ogg per walking Trial monster (separate nodes so footsteps do not collapse to one mix).
+   * Volume is half of manifest defaultVolume.
+   */
+  syncTrialWalkLoops(activeMonsterIds: readonly string[]): void {
+    if (this.muted) {
+      this.stopTrialWalkLoop();
+      return;
+    }
+
+    const desired = new Set(activeMonsterIds.filter((id) => id.length > 0));
+
+    for (const monsterId of [...this.walkLoopsByMonsterId.keys()]) {
+      if (!desired.has(monsterId)) {
+        this.disposeTrialWalkLoop(monsterId);
+      }
+    }
+
+    for (const monsterId of [...this.walkLoopStartPending]) {
+      if (!desired.has(monsterId)) {
+        this.walkLoopStartPending.delete(monsterId);
+      }
+    }
+
+    if (desired.size === 0) {
+      return;
+    }
+
+    const entry = getSoundManifestEntry(AssetIds.sounds.enemyWalkLoop);
+    const buffer = this.loadedBuffers.get(AssetIds.sounds.enemyWalkLoop);
+    if (entry == null || buffer == null) {
+      return;
+    }
+
+    const missingLoop = [...desired].filter((monsterId) => !this.walkLoopsByMonsterId.has(monsterId));
+    if (missingLoop.length === 0) {
+      return;
+    }
+
+    for (const monsterId of missingLoop) {
+      this.walkLoopStartPending.add(monsterId);
+    }
+
+    const jobMonsterIds = [...missingLoop];
+
+    void this.resume()
+      .then(() => {
+        if (this.muted) {
+          this.stopTrialWalkLoop();
+          return;
+        }
+
+        const ctx = this.getContext();
+        const buf = this.loadedBuffers.get(AssetIds.sounds.enemyWalkLoop);
+        if (ctx == null || buf == null || this.muted) {
+          return;
+        }
+
+        const baseVolume = clampVolume(entry.defaultVolume * 0.5);
+
+        for (const monsterId of jobMonsterIds) {
+          if (!this.walkLoopStartPending.has(monsterId)) {
+            continue;
+          }
+
+          if (this.walkLoopsByMonsterId.has(monsterId)) {
+            this.walkLoopStartPending.delete(monsterId);
+            continue;
+          }
+
+          const source = ctx.createBufferSource();
+          const gain = ctx.createGain();
+          source.buffer = buf;
+          source.loop = true;
+          source.playbackRate.value = walkPlaybackRateJitter(monsterId);
+          gain.gain.setValueAtTime(baseVolume, ctx.currentTime);
+          source.connect(gain);
+          gain.connect(ctx.destination);
+          const startWhen = Math.max(ctx.currentTime, 0);
+          source.start(startWhen);
+          this.walkLoopsByMonsterId.set(monsterId, { source, gain });
+          this.walkLoopStartPending.delete(monsterId);
+        }
+      })
+      .catch(() => undefined);
+  }
+
+  stopTrialWalkLoop(): void {
+    for (const monsterId of [...this.walkLoopsByMonsterId.keys()]) {
+      this.disposeTrialWalkLoop(monsterId);
+    }
+    this.walkLoopStartPending.clear();
+  }
+
+  stopBackgroundMusic(): void {
+    this.backgroundMusicStartInFlight = false;
+    if (this.backgroundLoop == null) {
+      return;
+    }
+
+    const loop = this.backgroundLoop;
+    this.backgroundLoop = null;
+
+    try {
+      loop.source.stop();
+    } catch {
+      // already stopped
+    }
+
+    try {
+      loop.source.disconnect();
+      loop.gain.disconnect();
+    } catch {
+      // ignore
+    }
+  }
+
+  private ensureBackgroundMusicPlaying(): void {
+    if (this.muted || this.bgmUserMuted || this.backgroundLoop != null || this.backgroundMusicStartInFlight) {
+      return;
+    }
+
+    const entry = getSoundManifestEntry(AssetIds.sounds.musicBackground);
+    const buffer = this.loadedBuffers.get(AssetIds.sounds.musicBackground);
+    if (entry == null || buffer == null) {
+      return;
+    }
+
+    this.backgroundMusicStartInFlight = true;
+    void this.resume()
+      .then(() => {
+        this.backgroundMusicStartInFlight = false;
+        if (this.muted || this.bgmUserMuted || this.backgroundLoop != null) {
+          return;
+        }
+
+        const ctx = this.getContext();
+        const buf = this.loadedBuffers.get(AssetIds.sounds.musicBackground);
+        if (ctx == null || buf == null || this.muted || this.bgmUserMuted) {
+          return;
+        }
+
+        const volume = clampVolume(entry.defaultVolume);
+        const source = ctx.createBufferSource();
+        const gain = ctx.createGain();
+        source.buffer = buf;
+        source.loop = true;
+        source.connect(gain);
+        gain.connect(ctx.destination);
+        const startWhen = Math.max(ctx.currentTime, 0);
+        gain.gain.setValueAtTime(volume, startWhen);
+        source.start(startWhen);
+        this.backgroundLoop = { source, gain };
+      })
+      .catch(() => {
+        this.backgroundMusicStartInFlight = false;
+      });
+  }
+
+  private disposeTrialWalkLoop(monsterId: string): void {
+    this.walkLoopStartPending.delete(monsterId);
+    const loop = this.walkLoopsByMonsterId.get(monsterId);
+    if (loop == null) {
+      return;
+    }
+
+    this.walkLoopsByMonsterId.delete(monsterId);
+
+    try {
+      loop.source.stop();
+    } catch {
+      // already stopped
+    }
+
+    try {
+      loop.source.disconnect();
+      loop.gain.disconnect();
+    } catch {
+      // ignore
+    }
   }
 
   async preload(entries: readonly SoundManifestEntry[] = getSoundManifestEntries()): Promise<void> {
@@ -58,15 +264,16 @@ export class BrowserAudioAdapter {
 
     const volume = clampVolume((event.volume ?? entry.defaultVolume) * (event.intensity ?? 1));
     const playbackRate = Math.max(0.25, event.playbackRate ?? 1);
+    const delaySec = Math.max(0, event.delaySec ?? 0);
+    const startWhen = context.currentTime + delaySec;
     const loadedBuffer = this.loadedBuffers.get(entry.id);
 
     if (loadedBuffer != null) {
-      playBuffer(context, loadedBuffer, volume, playbackRate);
+      playBuffer(context, loadedBuffer, volume, playbackRate, startWhen);
       return true;
     }
 
-    playSynthFallback(context, entry.fallback, volume, playbackRate);
-    return true;
+    return false;
   }
 
   private async loadEntry(entry: SoundManifestEntry): Promise<void> {
@@ -122,81 +329,32 @@ export class BrowserAudioAdapter {
   }
 }
 
+function walkPlaybackRateJitter(monsterId: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < monsterId.length; index += 1) {
+    hash ^= monsterId.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  const unit = (hash >>> 0) / 0xffffffff;
+  return 0.96 + unit * 0.08;
+}
+
 function playBuffer(
   context: AudioContext,
   buffer: AudioBuffer,
   volume: number,
   playbackRate: number,
+  when: number,
 ): void {
   const source = context.createBufferSource();
   const gain = context.createGain();
   source.buffer = buffer;
   source.playbackRate.value = playbackRate;
-  gain.gain.setValueAtTime(volume, context.currentTime);
   source.connect(gain);
   gain.connect(context.destination);
-  source.start();
-}
-
-function playSynthFallback(
-  context: AudioContext,
-  fallback: FallbackSynthProfile,
-  volume: number,
-  playbackRate: number,
-): void {
-  if (fallback.waveform === 'noise') {
-    playNoiseFallback(context, fallback, volume, playbackRate);
-    return;
-  }
-
-  const oscillator = context.createOscillator();
-  const gain = context.createGain();
-  const startTime = context.currentTime;
-  const durationSec = (fallback.durationMs / 1000) / playbackRate;
-  const attackSec = fallback.attackMs / 1000;
-  const releaseSec = fallback.releaseMs / 1000;
-  const stopTime = startTime + durationSec;
-
-  oscillator.type = fallback.waveform;
-  oscillator.frequency.setValueAtTime(fallback.frequencyHz * playbackRate, startTime);
-  shapeGain(gain.gain, startTime, stopTime, attackSec, releaseSec, volume);
-  oscillator.connect(gain);
-  gain.connect(context.destination);
-  oscillator.start(startTime);
-  oscillator.stop(stopTime);
-}
-
-function playNoiseFallback(
-  context: AudioContext,
-  fallback: FallbackSynthProfile,
-  volume: number,
-  playbackRate: number,
-): void {
-  const sampleRate = context.sampleRate;
-  const durationSec = (fallback.durationMs / 1000) / playbackRate;
-  const frameCount = Math.max(1, Math.floor(sampleRate * durationSec));
-  const buffer = context.createBuffer(1, frameCount, sampleRate);
-  const channel = buffer.getChannelData(0);
-
-  for (let index = 0; index < channel.length; index += 1) {
-    channel[index] = Math.random() * 2 - 1;
-  }
-
-  playBuffer(context, buffer, volume, playbackRate);
-}
-
-function shapeGain(
-  gain: AudioParam,
-  startTime: number,
-  stopTime: number,
-  attackSec: number,
-  releaseSec: number,
-  volume: number,
-): void {
-  gain.setValueAtTime(0.0001, startTime);
-  gain.exponentialRampToValueAtTime(Math.max(0.0001, volume), startTime + attackSec);
-  gain.setValueAtTime(Math.max(0.0001, volume), Math.max(startTime, stopTime - releaseSec));
-  gain.exponentialRampToValueAtTime(0.0001, stopTime);
+  const startWhen = Math.max(context.currentTime, when);
+  gain.gain.setValueAtTime(volume, startWhen);
+  source.start(startWhen);
 }
 
 function clampVolume(volume: number): number {

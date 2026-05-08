@@ -43,9 +43,29 @@ export const HUD_MUTE_TOGGLE_RECT: UiRect = {
   height: HUD_HEIGHT,
 };
 
+const HUD_BGM_TOGGLE_DIAMETER = 72;
+const HUD_BGM_RIGHT_MARGIN = 8;
+const HUD_BGM_TOP_MARGIN = 8;
+
+/** Circular BGM toggle at the logical screen top-right (not the HUD strip). */
+export const HUD_BGM_TOGGLE_RECT: UiRect = {
+  x: LOGICAL_WIDTH - HUD_BGM_RIGHT_MARGIN - HUD_BGM_TOGGLE_DIAMETER,
+  y: HUD_BGM_TOP_MARGIN,
+  width: HUD_BGM_TOGGLE_DIAMETER,
+  height: HUD_BGM_TOGGLE_DIAMETER,
+};
+
 export interface LogicalPoint {
   x: number;
   y: number;
+}
+
+export function pointInHudBgmToggle(point: LogicalPoint): boolean {
+  const rect = HUD_BGM_TOGGLE_RECT;
+  const centerX = rect.x + rect.width / 2;
+  const centerY = rect.y + rect.height / 2;
+  const radius = rect.width / 2;
+  return Math.hypot(point.x - centerX, point.y - centerY) <= radius;
 }
 
 export interface CellCoord {

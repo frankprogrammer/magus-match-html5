@@ -8,6 +8,7 @@ export interface ScreenButtonRects {
   play: UiRect;
   tryAgain: UiRect;
   mute: UiRect;
+  bgm: UiRect;
 }
 
 export interface ScreenRenderState {

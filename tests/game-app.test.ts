@@ -7,6 +7,7 @@ import { findStandardMatchHints } from '../src/board/BoardHints';
 import { findValidMoves, validateSwap } from '../src/board/BoardRules';
 import {
   GAME_OVER_TRY_AGAIN_BUTTON_RECT,
+  HUD_BGM_TOGGLE_RECT,
   HUD_MUTE_TOGGLE_RECT,
   TITLE_PLAY_BUTTON_RECT,
   type CellCoord,
@@ -239,7 +240,7 @@ describe('MagusMatchGameApp', () => {
     expect(app.getBoardRenderState().emptyCells?.length).toBeGreaterThan(0);
   });
 
-  it('emits Journey match, path, and mage audio through events', () => {
+  it('emits merge match sound on successful Journey swaps', () => {
     const app = new MagusMatchGameApp(555, { debugLevelType: 'JOURNEY' });
     const level = app.getCurrentLevelForDebug();
     if (level?.type !== 'JOURNEY') {
@@ -248,15 +249,14 @@ describe('MagusMatchGameApp', () => {
 
     tap(app, TITLE_PLAY_BUTTON_RECT);
     app.drainEvents();
-    const previousMageCell = app.getJourneyRuntimeForDebug()?.mageCell;
     app.update(0, [{ type: 'swap', from: level.journey.firstHint.from, to: level.journey.firstHint.to }]);
 
     const sounds = soundEvents(app.drainEvents()).map((event) => event.soundId);
-    expect(sounds).toContain(AssetIds.sounds.tileMatch);
-    expect(sounds).toContain(AssetIds.sounds.pathConvert);
-    if (JSON.stringify(previousMageCell) !== JSON.stringify(app.getJourneyRuntimeForDebug()?.mageCell)) {
-      expect(sounds).toContain(AssetIds.sounds.mageWalk);
-    }
+    expect(sounds).toEqual([
+      AssetIds.sounds.boardMove,
+      AssetIds.sounds.mergeMatch,
+      AssetIds.sounds.matchCoin,
+    ]);
   });
 
   it('emits Trial spell and monster audio through events', () => {
@@ -268,9 +268,12 @@ describe('MagusMatchGameApp', () => {
     app.update(0, [{ type: 'swap', from: firstMove.from, to: firstMove.to }]);
 
     const sounds = soundEvents(app.drainEvents()).map((event) => event.soundId);
-    expect(sounds).toContain(AssetIds.sounds.tileMatch);
+    expect(sounds).toContain(AssetIds.sounds.boardMove);
+    expect(sounds).toContain(AssetIds.sounds.mergeMatch);
+    expect(sounds).toContain(AssetIds.sounds.matchCoin);
+    expect(sounds.indexOf(AssetIds.sounds.boardMove)).toBeLessThan(sounds.indexOf(AssetIds.sounds.mergeMatch));
+    expect(sounds.indexOf(AssetIds.sounds.mergeMatch)).toBeLessThan(sounds.indexOf(AssetIds.sounds.matchCoin));
     expect(sounds.some((soundId) => soundId.endsWith('.whoosh'))).toBe(true);
-    expect(sounds.some((soundId) => soundId.endsWith('.impact'))).toBe(true);
     expect(
       sounds.includes(AssetIds.sounds.monsterDamage) || sounds.includes(AssetIds.sounds.monsterDefeat),
     ).toBe(true);
@@ -336,7 +339,11 @@ describe('MagusMatchGameApp', () => {
     expect(app.getRunStateForDebug().score).toBe(initialScore);
     expect(app.getLevelStatsForDebug()).toEqual(initialStats);
     expect(app.getHeroWorldState().activeProjectiles).toHaveLength(0);
-    expect(app.drainEvents().filter((event) => event.type === 'scoreChanged')).toHaveLength(0);
+    const eventsAfterInvalid = app.drainEvents();
+    expect(soundEvents(eventsAfterInvalid).map((event) => event.soundId)).toContain(
+      AssetIds.sounds.boardMoveBack,
+    );
+    expect(eventsAfterInvalid.filter((event) => event.type === 'scoreChanged')).toHaveLength(0);
   });
 
   it('animates the exact level 4 top-row invalid swap regression without gameplay changes', () => {
@@ -355,6 +362,9 @@ describe('MagusMatchGameApp', () => {
     expect(app.getRunStateForDebug().score).toBe(initialScore);
     expect(app.getLevelStatsForDebug()).toEqual(initialStats);
     expect(app.getHeroWorldState().activeProjectiles).toHaveLength(0);
+    expect(soundEvents(app.drainEvents()).map((event) => event.soundId)).toContain(
+      AssetIds.sounds.boardMoveBack,
+    );
   });
 
   it('accepts a valid Trial swap during an active invalid-swap bounce-back', () => {
@@ -415,6 +425,18 @@ describe('MagusMatchGameApp', () => {
     expect(app.getBoardRenderState().animationTrace?.kind).toBe('levelIntro');
     expect(app.getBoardRenderState().animationTrace?.cascadeSteps[0].refillTiles.length).toBe(64);
     expect(app.drainEvents()).toEqual([
+      {
+        type: 'soundRequested',
+        soundId: AssetIds.sounds.uiClick,
+        category: 'ui',
+        volume: 0.52,
+      },
+      {
+        type: 'soundRequested',
+        soundId: AssetIds.sounds.levelStart,
+        category: 'level',
+        volume: 0.35,
+      },
       { type: 'levelStarted', levelNumber: 1, levelType: 'TRIAL', seed: 777 },
     ]);
   });
@@ -457,7 +479,11 @@ describe('MagusMatchGameApp', () => {
     expect(app.getHudState().phase).toBe('GAME_OVER');
     const events = app.drainEvents();
     expect(events.filter((event) => event.type === 'runEnded')).toHaveLength(1);
-    expect(soundEvents(events).map((event) => event.soundId)).toContain(AssetIds.sounds.runEnd);
+    const sounds = soundEvents(events);
+    expect(sounds).toHaveLength(8);
+    expect(sounds.filter((event) => event.soundId === AssetIds.sounds.levelStart)).toHaveLength(2);
+    expect(sounds.filter((event) => event.soundId === AssetIds.sounds.playerDamage)).toHaveLength(3);
+    expect(sounds.filter((event) => event.soundId === AssetIds.sounds.playerDefeat)).toHaveLength(3);
   });
 
   it('keeps the debug seed when Try Again is tapped after Game Over', () => {
@@ -481,6 +507,9 @@ describe('MagusMatchGameApp', () => {
 
     expect(app.getHudState().muted).toBe(true);
     expect(app.getScreenState().muted).toBe(true);
+    expect(
+      soundEvents(app.drainEvents()).some((event) => event.soundId === AssetIds.sounds.uiClick),
+    ).toBe(true);
   });
 
   it('does not toggle mute from the old HUD tap area', () => {
@@ -489,6 +518,32 @@ describe('MagusMatchGameApp', () => {
     tap(app, HUD_MUTE_TOGGLE_RECT);
 
     expect(app.getHudState().muted).toBe(false);
+    expect(soundEvents(app.drainEvents())).toHaveLength(0);
+  });
+
+  it('toggles mute when tapping HUD mute during play with ui click', () => {
+    const app = new MagusMatchGameApp(1003);
+    tap(app, TITLE_PLAY_BUTTON_RECT);
+    app.drainEvents();
+
+    tap(app, HUD_MUTE_TOGGLE_RECT);
+
+    expect(app.getHudState().muted).toBe(true);
+    expect(soundEvents(app.drainEvents()).map((event) => event.soundId)).toContain(AssetIds.sounds.uiClick);
+  });
+
+  it('toggles bgm-only mute when tapping HUD BGM oval during play', () => {
+    const app = new MagusMatchGameApp(1004);
+    tap(app, TITLE_PLAY_BUTTON_RECT);
+    app.drainEvents();
+
+    expect(app.getHudState().bgmMuted).toBe(false);
+    tap(app, HUD_BGM_TOGGLE_RECT);
+
+    expect(app.getHudState().bgmMuted).toBe(true);
+    expect(
+      soundEvents(app.drainEvents()).some((event) => event.soundId === AssetIds.sounds.uiClick),
+    ).toBe(true);
   });
 
   it('builds Game Over screen state with leaderboard data and controls', () => {
@@ -507,6 +562,7 @@ describe('MagusMatchGameApp', () => {
     expect(screen.highScore).toBe(500);
     expect(screen.highlightedRank).toBe(1);
     expect(screen.buttonRects.tryAgain).toEqual(GAME_OVER_TRY_AGAIN_BUTTON_RECT);
+    expect(screen.buttonRects.bgm).toEqual(HUD_BGM_TOGGLE_RECT);
   });
 });
 

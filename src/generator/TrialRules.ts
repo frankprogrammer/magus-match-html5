@@ -114,6 +114,10 @@ export interface TrialDamageEvent {
   schoolId: SpellSchoolId;
   damage: number;
   defeated: boolean;
+  /** Seconds from swap resolution until projectile hits (matches shake / HP bar). */
+  impactDelaySec: number;
+  /** Seconds until cast / match attack should read visually (attack SFX start). */
+  castActivationDelaySec: number;
 }
 
 export interface TrialSwapResult {
@@ -475,6 +479,8 @@ function applyDamageSources(
         schoolId: source.schoolId,
         damage,
         defeated,
+        impactDelaySec,
+        castActivationDelaySec: source.castActivationDelaySec,
       });
     }
   }

@@ -7,5 +7,7 @@ export interface HudRenderState {
   scoreText: string;
   objectiveText: string;
   muted: boolean;
+  /** When true, background music is off (SFX still follow master mute). */
+  bgmMuted: boolean;
   debugText?: string;
 }

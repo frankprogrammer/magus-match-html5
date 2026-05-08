@@ -1,5 +1,5 @@
 import { AssetIds } from '../assets/AssetIds';
-import { BOARD_RECT, HERO_STAGE_HEIGHT, HUD_HEIGHT, LOGICAL_HEIGHT, LOGICAL_WIDTH } from '../core/Layout';
+import { BOARD_RECT, HERO_STAGE_HEIGHT, HUD_BGM_TOGGLE_RECT, HUD_HEIGHT, LOGICAL_HEIGHT, LOGICAL_WIDTH } from '../core/Layout';
 import type { CellCoord } from '../core/Layout';
 import type { TileType } from '../board/TileTypes';
 import { MATCH_HINT_BOUNCE_DISTANCE_PX } from '../data/tuning';
@@ -50,6 +50,7 @@ export function renderFrame(
   if (screenState != null) {
     drawScreenOverlay(renderer, screenState);
   }
+  drawHudBgmToggle(renderer, hudState);
 }
 
 export function buildBoardCellVisuals(boardState: BoardRenderState, elapsedSec: number): BoardCellVisual[] {
@@ -175,6 +176,33 @@ function drawHud(renderer: GameRenderer, hudState: HudRenderState): void {
     color: HUD_TEXT_COLOR,
     align: 'right',
   });
+}
+
+function drawHudBgmToggle(renderer: GameRenderer, hudState: HudRenderState): void {
+  const rect = HUD_BGM_TOGGLE_RECT;
+  const centerX = rect.x + rect.width / 2;
+  const centerY = rect.y + rect.height / 2;
+  const radius = rect.width / 2;
+
+  if (hudState.bgmMuted) {
+    renderer.drawEllipse('#5a5468', centerX, centerY, radius, radius);
+    renderer.drawEllipse('#2c2638', centerX, centerY, radius - 7, radius - 7);
+    renderer.drawText('♪', rect.x, rect.y, rect.width, rect.height, {
+      fontSize: 36,
+      fontWeight: 'bold',
+      color: 'rgba(200, 192, 220, 0.42)',
+      align: 'center',
+    });
+  } else {
+    renderer.drawEllipse('#d4b96a', centerX, centerY, radius, radius);
+    renderer.drawEllipse('#3d2658', centerX, centerY, radius - 8, radius - 8);
+    renderer.drawText('♪', rect.x, rect.y, rect.width, rect.height, {
+      fontSize: 40,
+      fontWeight: 'bold',
+      color: '#f5e9c9',
+      align: 'center',
+    });
+  }
 }
 
 function drawBoard(renderer: GameRenderer, boardState: BoardRenderState, elapsedSec: number): void {

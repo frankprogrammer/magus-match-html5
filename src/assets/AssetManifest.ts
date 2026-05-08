@@ -469,7 +469,7 @@ function audio(entry: SoundManifestEntry): AssetManifestEntry {
     browserUrl: entry.browserUrl,
     futureMhsPath: entry.futureMhsPath,
     sourceFormat: "mp3",
-    runtimeSize: "optional browser audio file with WebAudio synth fallback",
+    runtimeSize: "browser WAV/MP3 asset; no generated fallback in BrowserAudioAdapter",
     unitScale: 1,
     pivot: "center",
     collision: "none",

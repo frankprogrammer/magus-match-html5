@@ -11,6 +11,8 @@ export type GameEvent =
       volume?: number;
       playbackRate?: number;
       category?: SoundEventCategory;
+      /** Play this many seconds after the event is handled (spell impact sync). */
+      delaySec?: number;
     }
   | { type: 'scoreChanged'; score: number }
   | { type: 'levelStarted'; levelNumber: number; levelType: LevelType; seed: number }

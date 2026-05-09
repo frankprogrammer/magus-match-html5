@@ -1,8 +1,16 @@
 import './styles.css';
 import { MagusMatchGameApp } from './core/GameApp';
-import { HERO_STAGE_HEIGHT, LOGICAL_HEIGHT, LOGICAL_WIDTH } from './core/Layout';
+import {
+  GAME_OVER_TRY_AGAIN_BUTTON_RECT,
+  HERO_STAGE_HEIGHT,
+  LOGICAL_HEIGHT,
+  LOGICAL_WIDTH,
+  TITLE_PLAY_BUTTON_RECT,
+  pointInRect,
+} from './core/Layout';
 import {
   BrowserInputAdapter,
+  clientToLogicalPoint,
   parseDebugLevelNumber,
   parseDebugLevelType,
   parseDebugSeed,
@@ -88,6 +96,7 @@ let audio: BrowserAudio | null = null;
 const leaderboardStore = new LocalLeaderboardStore();
 let leaderboardRows: readonly LeaderboardEntry[] = leaderboardStore.load();
 let highlightedRank: number | null = null;
+let overlayPrimaryButtonPressed = false;
 
 const input = new BrowserInputAdapter(gameShell);
 let fullscreenRequestAttempted = false;
@@ -108,6 +117,26 @@ if (ENABLE_BROWSER_AUDIO) {
 }
 
 gameShell.addEventListener('pointerdown', requestGameFullscreen, { passive: true });
+
+function updateOverlayPrimaryButtonPressed(event: PointerEvent, down: boolean): void {
+  if (!down) {
+    overlayPrimaryButtonPressed = false;
+    return;
+  }
+  const logical = clientToLogicalPoint(event, gameShell.getBoundingClientRect());
+  const phase = app.getScreenState(leaderboardRows, highlightedRank).phase;
+  if (phase === 'TITLE' && pointInRect(logical, TITLE_PLAY_BUTTON_RECT)) {
+    overlayPrimaryButtonPressed = true;
+    return;
+  }
+  if (phase === 'GAME_OVER' && pointInRect(logical, GAME_OVER_TRY_AGAIN_BUTTON_RECT)) {
+    overlayPrimaryButtonPressed = true;
+  }
+}
+
+gameShell.addEventListener('pointerdown', (e) => updateOverlayPrimaryButtonPressed(e, true), { passive: true });
+gameShell.addEventListener('pointerup', (e) => updateOverlayPrimaryButtonPressed(e, false), { passive: true });
+gameShell.addEventListener('pointercancel', (e) => updateOverlayPrimaryButtonPressed(e, false), { passive: true });
 
 function resizeLogicalStage(): void {
   const rect = gameShell.getBoundingClientRect();
@@ -248,7 +277,8 @@ function getBrowserHudState(): HudRenderState {
 
 function getBrowserScreenState(): ScreenRenderState {
   const screen = app.getScreenState(leaderboardRows, highlightedRank);
-  return ENABLE_BROWSER_AUDIO ? screen : { ...screen, muted: true };
+  const base = ENABLE_BROWSER_AUDIO ? screen : { ...screen, muted: true };
+  return { ...base, overlayPrimaryButtonPressed };
 }
 
 function mustQuery(parent: ParentNode, selector: string): HTMLElement {

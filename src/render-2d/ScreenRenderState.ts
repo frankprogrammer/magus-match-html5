@@ -21,4 +21,6 @@ export interface ScreenRenderState {
   buttonRects: ScreenButtonRects;
   muted: boolean;
   transitionText: string | null;
+  /** Browser shell: true while pointer is down on title Play or game-over Try Again. */
+  overlayPrimaryButtonPressed?: boolean;
 }

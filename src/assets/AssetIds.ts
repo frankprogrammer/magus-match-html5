@@ -50,6 +50,8 @@ export const AssetIds = {
     trialFillBarBg: 'ui.trialFillBarBg',
     trialFillBarFill: 'ui.trialFillBarFill',
     trialFillBarKoboldIcon: 'ui.trialFillBarKoboldIcon',
+    primaryButton: 'ui.primaryButton',
+    primaryButtonPressed: 'ui.primaryButtonPressed',
   },
   materials: {
     mageTexture: 'material.mageTexture',

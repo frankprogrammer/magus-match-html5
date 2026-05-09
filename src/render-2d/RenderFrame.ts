@@ -38,13 +38,14 @@ import {
   TRIAL_FILLBAR_INNER_WIDTH_FRAC,
   gameOverTitleBannerRect,
   hudObjectiveTextLayoutLegacy,
+  type UiRect,
 } from '../core/Layout';
 import type { CellCoord } from '../core/Layout';
 import type { TileType } from '../board/TileTypes';
 import { MATCH_HINT_BOUNCE_DISTANCE_PX } from '../data/tuning';
 import type { HudRenderState } from './HudRenderState';
 import type { BoardRenderState } from './BoardRenderState';
-import type { GameRenderer } from './GameRenderer';
+import type { DrawImageRef, GameRenderer } from './GameRenderer';
 import type { ScreenRenderState } from './ScreenRenderState';
 
 const HUD_TEXT_COLOR = '#ffffff';
@@ -645,7 +646,7 @@ function drawTitleScreen(renderer: GameRenderer, screenState: ScreenRenderState)
     color: '#c8a24b',
     align: 'center',
   });
-  drawButton(renderer, screenState.buttonRects.play, 'PLAY');
+  drawButton(renderer, screenState.buttonRects.play, 'PLAY', screenState.overlayPrimaryButtonPressed === true);
   drawLeaderboardPreview(renderer, screenState, 1260, 5);
 }
 
@@ -684,7 +685,12 @@ function drawGameOverScreen(renderer: GameRenderer, screenState: ScreenRenderSta
     align: 'center',
   });
   drawLeaderboardPreview(renderer, screenState, 520, 10);
-  drawButton(renderer, screenState.buttonRects.tryAgain, 'TRY AGAIN');
+  drawButton(
+    renderer,
+    screenState.buttonRects.tryAgain,
+    'TRY AGAIN',
+    screenState.overlayPrimaryButtonPressed === true,
+  );
 }
 
 function drawTransitionOverlay(renderer: GameRenderer, text: string): void {
@@ -699,11 +705,19 @@ function drawTransitionOverlay(renderer: GameRenderer, text: string): void {
 
 function drawButton(
   renderer: GameRenderer,
-  rect: { x: number; y: number; width: number; height: number },
+  rect: UiRect,
   label: string,
+  pressed: boolean,
 ): void {
-  renderer.drawRect('#c8a24b', rect.x, rect.y, rect.width, rect.height);
-  renderer.drawRect('#4b2e83', rect.x + 8, rect.y + 8, rect.width - 16, rect.height - 16);
+  const background: DrawImageRef = {
+    id: pressed ? AssetIds.ui.primaryButtonPressed : AssetIds.ui.primaryButton,
+  };
+  if (renderer.hasImage(background)) {
+    renderer.drawImage(background, rect.x, rect.y, rect.width, rect.height);
+  } else {
+    renderer.drawRect('#c8a24b', rect.x, rect.y, rect.width, rect.height);
+    renderer.drawRect('#4b2e83', rect.x + 8, rect.y + 8, rect.width - 16, rect.height - 16);
+  }
   renderer.drawText(label, rect.x, rect.y, rect.width, rect.height, {
     fontSize: 44,
     fontWeight: 'bold',

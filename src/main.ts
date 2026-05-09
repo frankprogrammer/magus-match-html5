@@ -69,6 +69,9 @@ root.innerHTML = `
       <div class="debug-panel" data-debug></div>
     </section>
   </main>
+  <button class="launch-overlay" data-launch-overlay type="button" aria-label="Start Magus Match">
+    <img class="launch-overlay__image" src="/assets/ui/launch.png" alt="" draggable="false" />
+  </button>
 `;
 
 const shell = root.querySelector<HTMLElement>('.game-shell');
@@ -80,6 +83,7 @@ if (shell == null || logicalStage == null) {
 
 const gameShell = shell;
 const stageElement = logicalStage;
+const launchOverlay = root.querySelector<HTMLButtonElement>('[data-launch-overlay]');
 const debugPanel = mustQuery(root, '[data-debug]');
 const canvas = mustQuery(root, '.game-canvas') as HTMLCanvasElement;
 const heroStageElement = mustQuery(root, '[data-hero-stage]');
@@ -100,6 +104,7 @@ let overlayPrimaryButtonPressed = false;
 
 const input = new BrowserInputAdapter(gameShell);
 let fullscreenRequestAttempted = false;
+let launchOverlayDismissed = false;
 
 void loadBrowserImages().then((images) => {
   renderer.setImages(images);
@@ -117,6 +122,20 @@ if (ENABLE_BROWSER_AUDIO) {
 }
 
 gameShell.addEventListener('pointerdown', requestGameFullscreen, { passive: true });
+
+launchOverlay?.addEventListener('pointerdown', (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  if (launchOverlayDismissed) {
+    return;
+  }
+
+  launchOverlayDismissed = true;
+  launchOverlay.remove();
+  void audio?.resume();
+  requestGameFullscreen();
+  app.startFromTitle();
+});
 
 function updateOverlayPrimaryButtonPressed(event: PointerEvent, down: boolean): void {
   if (!down) {

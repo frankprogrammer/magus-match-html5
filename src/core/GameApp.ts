@@ -104,6 +104,7 @@ export interface GameApp {
     highlightedRank?: number | null,
   ): ScreenRenderState;
   drainEvents(): GameEvent[];
+  startFromTitle(): boolean;
   reset(seed?: number): void;
 }
 
@@ -321,6 +322,16 @@ export class MagusMatchGameApp implements GameApp {
     return drained;
   }
 
+  startFromTitle(): boolean {
+    if (this.phase !== "TITLE") {
+      return false;
+    }
+
+    this.emitUiClick();
+    this.startPreparedLevel();
+    return true;
+  }
+
   reset(seed = createRandomSeed()): void {
     this.rng = new SeededRng(seed);
     this.run = createInitialRunState(seed);
@@ -535,8 +546,7 @@ export class MagusMatchGameApp implements GameApp {
     }
 
     if (this.phase === "TITLE" && pointInRect(point, TITLE_PLAY_BUTTON_RECT)) {
-      this.emitUiClick();
-      this.startPreparedLevel();
+      this.startFromTitle();
       return;
     }
 

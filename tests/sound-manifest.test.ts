@@ -25,15 +25,15 @@ describe('SoundManifest', () => {
     );
   });
 
-  it('URL-encodes Attack_Freeze.wav for ice spell whoosh', () => {
+  it('URL-encodes Attack_Freeze.ogg for ice spell whoosh', () => {
     expect(SoundManifest[AssetIds.sounds.iceWhoosh].browserUrl).toBe(
-      `/assets/audio/${encodeURIComponent('Attack_Freeze.wav')}`,
+      `/assets/audio/${encodeURIComponent('Attack_Freeze.ogg')}`,
     );
   });
 
-  it('URL-encodes Die_Enemy.wav for monster defeat', () => {
+  it('URL-encodes Die_Enemy.ogg for monster defeat', () => {
     expect(SoundManifest[AssetIds.sounds.monsterDefeat].browserUrl).toBe(
-      `/assets/audio/${encodeURIComponent('Die_Enemy.wav')}`,
+      `/assets/audio/${encodeURIComponent('Die_Enemy.ogg')}`,
     );
   });
 
@@ -49,15 +49,15 @@ describe('SoundManifest', () => {
     );
   });
 
-  it('URL-encodes Die_Player.wav for Trial mage defeat', () => {
+  it('URL-encodes Die_Player.ogg for Trial mage defeat', () => {
     expect(SoundManifest[AssetIds.sounds.playerDefeat].browserUrl).toBe(
-      `/assets/audio/${encodeURIComponent('Die_Player.wav')}`,
+      `/assets/audio/${encodeURIComponent('Die_Player.ogg')}`,
     );
   });
 
-  it('URL-encodes Background.wav for looping BGM', () => {
+  it('URL-encodes Background.ogg for looping BGM', () => {
     expect(SoundManifest[AssetIds.sounds.musicBackground].browserUrl).toBe(
-      `/assets/audio/${encodeURIComponent('Background.wav')}`,
+      `/assets/audio/${encodeURIComponent('Background.ogg')}`,
     );
   });
 
@@ -73,21 +73,21 @@ describe('SoundManifest', () => {
     );
   });
 
-  it('URL-encodes Coin.wav for match score pickup', () => {
+  it('URL-encodes Coin.ogg for match score pickup', () => {
     expect(SoundManifest[AssetIds.sounds.matchCoin].browserUrl).toBe(
-      `/assets/audio/${encodeURIComponent('Coin.wav')}`,
+      `/assets/audio/${encodeURIComponent('Coin.ogg')}`,
     );
   });
 
-  it('URL-encodes Activarion_Bomb.wav for TNT activation', () => {
+  it('URL-encodes Activarion_Bomb.ogg for TNT activation', () => {
     expect(SoundManifest[AssetIds.sounds.powerupBombActivate].browserUrl).toBe(
-      `/assets/audio/${encodeURIComponent('Activarion_Bomb.wav')}`,
+      `/assets/audio/${encodeURIComponent('Activarion_Bomb.ogg')}`,
     );
   });
 
-  it('URL-encodes Activation_Star.wav for rocket activation', () => {
+  it('URL-encodes Activation_Star.ogg for rocket activation', () => {
     expect(SoundManifest[AssetIds.sounds.powerupRocketActivate].browserUrl).toBe(
-      `/assets/audio/${encodeURIComponent('Activation_Star.wav')}`,
+      `/assets/audio/${encodeURIComponent('Activation_Star.ogg')}`,
     );
   });
 

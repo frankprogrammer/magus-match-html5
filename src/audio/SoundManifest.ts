@@ -258,6 +258,24 @@ export const SoundManifest = {
     synth('sawtooth', 680, 150),
     'Power-up creation sparkle.',
   ),
+  [AssetIds.sounds.powerupBombActivate]: spellAttackWhoosh(
+    AssetIds.sounds.powerupBombActivate,
+    'Activarion_Bomb.wav',
+    'match',
+    'global',
+    0.52,
+    synth('sawtooth', 180, 200),
+    'TNT tap or swap activation; Activarion_Bomb.wav in public/assets/audio.',
+  ),
+  [AssetIds.sounds.powerupRocketActivate]: spellAttackWhoosh(
+    AssetIds.sounds.powerupRocketActivate,
+    'Activation_Star.wav',
+    'match',
+    'global',
+    0.52,
+    synth('triangle', 880, 140),
+    'Rocket row/column tap or swap activation; Activation_Star.wav in public/assets/audio.',
+  ),
   [AssetIds.sounds.victorySting]: sound(
     AssetIds.sounds.victorySting,
     'victory-sting',
@@ -276,14 +294,14 @@ export const SoundManifest = {
     synth('sawtooth', 260, 220),
     'Unseen abductor cage-yank whoosh during victory staging.',
   ),
-  [AssetIds.sounds.runEnd]: sound(
+  [AssetIds.sounds.runEnd]: spellAttackWhoosh(
     AssetIds.sounds.runEnd,
-    'run-end',
+    'Game_Over.wav',
     'run',
     'global',
-    0.6,
+    0.58,
     synth('sine', 220, 360),
-    'Run-end fanfare/downbeat for Game Over.',
+    'Game Over sting; Game_Over.wav in public/assets/audio.',
   ),
   [AssetIds.sounds.musicBackground]: spellAttackWhoosh(
     AssetIds.sounds.musicBackground,
@@ -323,6 +341,9 @@ export const BROWSER_PRELOAD_SOUND_IDS: readonly string[] = [
   AssetIds.sounds.monsterDefeat,
   AssetIds.sounds.playerDamage,
   AssetIds.sounds.playerDefeat,
+  AssetIds.sounds.powerupBombActivate,
+  AssetIds.sounds.powerupRocketActivate,
+  AssetIds.sounds.runEnd,
   AssetIds.sounds.musicBackground,
 ];
 

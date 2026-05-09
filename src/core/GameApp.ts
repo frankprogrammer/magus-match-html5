@@ -20,6 +20,7 @@ import {
   cloneBoard,
   createEmptyBoard,
   getAllPlayableCoords,
+  getCell,
   getVoidCoords,
 } from "../board/Board";
 import {
@@ -30,6 +31,8 @@ import {
 import { getBoardAnimationTraceDurationMs } from "../board/BoardAnimationTiming";
 import { findStandardMatchHints } from "../board/BoardHints";
 import type { TileType } from "../board/TileTypes";
+import { isPowerUpTileType } from "../board/TileTypes";
+import { isTapActivatablePowerUpTileType } from "../board/PowerUps";
 import { AssetIds } from "../assets/AssetIds";
 import { heroStageBackdropAssetIdForLevel } from "./HeroStageBackdrop";
 import type { GeneratedLevel } from "../generator/LevelGenerator";
@@ -624,6 +627,10 @@ export class MagusMatchGameApp implements GameApp {
       this.phase = "GAME_OVER";
       this.pendingLevelResult = null;
       this.transitionTimerSec = 0;
+      this.requestSound(AssetIds.sounds.runEnd, {
+        category: "run",
+        volume: 0.58,
+      });
       this.events.push({
         type: "runEnded",
         finalScore: this.run.score,
@@ -655,6 +662,7 @@ export class MagusMatchGameApp implements GameApp {
       return;
     }
 
+    const journeySwapPowerUpType = this.peekJourneySwapPowerUpType(from, to);
     const result = processJourneySwap(
       this.board,
       this.journeyRuntime,
@@ -685,6 +693,7 @@ export class MagusMatchGameApp implements GameApp {
     this.levelMatchCount += result.scoringStats.matchCount;
     this.levelValidSwapCount += result.scoringStats.validSwapCount;
     this.captureBoardAnimationTrace(result.animationTrace);
+    this.emitPowerUpActivationSound(journeySwapPowerUpType);
     this.emitMatchAudioAndJuice(result.scoringStats, to);
     this.emitJourneyAudioAndJuice(result, previousMageCell, to);
     const scoreDelta = result.scoreDelta + scoreSwapStats(result.scoringStats);
@@ -721,12 +730,14 @@ export class MagusMatchGameApp implements GameApp {
       return;
     }
 
+    const journeyTapPowerUpType = getCell(this.board, origin)?.tile?.type;
     const previousMageCell = this.journeyRuntime.mageCell;
     this.board = result.board;
     this.journeyRuntime = result.runtime;
     this.levelMatchCount += result.scoringStats.matchCount;
     this.levelValidSwapCount += result.scoringStats.validSwapCount;
     this.captureBoardAnimationTrace(result.animationTrace);
+    this.emitPowerUpActivationSound(journeyTapPowerUpType);
     this.emitMatchAudioAndJuice(result.scoringStats, origin);
     this.emitJourneyAudioAndJuice(result, previousMageCell, origin);
     const scoreDelta = result.scoreDelta + scoreSwapStats(result.scoringStats);
@@ -748,6 +759,7 @@ export class MagusMatchGameApp implements GameApp {
     }
 
     const previousTrialResult = this.trialRuntime.result;
+    const trialSwapPowerUpType = this.peekTrialSwapPowerUpType(from, to);
     const result = processTrialSwap(
       this.board,
       this.trialRuntime,
@@ -777,6 +789,7 @@ export class MagusMatchGameApp implements GameApp {
     this.levelMatchCount += result.scoringStats.matchCount;
     this.levelValidSwapCount += result.scoringStats.validSwapCount;
     this.captureBoardAnimationTrace(result.animationTrace);
+    this.emitPowerUpActivationSound(trialSwapPowerUpType);
     this.emitMatchAudioAndJuice(result.scoringStats, to);
     this.emitTrialAudioAndJuice(result.damageEvents, to);
     const scoreDelta = result.scoreDelta + scoreSwapStats(result.scoringStats);
@@ -814,12 +827,14 @@ export class MagusMatchGameApp implements GameApp {
       return;
     }
 
+    const trialTapPowerUpType = getCell(this.board, origin)?.tile?.type;
     this.board = result.board;
     this.trialRuntime = result.runtime;
     this.maybeEmitTrialPlayerDefeatSfx(previousTrialResult, result.runtime.result);
     this.levelMatchCount += result.scoringStats.matchCount;
     this.levelValidSwapCount += result.scoringStats.validSwapCount;
     this.captureBoardAnimationTrace(result.animationTrace);
+    this.emitPowerUpActivationSound(trialTapPowerUpType);
     this.emitMatchAudioAndJuice(result.scoringStats, origin);
     this.emitTrialAudioAndJuice(result.damageEvents, origin);
     const scoreDelta = result.scoreDelta + scoreSwapStats(result.scoringStats);
@@ -879,6 +894,46 @@ export class MagusMatchGameApp implements GameApp {
 
   private hasLatestBoardAnimationFinished(): boolean {
     return this.animationClockSec >= this.latestBoardAnimationEndsAtSec;
+  }
+
+  private peekJourneySwapPowerUpType(from: CellCoord, to: CellCoord): TileType | null {
+    const fromType = getCell(this.board, from)?.tile?.type;
+    const toType = getCell(this.board, to)?.tile?.type;
+    if (isTapActivatablePowerUpTileType(fromType)) {
+      return fromType;
+    }
+    if (isTapActivatablePowerUpTileType(toType)) {
+      return toType;
+    }
+
+    return null;
+  }
+
+  private peekTrialSwapPowerUpType(from: CellCoord, to: CellCoord): TileType | null {
+    const fromTile = getCell(this.board, from)?.tile;
+    const toTile = getCell(this.board, to)?.tile;
+    if (fromTile != null && isPowerUpTileType(fromTile.type)) {
+      return fromTile.type;
+    }
+    if (toTile != null && isPowerUpTileType(toTile.type)) {
+      return toTile.type;
+    }
+
+    return null;
+  }
+
+  private emitPowerUpActivationSound(activatedType: TileType | null | undefined): void {
+    if (activatedType === "TNT") {
+      this.requestSound(AssetIds.sounds.powerupBombActivate, {
+        category: "match",
+        volume: 0.52,
+      });
+    } else if (activatedType === "ROCKET_H" || activatedType === "ROCKET_V") {
+      this.requestSound(AssetIds.sounds.powerupRocketActivate, {
+        category: "match",
+        volume: 0.52,
+      });
+    }
   }
 
   private requestSound(

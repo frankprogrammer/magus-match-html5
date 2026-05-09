@@ -85,6 +85,8 @@ export const AssetIds = {
     playerDamage: 'sound.playerDamage',
     playerDefeat: 'sound.playerDefeat',
     powerupCreate: 'sound.powerupCreate',
+    powerupBombActivate: 'sound.powerup.bombActivate',
+    powerupRocketActivate: 'sound.powerup.rocketActivate',
     victorySting: 'sound.victorySting',
     cageYankWhoosh: 'sound.cageYankWhoosh',
     runEnd: 'sound.runEnd',

@@ -480,10 +480,11 @@ describe('MagusMatchGameApp', () => {
     const events = app.drainEvents();
     expect(events.filter((event) => event.type === 'runEnded')).toHaveLength(1);
     const sounds = soundEvents(events);
-    expect(sounds).toHaveLength(8);
+    expect(sounds).toHaveLength(9);
     expect(sounds.filter((event) => event.soundId === AssetIds.sounds.levelStart)).toHaveLength(2);
     expect(sounds.filter((event) => event.soundId === AssetIds.sounds.playerDamage)).toHaveLength(3);
     expect(sounds.filter((event) => event.soundId === AssetIds.sounds.playerDefeat)).toHaveLength(3);
+    expect(sounds.filter((event) => event.soundId === AssetIds.sounds.runEnd)).toHaveLength(1);
   });
 
   it('keeps the debug seed when Try Again is tapped after Game Over', () => {

@@ -79,6 +79,24 @@ describe('SoundManifest', () => {
     );
   });
 
+  it('URL-encodes Activarion_Bomb.wav for TNT activation', () => {
+    expect(SoundManifest[AssetIds.sounds.powerupBombActivate].browserUrl).toBe(
+      `/assets/audio/${encodeURIComponent('Activarion_Bomb.wav')}`,
+    );
+  });
+
+  it('URL-encodes Activation_Star.wav for rocket activation', () => {
+    expect(SoundManifest[AssetIds.sounds.powerupRocketActivate].browserUrl).toBe(
+      `/assets/audio/${encodeURIComponent('Activation_Star.wav')}`,
+    );
+  });
+
+  it('URL-encodes Game_Over.wav for run end', () => {
+    expect(SoundManifest[AssetIds.sounds.runEnd].browserUrl).toBe(
+      `/assets/audio/${encodeURIComponent('Game_Over.wav')}`,
+    );
+  });
+
   it('keeps soundRequested payloads JSON-compatible with Phase 9 fields', () => {
     const event: GameEvent = {
       type: 'soundRequested',

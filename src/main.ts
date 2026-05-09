@@ -17,6 +17,7 @@ import {
 } from './platform-browser/BrowserInputAdapter';
 import { isMobileFullscreenTarget, shouldRequestGameFullscreen } from './platform-browser/FullscreenPolicy';
 import { loadBrowserImages } from './platform-browser/BrowserImageLoader';
+import { resolveBrowserAssetUrl } from './platform-browser/BrowserAssetUrl';
 import { LocalLeaderboardStore } from './platform-browser/LocalLeaderboardStore';
 import { BoardAnimationPresenter } from './render-2d/BoardAnimationPresenter';
 import { Canvas2DRenderer } from './render-2d/Canvas2DRenderer';
@@ -70,7 +71,7 @@ root.innerHTML = `
     </section>
   </main>
   <button class="launch-overlay" data-launch-overlay type="button" aria-label="Start Magus Match">
-    <img class="launch-overlay__image" src="/assets/ui/launch.png" alt="" draggable="false" />
+    <img class="launch-overlay__image" src="${resolveBrowserAssetUrl('/assets/ui/launch.png')}" alt="" draggable="false" />
   </button>
 `;
 

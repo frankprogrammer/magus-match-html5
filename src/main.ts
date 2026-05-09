@@ -102,6 +102,7 @@ const leaderboardStore = new LocalLeaderboardStore();
 let leaderboardRows: readonly LeaderboardEntry[] = leaderboardStore.load();
 let highlightedRank: number | null = null;
 let overlayPrimaryButtonPressed = false;
+let audioPreloadStarted = false;
 
 const input = new BrowserInputAdapter(gameShell);
 let fullscreenRequestAttempted = false;
@@ -114,11 +115,10 @@ void loadBrowserImages().then((images) => {
 if (ENABLE_BROWSER_AUDIO) {
   void import('./platform-browser/BrowserAudioAdapter').then(({ BrowserAudioAdapter }) => {
     audio = new BrowserAudioAdapter();
-    return audio.preload(getSoundManifestEntriesForBrowserPreload());
   });
 
   gameShell.addEventListener('pointerdown', () => {
-    void audio?.resume();
+    unlockBrowserAudio();
   });
 }
 
@@ -133,10 +133,24 @@ launchOverlay?.addEventListener('pointerdown', (event) => {
 
   launchOverlayDismissed = true;
   launchOverlay.remove();
-  void audio?.resume();
+  unlockBrowserAudio();
   requestGameFullscreen();
   app.startFromTitle();
 });
+
+function unlockBrowserAudio(): void {
+  if (!ENABLE_BROWSER_AUDIO || audio == null) {
+    return;
+  }
+
+  void audio.resume();
+  if (audioPreloadStarted) {
+    return;
+  }
+
+  audioPreloadStarted = true;
+  void audio.preload(getSoundManifestEntriesForBrowserPreload());
+}
 
 function updateOverlayPrimaryButtonPressed(event: PointerEvent, down: boolean): void {
   if (!down) {

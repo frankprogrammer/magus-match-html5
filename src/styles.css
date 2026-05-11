@@ -121,9 +121,7 @@ body {
   user-select: none;
 }
 
-/* Phase + run seed; remove display:none to show during local debugging. */
 .debug-panel {
-  display: none;
   position: absolute;
   left: 32px;
   bottom: 32px;

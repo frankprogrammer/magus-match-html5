@@ -52,6 +52,7 @@ export const SPELL_CAST_WINDUP_SEC = 0.5;
 export const KOBOLD_DEFEAT_ANIMATION_SEC = 1.0;
 export const KOBOLD_DEFEAT_FADE_SEC = 0.15;
 export const TRIAL_ICE_FREEZE_SEC = 1.5;
+export const LIGHTNING_CHAIN_HOP_DELAY_SEC = 0.12;
 
 export interface ActiveTrialMonster {
   monsterId: string;
@@ -89,6 +90,7 @@ export interface TrialProjectileRuntimeState {
   projectileId: string;
   schoolId: SpellSchoolId;
   effectKind: 'match' | 'bomb';
+  originKind?: 'mage' | 'world';
   from: Vec3Data;
   to: Vec3Data;
   castActivationDelaySec: number;
@@ -370,19 +372,26 @@ export function selectNearestAliveMonster(
   runtime: TrialRuntimeState,
   level: GeneratedTrialLevel,
 ): ActiveTrialMonster | null {
-  const monsters = runtime.monsters.filter((monster) => monster.hp > 0);
+  const monsters = aliveMonstersByTargetOrder(runtime, level);
   if (monsters.length === 0) {
     return null;
   }
 
-  return monsters.sort((first, second) => {
+  return monsters[0];
+}
+
+function aliveMonstersByTargetOrder(
+  runtime: Pick<TrialRuntimeState, 'monsters'>,
+  level: GeneratedTrialLevel,
+): ActiveTrialMonster[] {
+  return runtime.monsters.filter((monster) => monster.hp > 0).sort((first, second) => {
     const firstDistance = Math.abs(first.x - level.trial.mageX);
     const secondDistance = Math.abs(second.x - level.trial.mageX);
     return (
       firstDistance - secondDistance ||
       first.monsterId.localeCompare(second.monsterId)
     );
-  })[0];
+  });
 }
 
 export function damageMultiplierForMatch(match: MatchGroup): number {
@@ -442,6 +451,80 @@ function applyDamageSources(
   const damageEvents: TrialDamageEvent[] = [];
 
   for (const source of sources) {
+    if (source.schoolId === 'lightning') {
+      const targets = aliveMonstersByTargetOrder(nextRuntime, level);
+      const projectiles: TrialProjectileRuntimeState[] = [];
+      let previousTarget: ActiveTrialMonster | null = null;
+
+      for (const [chainIndex, target] of targets.entries()) {
+        const currentTarget = nextRuntime.monsters.find((monster) => monster.monsterId === target.monsterId);
+        if (currentTarget == null) {
+          continue;
+        }
+
+        const chainDelaySec = chainIndex * LIGHTNING_CHAIN_HOP_DELAY_SEC;
+        const projectileActivationDelaySec = source.castActivationDelaySec + SPELL_CAST_WINDUP_SEC + chainDelaySec;
+        const impactDelaySec = projectileActivationDelaySec + source.durationSec;
+        const damage = Math.min(currentTarget.hp, source.damage);
+        const nextHp = Math.max(0, currentTarget.hp - source.damage);
+        const defeated = nextHp <= 0;
+        const projectile = createProjectile(
+          nextRuntime.nextProjectileIndex + projectiles.length,
+          level,
+          source,
+          currentTarget,
+          {
+            originKind: previousTarget == null ? 'mage' : 'world',
+            from:
+              previousTarget == null
+                ? getTrialSpellOriginWorldPosition(level)
+                : getTrialMonsterWorldPosition(level, previousTarget),
+            castActivationDelaySec: source.castActivationDelaySec + chainDelaySec,
+            activationDelaySec: projectileActivationDelaySec,
+            chargeDurationSec: previousTarget == null ? SPELL_CAST_WINDUP_SEC : 0,
+          },
+        );
+        const monsters = nextRuntime.monsters.map((monster) =>
+          monster.monsterId === currentTarget.monsterId
+            ? {
+                ...monster,
+                hp: nextHp,
+                defeatDelaySec: defeated ? impactDelaySec : monster.defeatDelaySec,
+                ...scheduleHitShake(monster, impactDelaySec),
+                ...scheduleHealthBarUpdate(monster, impactDelaySec, nextHp),
+              }
+            : monster,
+        );
+
+        nextRuntime = {
+          ...nextRuntime,
+          monsters,
+        };
+        projectiles.push(projectile);
+
+        scoreDelta += Math.round(damage * 2) + (defeated ? currentTarget.scoreValue : 0);
+        damageEvents.push({
+          monsterId: currentTarget.monsterId,
+          schoolId: source.schoolId,
+          damage,
+          defeated,
+          impactDelaySec,
+          castActivationDelaySec: source.castActivationDelaySec + chainDelaySec,
+        });
+        previousTarget = target;
+      }
+
+      if (projectiles.length > 0) {
+        nextRuntime = {
+          ...nextRuntime,
+          projectiles: [...nextRuntime.projectiles, ...projectiles],
+          nextProjectileIndex: nextRuntime.nextProjectileIndex + projectiles.length,
+        };
+      }
+
+      continue;
+    }
+
     for (let shotIndex = 0; shotIndex < source.shotCount; shotIndex += 1) {
       const target = selectNearestAliveMonster(nextRuntime, level);
       if (target == null) {
@@ -452,7 +535,15 @@ function applyDamageSources(
       const nextHp = Math.max(0, target.hp - source.damage);
       const defeated = nextHp <= 0;
       const impactDelaySec = source.castActivationDelaySec + SPELL_CAST_WINDUP_SEC + source.durationSec;
-      const projectile = shotIndex < source.visualShotCount ? createProjectile(nextRuntime, level, source, target) : null;
+      const projectile = shotIndex < source.visualShotCount
+        ? createProjectile(nextRuntime.nextProjectileIndex, level, source, target, {
+            originKind: 'mage',
+            from: getTrialSpellOriginWorldPosition(level),
+            castActivationDelaySec: source.castActivationDelaySec,
+            activationDelaySec: source.castActivationDelaySec + SPELL_CAST_WINDUP_SEC,
+            chargeDurationSec: SPELL_CAST_WINDUP_SEC,
+          })
+        : null;
       const monsters = nextRuntime.monsters.map((monster) =>
         monster.monsterId === target.monsterId
           ? {
@@ -570,20 +661,28 @@ function powerUpShotCount(detonation: PowerUpDetonation): number {
 }
 
 function createProjectile(
-  runtime: TrialRuntimeState,
+  projectileIndex: number,
   level: GeneratedTrialLevel,
   source: TrialDamageSource,
   target: ActiveTrialMonster,
+  options: {
+    originKind: TrialProjectileRuntimeState['originKind'];
+    from: Vec3Data;
+    castActivationDelaySec: number;
+    activationDelaySec: number;
+    chargeDurationSec: number;
+  },
 ): TrialProjectileRuntimeState {
   return {
-    projectileId: `trial-${runtime.nextProjectileIndex}`,
+    projectileId: `trial-${projectileIndex}`,
     schoolId: source.schoolId,
     effectKind: source.effectKind,
-    from: getTrialSpellOriginWorldPosition(level),
+    originKind: options.originKind,
+    from: options.from,
     to: getTrialMonsterWorldPosition(level, target),
-    castActivationDelaySec: source.castActivationDelaySec,
-    activationDelaySec: source.castActivationDelaySec + SPELL_CAST_WINDUP_SEC,
-    chargeDurationSec: SPELL_CAST_WINDUP_SEC,
+    castActivationDelaySec: options.castActivationDelaySec,
+    activationDelaySec: options.activationDelaySec,
+    chargeDurationSec: options.chargeDurationSec,
     remainingSec: source.durationSec,
     durationSec: source.durationSec,
   };

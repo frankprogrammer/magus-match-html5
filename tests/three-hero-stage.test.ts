@@ -7,6 +7,11 @@ import {
   isProjectileChargeVisible,
   isProjectileCastReady,
   isProjectileVisible,
+  LIGHTNING_RAY_RENDER_ORDER,
+  lightningRayCenterlinePoints,
+  lightningRayMaterialSettings,
+  lightningRayRibbonGeometryData,
+  lightningRayThicknessWorldUnits,
   mageChargeMaterialSettings,
   projectWorldPositionToLogicalHeroStage,
   projectileChargeProgress,
@@ -120,6 +125,73 @@ describe('ThreeHeroStage projectile VFX', () => {
 
     expect(resolveMageParticleSourceWorldPosition(new THREE.Group())).toBeNull();
     expect(resolveProjectileRenderOrigin(projectile, new THREE.Group())).toBe(projectile);
+  });
+
+  it('preserves world-origin chain projectile origins', () => {
+    const mage = new THREE.Group();
+    const particleSource = new THREE.Object3D();
+    particleSource.name = 'particleSource';
+    particleSource.position.set(10, 10, 10);
+    mage.add(particleSource);
+    const projectile = { ...testProjectile(), originKind: 'world' as const };
+
+    expect(resolveProjectileRenderOrigin(projectile, mage)).toBe(projectile);
+  });
+
+  it('converts the requested lightning ray thickness from logical pixels to world units', () => {
+    expect(lightningRayThicknessWorldUnits(LOGICAL_WIDTH)).toBeCloseTo(0.1875);
+  });
+
+  it('uses a depth-independent material so lightning renders above enemies', () => {
+    expect(lightningRayMaterialSettings({ schoolId: 'lightning' })).toMatchObject({
+      color: projectileColor('lightning'),
+      transparent: true,
+      depthWrite: false,
+      depthTest: false,
+      side: THREE.DoubleSide,
+    });
+    expect(LIGHTNING_RAY_RENDER_ORDER).toBeGreaterThan(32);
+  });
+
+  it('builds animated lightning ray centerline points anchored to projectile endpoints', () => {
+    const projectile = {
+      ...testProjectile(),
+      projectileId: 'lightning-test',
+      schoolId: 'lightning' as const,
+      from: { x: 1, y: 2, z: 3 },
+      to: { x: 5, y: 6, z: 7 },
+    };
+
+    const points = lightningRayCenterlinePoints(projectile, 0, 4);
+    const movedPoints = lightningRayCenterlinePoints(projectile, 0.2, 4);
+
+    expect(points).toHaveLength(5);
+    expect(points[0]).toEqual(projectile.from);
+    expect(points.at(-1)).toEqual(projectile.to);
+    expect(lightningRayCenterlinePoints(projectile, 0, 4)).toEqual(points);
+    expect(movedPoints[0]).toEqual(projectile.from);
+    expect(movedPoints.at(-1)).toEqual(projectile.to);
+    expect(points[2]).not.toEqual({ x: 3, y: 4, z: 5 });
+    expect(movedPoints[2]).not.toEqual(points[2]);
+  });
+
+  it('builds paired ribbon vertices and faces around the lightning ray centerline', () => {
+    const projectile = {
+      ...testProjectile(),
+      projectileId: 'lightning-ribbon-test',
+      schoolId: 'lightning' as const,
+      from: { x: 0, y: 0, z: 0 },
+      to: { x: 4, y: 0, z: 0 },
+    };
+
+    const geometry = lightningRayRibbonGeometryData(projectile, 0, 0.1875, 4);
+
+    expect(geometry.centerline).toHaveLength(5);
+    expect(geometry.positions).toHaveLength(5 * 2 * 3);
+    expect(geometry.indices).toHaveLength(4 * 6);
+    expect(geometry.centerline[0]).toEqual(projectile.from);
+    expect(geometry.centerline.at(-1)).toEqual(projectile.to);
+    expect(Math.hypot(geometry.positions[0] - geometry.positions[3], geometry.positions[1] - geometry.positions[4])).toBeCloseTo(0.1875);
   });
 
   it('projects the mage particleSource into logical hero-stage coordinates', () => {

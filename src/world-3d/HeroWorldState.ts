@@ -13,6 +13,7 @@ export interface ProjectileState {
   projectileId: string;
   schoolId: 'fire' | 'ice' | 'lightning' | 'earth';
   effectKind: 'match' | 'bomb';
+  originKind?: 'mage' | 'world';
   from: Vec3Data;
   to: Vec3Data;
   castActivationDelaySec: number;

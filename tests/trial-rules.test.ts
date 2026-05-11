@@ -23,6 +23,7 @@ import {
   selectNearestAliveMonster,
   KOBOLD_DEFEAT_ANIMATION_SEC,
   KOBOLD_DEFEAT_FADE_SEC,
+  LIGHTNING_CHAIN_HOP_DELAY_SEC,
   SPELL_CAST_WINDUP_SEC,
   TRIAL_ICE_FREEZE_SEC,
   TRIAL_MONSTER_RANDOM_Y_OFFSET_AMPLITUDE,
@@ -275,6 +276,84 @@ describe('TrialRules', () => {
     expect(updated.projectiles).toHaveLength(0);
     expect(updated.monsters[0]?.hitShakeRemainingSec).toBeUndefined();
     expect(updated.monsters[0]?.hp).toBeLessThan(50);
+  });
+
+  it('chains lightning matches through every alive monster once with enemy-to-enemy projectiles', () => {
+    const board = lightningMatchSwapBoard();
+    const level = testTrialLevel(
+      [
+        monster({ monsterId: 'first', maxHp: 30 }),
+        monster({ monsterId: 'second', maxHp: 30 }),
+        monster({ monsterId: 'third', maxHp: 30 }),
+      ],
+      board,
+    );
+    const baseRuntime = createTrialRuntime(level);
+    const activeMonster = baseRuntime.monsters[0];
+    const runtime = {
+      ...baseRuntime,
+      nextSpawnIndex: 3,
+      monsters: [
+        { ...activeMonster, monsterId: 'first', hp: 30, maxHp: 30, x: level.trial.mageX + 1 },
+        { ...activeMonster, monsterId: 'second', hp: 30, maxHp: 30, x: level.trial.mageX + 2 },
+        { ...activeMonster, monsterId: 'third', hp: 30, maxHp: 30, x: level.trial.mageX + 3 },
+      ],
+    };
+
+    const result = processTrialSwap(
+      board,
+      runtime,
+      level,
+      { col: 1, row: 0 },
+      { col: 1, row: 1 },
+      new SeededRng(99),
+    );
+    const lightningEvents = result.damageEvents.filter((event) => event.schoolId === 'lightning');
+    const lightningProjectiles = result.runtime.projectiles.filter((projectile) => projectile.schoolId === 'lightning');
+    const firstImpactDelaySec =
+      TILE_SWAP_RETARGET_MS / 1000 + SPELL_CAST_WINDUP_SEC + SPELL_MATCH_PROJECTILE_VISUAL_MS / 1000;
+
+    expect(result.valid).toBe(true);
+    expect(lightningEvents.map((event) => event.monsterId)).toEqual(['first', 'second', 'third']);
+    expect(lightningEvents.map((event) => event.damage)).toEqual([10, 10, 10]);
+    expect(lightningEvents[0].impactDelaySec).toBeCloseTo(firstImpactDelaySec);
+    expect(lightningEvents[1].impactDelaySec).toBeCloseTo(firstImpactDelaySec + LIGHTNING_CHAIN_HOP_DELAY_SEC);
+    expect(lightningEvents[2].impactDelaySec).toBeCloseTo(firstImpactDelaySec + LIGHTNING_CHAIN_HOP_DELAY_SEC * 2);
+    expect(result.runtime.monsters.map((target) => ({ id: target.monsterId, hp: target.hp }))).toEqual([
+      { id: 'first', hp: 20 },
+      { id: 'second', hp: 20 },
+      { id: 'third', hp: 20 },
+    ]);
+    expect(lightningProjectiles).toHaveLength(3);
+    expect(lightningProjectiles[0]).toMatchObject({
+      originKind: 'mage',
+      from: getTrialSpellOriginWorldPosition(level),
+      to: getTrialMonsterWorldPosition(level, runtime.monsters[0]),
+    });
+    expect(lightningProjectiles[1]).toMatchObject({
+      originKind: 'world',
+      from: getTrialMonsterWorldPosition(level, runtime.monsters[0]),
+      to: getTrialMonsterWorldPosition(level, runtime.monsters[1]),
+      chargeDurationSec: 0,
+    });
+    expect(lightningProjectiles[2]).toMatchObject({
+      originKind: 'world',
+      from: getTrialMonsterWorldPosition(level, runtime.monsters[1]),
+      to: getTrialMonsterWorldPosition(level, runtime.monsters[2]),
+      chargeDurationSec: 0,
+    });
+
+    const stacked = processTrialSwap(
+      board,
+      result.runtime,
+      level,
+      { col: 1, row: 0 },
+      { col: 1, row: 1 },
+      new SeededRng(100),
+    );
+
+    expect(stacked.damageEvents.filter((event) => event.schoolId === 'lightning')).toHaveLength(3);
+    expect(stacked.runtime.monsters.map((target) => target.hp)).toEqual([10, 10, 10]);
   });
 
   it('starts ice freeze when the ice projectile visually impacts and stops movement while frozen', () => {
@@ -955,5 +1034,13 @@ function iceMatchSwapBoard() {
     ['ICE', 'FIRE', 'ICE'],
     ['FIRE', 'ICE', 'FIRE'],
     ['LIGHTNING', 'ICE', 'EARTH'],
+  ]);
+}
+
+function lightningMatchSwapBoard() {
+  return createBoardFromTileTypes([
+    ['LIGHTNING', 'FIRE', 'LIGHTNING'],
+    ['ICE', 'LIGHTNING', 'EARTH'],
+    ['FIRE', 'ICE', 'EARTH'],
   ]);
 }

@@ -2,11 +2,18 @@ import * as THREE from 'three';
 import { HERO_STAGE_HEIGHT, LOGICAL_WIDTH } from '../core/Layout';
 import type { HeroWorldState, ProjectileState } from '../world-3d/HeroWorldState';
 import type { WorldObjectState } from '../world-3d/WorldObjectState';
-import { orthographicBoundsForAspect, ThreeCameraController } from './ThreeCameraController';
+import { HERO_STAGE_ORTHO_VIEW_WIDTH, orthographicBoundsForAspect, ThreeCameraController } from './ThreeCameraController';
 import { ThreeObjectFactory } from './ThreeObjectFactory';
 import { ThreeObjectCache } from './ThreePools';
 
 type OverrideableMaterial = THREE.MeshStandardMaterial | THREE.MeshBasicMaterial;
+
+export const LIGHTNING_RAY_THICKNESS_PX = 15;
+export const LIGHTNING_RAY_RENDER_ORDER = 60;
+const LIGHTNING_RAY_SEGMENT_COUNT = 18;
+const LIGHTNING_RAY_WAVE_COUNT = 2.35;
+const LIGHTNING_RAY_WAVE_AMPLITUDE = 0.24;
+const LIGHTNING_RAY_WAVE_SPEED = Math.PI * 5.2;
 
 const originalMaterialState = new WeakMap<OverrideableMaterial, {
   color: THREE.Color;
@@ -78,6 +85,9 @@ export class ThreeHeroStage {
     }
     for (const [, projectile] of this.projectileCache.entries()) {
       this.scene.remove(projectile.mesh);
+      if (projectile.lightningRay != null) {
+        this.scene.remove(projectile.lightningRay);
+      }
       disposeProjectileSystem(projectile);
     }
     for (const [, charge] of this.mageChargeCache.entries()) {
@@ -103,7 +113,11 @@ export class ThreeHeroStage {
 
     for (const projectileState of projectiles) {
       activeProjectileIds.add(projectileState.projectileId);
-      if (!isProjectileCastReady(projectileState) || this.castTriggeredProjectileIds.has(projectileState.projectileId)) {
+      if (
+        projectileState.originKind === 'world' ||
+        !isProjectileCastReady(projectileState) ||
+        this.castTriggeredProjectileIds.has(projectileState.projectileId)
+      ) {
         continue;
       }
 
@@ -131,12 +145,15 @@ export class ThreeHeroStage {
       seen.add(objectId);
       const renderProjectileState = resolveProjectileRenderOrigin(projectileState, mageObject);
       const projectile = this.getOrCreateProjectile(objectId, renderProjectileState);
-      applyProjectileState(projectile, renderProjectileState);
+      applyProjectileState(projectile, renderProjectileState, this.elapsedSec);
     }
 
     for (const [objectId, projectile] of [...this.projectileCache.entries()]) {
       if (!seen.has(objectId)) {
         this.scene.remove(projectile.mesh);
+        if (projectile.lightningRay != null) {
+          this.scene.remove(projectile.lightningRay);
+        }
         disposeProjectileSystem(projectile);
         this.projectileCache.delete(objectId);
       }
@@ -195,6 +212,9 @@ export class ThreeHeroStage {
     const projectile = createProjectileParticleSystem(projectileState);
     this.projectileCache.set(objectId, projectile);
     this.scene.add(projectile.mesh);
+    if (projectile.lightningRay != null) {
+      this.scene.add(projectile.lightningRay);
+    }
     return projectile;
   }
 
@@ -630,6 +650,10 @@ export function resolveProjectileRenderOrigin(
   projectile: ProjectileState,
   mageObject?: THREE.Object3D,
 ): ProjectileState {
+  if (projectile.originKind === 'world') {
+    return projectile;
+  }
+
   const particleSourcePosition = resolveMageParticleSourceWorldPosition(mageObject);
   return particleSourcePosition == null
     ? projectile
@@ -690,6 +714,7 @@ interface ProjectileParticleSystem {
   mesh: THREE.InstancedMesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
   texture: THREE.CanvasTexture;
   dummy: THREE.Object3D;
+  lightningRay?: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
 }
 
 interface MageChargeParticleSystem {
@@ -729,7 +754,12 @@ function createProjectileParticleSystem(
   const mesh = new THREE.InstancedMesh(geometry, material, particleCount);
   mesh.frustumCulled = false;
   mesh.renderOrder = projectile.effectKind === 'bomb' ? 32 : 30;
-  return { mesh, texture, dummy: new THREE.Object3D() };
+  return {
+    mesh,
+    texture,
+    dummy: new THREE.Object3D(),
+    lightningRay: projectile.schoolId === 'lightning' ? createLightningRayMesh(projectile) : undefined,
+  };
 }
 
 function createMageChargeParticleSystem(
@@ -756,6 +786,7 @@ function createMageChargeParticleSystem(
 function applyProjectileState(
   system: ProjectileParticleSystem,
   projectile: ProjectileState,
+  elapsedSec: number,
 ): void {
   const progress = projectileProgress(projectile);
   const direction = projectileDirection(projectile);
@@ -797,6 +828,141 @@ function applyProjectileState(
   system.mesh.material.opacity = projectileOpacity(projectile.effectKind, progress);
   system.mesh.material.blending = settings.blending;
   system.mesh.material.needsUpdate = true;
+  applyLightningRayState(system, projectile, progress, elapsedSec);
+}
+
+function createLightningRayMesh(projectile: ProjectileState): THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial> {
+  const geometry = new THREE.BufferGeometry();
+  const material = new THREE.MeshBasicMaterial(lightningRayMaterialSettings(projectile));
+  const ray = new THREE.Mesh(geometry, material);
+  ray.frustumCulled = false;
+  ray.renderOrder = LIGHTNING_RAY_RENDER_ORDER;
+  applyLightningRayGeometry(ray, projectile, 0);
+  return ray;
+}
+
+function applyLightningRayState(
+  system: ProjectileParticleSystem,
+  projectile: ProjectileState,
+  progress: number,
+  elapsedSec: number,
+): void {
+  if (system.lightningRay == null) {
+    return;
+  }
+
+  applyLightningRayGeometry(system.lightningRay, projectile, elapsedSec);
+  system.lightningRay.material.color.set(projectileColor(projectile.schoolId));
+  system.lightningRay.material.opacity = projectileOpacity(projectile.effectKind, progress);
+  system.lightningRay.material.needsUpdate = true;
+}
+
+function applyLightningRayGeometry(
+  ray: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>,
+  projectile: ProjectileState,
+  elapsedSec: number,
+): void {
+  const geometry = lightningRayRibbonGeometryData(projectile, elapsedSec);
+  ray.geometry.setAttribute('position', new THREE.BufferAttribute(geometry.positions, 3));
+  ray.geometry.setIndex(geometry.indices);
+  ray.geometry.computeVertexNormals();
+  ray.geometry.computeBoundingSphere();
+}
+
+export function lightningRayThicknessWorldUnits(logicalWidth = LOGICAL_WIDTH): number {
+  return (HERO_STAGE_ORTHO_VIEW_WIDTH / logicalWidth) * LIGHTNING_RAY_THICKNESS_PX;
+}
+
+export function lightningRayMaterialSettings(
+  projectile: Pick<ProjectileState, 'schoolId'>,
+): THREE.MeshBasicMaterialParameters {
+  return {
+    color: projectileColor(projectile.schoolId),
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    depthTest: false,
+    side: THREE.DoubleSide,
+  };
+}
+
+export function lightningRayCenterlinePoints(
+  projectile: Pick<ProjectileState, 'projectileId' | 'from' | 'to'>,
+  elapsedSec = 0,
+  segmentCount = LIGHTNING_RAY_SEGMENT_COUNT,
+): ProjectileState['from'][] {
+  const safeSegmentCount = Math.max(1, Math.floor(segmentCount));
+  const dx = projectile.to.x - projectile.from.x;
+  const dy = projectile.to.y - projectile.from.y;
+  const dz = projectile.to.z - projectile.from.z;
+  const planarLength = Math.hypot(dx, dy);
+  const perpX = planarLength > 0 ? -dy / planarLength : 1;
+  const perpY = planarLength > 0 ? dx / planarLength : 0;
+  const points: ProjectileState['from'][] = [];
+  const phaseSeed = deterministicUnit(`${projectile.projectileId}:ray:phase`) * Math.PI * 2;
+
+  for (let index = 0; index <= safeSegmentCount; index += 1) {
+    const progress = index / safeSegmentCount;
+    const endpoint = index === 0 || index === safeSegmentCount;
+    const pulse = Math.sin(progress * Math.PI);
+    const wave = endpoint
+      ? 0
+      : Math.sin(progress * LIGHTNING_RAY_WAVE_COUNT * Math.PI * 2 - elapsedSec * LIGHTNING_RAY_WAVE_SPEED + phaseSeed) *
+        LIGHTNING_RAY_WAVE_AMPLITUDE *
+        pulse;
+    const lateralJitter = endpoint
+      ? 0
+      : (deterministicUnit(`${projectile.projectileId}:ray:lateral:${index}`) - 0.5) * 0.08 * pulse;
+    const depthJitter = endpoint
+      ? 0
+      : (deterministicUnit(`${projectile.projectileId}:ray:depth:${index}`) - 0.5) * 0.04 * pulse;
+
+    points.push({
+      x: projectile.from.x + dx * progress + perpX * (wave + lateralJitter),
+      y: projectile.from.y + dy * progress + perpY * (wave + lateralJitter),
+      z: projectile.from.z + dz * progress + depthJitter,
+    });
+  }
+
+  return points;
+}
+
+export function lightningRayRibbonGeometryData(
+  projectile: Pick<ProjectileState, 'projectileId' | 'from' | 'to'>,
+  elapsedSec = 0,
+  thicknessWorldUnits = lightningRayThicknessWorldUnits(),
+  segmentCount = LIGHTNING_RAY_SEGMENT_COUNT,
+): { centerline: ProjectileState['from'][]; positions: Float32Array; indices: number[] } {
+  const centerline = lightningRayCenterlinePoints(projectile, elapsedSec, segmentCount);
+  const positions = new Float32Array(centerline.length * 2 * 3);
+  const indices: number[] = [];
+  const halfThickness = thicknessWorldUnits / 2;
+
+  centerline.forEach((point, index) => {
+    const previous = centerline[Math.max(0, index - 1)];
+    const next = centerline[Math.min(centerline.length - 1, index + 1)];
+    const tangentX = next.x - previous.x;
+    const tangentY = next.y - previous.y;
+    const tangentLength = Math.hypot(tangentX, tangentY);
+    const normalX = tangentLength > 0 ? -tangentY / tangentLength : 0;
+    const normalY = tangentLength > 0 ? tangentX / tangentLength : 1;
+    const leftIndex = index * 6;
+    const rightIndex = leftIndex + 3;
+
+    positions[leftIndex] = point.x + normalX * halfThickness;
+    positions[leftIndex + 1] = point.y + normalY * halfThickness;
+    positions[leftIndex + 2] = point.z;
+    positions[rightIndex] = point.x - normalX * halfThickness;
+    positions[rightIndex + 1] = point.y - normalY * halfThickness;
+    positions[rightIndex + 2] = point.z;
+
+    if (index < centerline.length - 1) {
+      const base = index * 2;
+      indices.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
+    }
+  });
+
+  return { centerline, positions, indices };
 }
 
 function applyMageChargeState(
@@ -841,6 +1007,10 @@ function disposeProjectileSystem(system: ProjectileParticleSystem): void {
   system.mesh.geometry.dispose();
   system.mesh.material.dispose();
   system.texture.dispose();
+  if (system.lightningRay != null) {
+    system.lightningRay.geometry.dispose();
+    system.lightningRay.material.dispose();
+  }
 }
 
 function disposeMageChargeSystem(system: MageChargeParticleSystem): void {

@@ -1,6 +1,6 @@
-export const LOGICAL_WIDTH = 1080;
+export const LOGICAL_WIDTH = 864;
 export const LOGICAL_HEIGHT = 1920;
-export const HERO_STAGE_HEIGHT = 500;
+export const HERO_STAGE_HEIGHT = 700;
 
 /** Level title strip (`ui title.png`), scaled to ~60% width; native asset pixel size. */
 export const LEVEL_PANEL_NATURAL_SIZE = { width: 950, height: 156 } as const;
@@ -114,22 +114,24 @@ export const TRIAL_FILLBAR_FILL_OFFSET_X_PX = -5;
 export const TRIAL_FILLBAR_FILL_OFFSET_Y_PX = -2;
 /** Journey / non-trial objective column (legacy layout). */
 export function hudObjectiveTextLayoutLegacy(): { x: number; width: number } {
-  const x = 670;
-  const width = LOGICAL_WIDTH - HUD_CONTENT_PADDING_X - x;
+  const width = Math.min(300, LOGICAL_WIDTH - 2 * HUD_CONTENT_PADDING_X);
+  const x = LOGICAL_WIDTH - HUD_CONTENT_PADDING_X - width;
   return { x, width };
 }
 
-export const BOARD_SECTION_HEIGHT = 1270;
+export const BOARD_SECTION_HEIGHT = LOGICAL_HEIGHT - HERO_STAGE_HEIGHT - HUD_HEIGHT;
 export const BOARD_SIZE = 8;
 export const BOARD_SECTION_TOP = HERO_STAGE_HEIGHT + HUD_HEIGHT;
-export const BOARD_VERTICAL_MARGIN = (BOARD_SECTION_HEIGHT - LOGICAL_WIDTH) / 2;
+export const BOARD_PIXEL_SIZE = Math.min(LOGICAL_WIDTH, BOARD_SECTION_HEIGHT);
+export const BOARD_HORIZONTAL_MARGIN = (LOGICAL_WIDTH - BOARD_PIXEL_SIZE) / 2;
+export const BOARD_VERTICAL_MARGIN = (BOARD_SECTION_HEIGHT - BOARD_PIXEL_SIZE) / 2;
 
 export const BOARD_RECT = {
-  x: 0,
+  x: BOARD_HORIZONTAL_MARGIN,
   y: BOARD_SECTION_TOP + BOARD_VERTICAL_MARGIN,
-  width: LOGICAL_WIDTH,
-  height: LOGICAL_WIDTH,
-  cellSize: LOGICAL_WIDTH / BOARD_SIZE,
+  width: BOARD_PIXEL_SIZE,
+  height: BOARD_PIXEL_SIZE,
+  cellSize: BOARD_PIXEL_SIZE / BOARD_SIZE,
 } as const;
 
 export interface UiRect {
@@ -140,21 +142,21 @@ export interface UiRect {
 }
 
 export const TITLE_PLAY_BUTTON_RECT: UiRect = {
-  x: 300,
+  x: (LOGICAL_WIDTH - 480) / 2,
   y: 1040,
   width: 480,
   height: 112,
 };
 
 export const GAME_OVER_TRY_AGAIN_BUTTON_RECT: UiRect = {
-  x: 300,
+  x: (LOGICAL_WIDTH - 480) / 2,
   y: 1570,
   width: 480,
   height: 112,
 };
 
 export const HUD_MUTE_TOGGLE_RECT: UiRect = {
-  x: 930,
+  x: LOGICAL_WIDTH - 150,
   y: HERO_STAGE_HEIGHT,
   width: 150,
   height: HUD_HEIGHT,

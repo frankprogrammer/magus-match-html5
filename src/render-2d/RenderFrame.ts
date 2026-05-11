@@ -632,15 +632,29 @@ function drawScreenOverlay(renderer: GameRenderer, screenState: ScreenRenderStat
   }
 }
 
+const SCREEN_SAFE_PADDING_X = 56;
+
+function centeredScreenRect(maxWidth: number, y: number, height: number): UiRect {
+  const width = Math.min(maxWidth, LOGICAL_WIDTH - 2 * SCREEN_SAFE_PADDING_X);
+  return {
+    x: (LOGICAL_WIDTH - width) / 2,
+    y,
+    width,
+    height,
+  };
+}
+
 function drawTitleScreen(renderer: GameRenderer, screenState: ScreenRenderState): void {
   renderer.drawRect('rgba(20, 14, 32, 0.78)', 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
-  renderer.drawText('MAGUS MATCH', 100, 250, 880, 150, {
+  const titleRect = centeredScreenRect(880, 250, 150);
+  renderer.drawText('MAGUS MATCH', titleRect.x, titleRect.y, titleRect.width, titleRect.height, {
     fontSize: 86,
     fontWeight: 'bold',
     color: '#f5e9c9',
     align: 'center',
   });
-  renderer.drawText('Save the prince one spell at a time', 160, 390, 760, 60, {
+  const subtitleRect = centeredScreenRect(760, 390, 60);
+  renderer.drawText('Save the prince one spell at a time', subtitleRect.x, subtitleRect.y, subtitleRect.width, subtitleRect.height, {
     fontSize: 34,
     fontWeight: 'normal',
     color: '#c8a24b',
@@ -672,13 +686,15 @@ function drawGameOverScreen(renderer: GameRenderer, screenState: ScreenRenderSta
     color: '#f5e9c9',
     align: 'center',
   });
-  renderer.drawText(`Final ${screenState.finalScore}`, 140, 320, 800, 70, {
+  const finalScoreRect = centeredScreenRect(800, 320, 70);
+  renderer.drawText(`Final ${screenState.finalScore}`, finalScoreRect.x, finalScoreRect.y, finalScoreRect.width, finalScoreRect.height, {
     fontSize: 42,
     fontWeight: 'bold',
     color: '#c8a24b',
     align: 'center',
   });
-  renderer.drawText(`High ${screenState.highScore}`, 140, 390, 800, 54, {
+  const highScoreRect = centeredScreenRect(800, 390, 54);
+  renderer.drawText(`High ${screenState.highScore}`, highScoreRect.x, highScoreRect.y, highScoreRect.width, highScoreRect.height, {
     fontSize: 30,
     fontWeight: 'bold',
     color: '#f5e9c9',
@@ -695,7 +711,8 @@ function drawGameOverScreen(renderer: GameRenderer, screenState: ScreenRenderSta
 
 function drawTransitionOverlay(renderer: GameRenderer, text: string): void {
   renderer.drawRect('rgba(20, 14, 32, 0.55)', 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
-  renderer.drawText(text, 120, 800, 840, 120, {
+  const textRect = centeredScreenRect(840, 800, 120);
+  renderer.drawText(text, textRect.x, textRect.y, textRect.width, textRect.height, {
     fontSize: 70,
     fontWeight: 'bold',
     color: '#f5e9c9',
@@ -732,7 +749,8 @@ function drawLeaderboardPreview(
   y: number,
   maxRows: number,
 ): void {
-  renderer.drawText('HALL OF HEROES', 150, y, 780, 56, {
+  const rect = centeredScreenRect(840, y, 56);
+  renderer.drawText('HALL OF HEROES', rect.x, rect.y, rect.width, rect.height, {
     fontSize: 34,
     fontWeight: 'bold',
     color: '#f5e9c9',
@@ -741,7 +759,8 @@ function drawLeaderboardPreview(
 
   const rows = screenState.leaderboardRows.slice(0, maxRows);
   if (rows.length === 0) {
-    renderer.drawText('No champions yet', 190, y + 74, 700, 44, {
+    const emptyRect = centeredScreenRect(700, y + 74, 44);
+    renderer.drawText('No champions yet', emptyRect.x, emptyRect.y, emptyRect.width, emptyRect.height, {
       fontSize: 26,
       fontWeight: 'normal',
       color: '#c8a24b',
@@ -754,15 +773,20 @@ function drawLeaderboardPreview(
     const rowY = y + 72 + index * 52;
     const isHighlighted = screenState.highlightedRank === index + 1;
     if (isHighlighted) {
-      renderer.drawRect('rgba(200, 162, 75, 0.35)', 120, rowY - 3, 840, 46);
+      renderer.drawRect('rgba(200, 162, 75, 0.35)', rect.x, rowY - 3, rect.width, 46);
     }
-    renderer.drawText(`${index + 1}. ${entry.name}`, 145, rowY, 520, 42, {
+    const scoreWidth = 220;
+    const rowInset = 25;
+    const scoreX = rect.x + rect.width - rowInset - scoreWidth;
+    const nameX = rect.x + rowInset;
+    const nameWidth = scoreX - nameX - 20;
+    renderer.drawText(`${index + 1}. ${entry.name}`, nameX, rowY, nameWidth, 42, {
       fontSize: 26,
       fontWeight: isHighlighted ? 'bold' : 'normal',
       color: '#f5e9c9',
       align: 'left',
     });
-    renderer.drawText(`${entry.score}`, 665, rowY, 260, 42, {
+    renderer.drawText(`${entry.score}`, scoreX, rowY, scoreWidth, 42, {
       fontSize: 26,
       fontWeight: isHighlighted ? 'bold' : 'normal',
       color: '#c8a24b',

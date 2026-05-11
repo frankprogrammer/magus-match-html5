@@ -30,9 +30,9 @@ body {
 
 .game-shell {
   position: relative;
-  width: min(100dvw, calc(100dvh * 0.5625));
-  height: min(100dvh, calc(100dvw * 1.7777778));
-  aspect-ratio: 9 / 16;
+  width: min(100dvw, calc(100dvh * 0.45));
+  height: min(100dvh, calc(100dvw * 2.2222222));
+  aspect-ratio: 9 / 20;
   overflow: hidden;
   background: #241832;
   border: 1px solid rgba(245, 233, 201, 0.22);
@@ -64,7 +64,7 @@ body {
   position: absolute;
   inset: 0;
   transform-origin: top left;
-  width: 1080px;
+  width: 864px;
   height: 1920px;
 }
 
@@ -72,7 +72,7 @@ body {
 .game-canvas {
   position: absolute;
   left: 0;
-  width: 1080px;
+  width: 864px;
 }
 
 .game-canvas {
@@ -85,17 +85,17 @@ body {
 .hero-stage {
   position: absolute;
   left: 0;
-  width: 1080px;
+  width: 864px;
   top: 0;
-  height: 500px;
+  height: 700px;
   overflow: hidden;
   z-index: 1;
 }
 
 .hero-stage-canvas {
   display: block;
-  width: 1080px;
-  height: 500px;
+  width: 864px;
+  height: 700px;
 }
 
 .launch-overlay {

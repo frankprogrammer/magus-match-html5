@@ -50,9 +50,9 @@ export interface AssetManifestEntry {
 const TILE_NOTES =
   "Runtime 256x256 transparent PNG, centered subject, 24-36px padding, readable at 100x100.";
 const BACKDROP_NOTES =
-  "Runtime 2160x1000 PNG/WebP for 2x coverage of the 1080x500 hero stage.";
+  "Runtime 2160x1000 PNG/WebP legacy source art; cover-cropped for the 864x700 hero stage.";
 const CASTLE_BACKDROP_NOTES =
-  "Hero-stage cover backdrop. Drawn as a Three.js texture plane that fills the orthographic 1080x500 stage and crops overflow.";
+  "Hero-stage cover backdrop. Drawn as a Three.js texture plane that fills the orthographic 864x700 stage and crops overflow.";
 const RIG_NOTES =
   "Transparent PNG source parts now; later exported as a 2048x2048 atlas plus skeletal JSON.";
 const TEMP_FBX_MAGE_NOTES =
@@ -64,9 +64,9 @@ const TEMP_FBX_KOBOLD_NOTES =
 const TEMP_FBX_KOBOLD_TEXTURE_NOTES =
   "Temporary browser hero-stage texture recovered from the kobold FBX .fbm export folder and applied to kobold meshes when the FBX material does not load a map.";
 const UI_BANNER_NOTES =
-  "Runtime 1080x150 PNG for the fixed middle HUD band; drawn full-width behind HUD text.";
+  "Runtime 1080x150 source PNG for the fixed middle HUD band; drawn full-width behind HUD text.";
 const BOARD_BACKGROUND_NOTES =
-  "Runtime 1080x1080 PNG for the board base; drawn behind board cells with flat-color fallback.";
+  "Runtime 1080x1080 source PNG for the board base; drawn behind board cells with flat-color fallback.";
 const UI_LEVEL_TITLE_NOTES =
   "Runtime ~950x156 PNG title ribbon; scaled to 60% logical width, centered near top for level label.";
 const UI_HEART_NOTES =
@@ -201,7 +201,7 @@ export const AssetManifest: Record<string, AssetManifestEntry> = {
     "Assets/Textures/Backdrops/bg1.png",
     "prompt.backdrops.hero",
     CASTLE_BACKDROP_NOTES,
-    "cover 1080x500 hero stage",
+    "cover 864x700 hero stage",
   ),
   [AssetIds.backdrops.bg2]: texture(
     AssetIds.backdrops.bg2,
@@ -209,7 +209,7 @@ export const AssetManifest: Record<string, AssetManifestEntry> = {
     "Assets/Textures/Backdrops/bg2.png",
     "prompt.backdrops.hero",
     CASTLE_BACKDROP_NOTES,
-    "cover 1080x500 hero stage",
+    "cover 864x700 hero stage",
   ),
   [AssetIds.backdrops.bg3]: texture(
     AssetIds.backdrops.bg3,
@@ -217,7 +217,7 @@ export const AssetManifest: Record<string, AssetManifestEntry> = {
     "Assets/Textures/Backdrops/bg3.png",
     "prompt.backdrops.hero",
     CASTLE_BACKDROP_NOTES,
-    "cover 1080x500 hero stage",
+    "cover 864x700 hero stage",
   ),
   [AssetIds.backdrops.bg4]: texture(
     AssetIds.backdrops.bg4,
@@ -225,7 +225,7 @@ export const AssetManifest: Record<string, AssetManifestEntry> = {
     "Assets/Textures/Backdrops/bg4.png",
     "prompt.backdrops.hero",
     CASTLE_BACKDROP_NOTES,
-    "cover 1080x500 hero stage",
+    "cover 864x700 hero stage",
   ),
   [AssetIds.backdrops.bg5]: texture(
     AssetIds.backdrops.bg5,
@@ -233,7 +233,7 @@ export const AssetManifest: Record<string, AssetManifestEntry> = {
     "Assets/Textures/Backdrops/bg5.png",
     "prompt.backdrops.hero",
     CASTLE_BACKDROP_NOTES,
-    "cover 1080x500 hero stage",
+    "cover 864x700 hero stage",
   ),
   [AssetIds.backdrops.bg6]: texture(
     AssetIds.backdrops.bg6,
@@ -241,7 +241,7 @@ export const AssetManifest: Record<string, AssetManifestEntry> = {
     "Assets/Textures/Backdrops/bg6.png",
     "prompt.backdrops.hero",
     CASTLE_BACKDROP_NOTES,
-    "cover 1080x500 hero stage",
+    "cover 864x700 hero stage",
   ),
   [AssetIds.backdrops.bg7]: texture(
     AssetIds.backdrops.bg7,
@@ -249,7 +249,7 @@ export const AssetManifest: Record<string, AssetManifestEntry> = {
     "Assets/Textures/Backdrops/bg7.png",
     "prompt.backdrops.hero",
     CASTLE_BACKDROP_NOTES,
-    "cover 1080x500 hero stage",
+    "cover 864x700 hero stage",
   ),
   [AssetIds.rigs.mage]: rig(
     AssetIds.rigs.mage,

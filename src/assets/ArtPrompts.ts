@@ -98,7 +98,7 @@ export const ArtPrompts: readonly ArtPromptBatch[] = [
   {
     id: 'prompt.backdrops.hero',
     title: 'Hero stage backdrops',
-    outputUse: 'Hero-stage 2.5D backdrop plates at 2160x1000 PNG or WebP.',
+    outputUse: 'Hero-stage 2.5D backdrop plates at 2160x1000 PNG or WebP, cover-cropped into an 864x700 stage.',
     prompt: withLockedStyle(
       [
         'Create three portrait fantasy backdrop paintings for the top hero stage of a mobile match-3 game,',
@@ -108,7 +108,7 @@ export const ArtPrompts: readonly ArtPromptBatch[] = [
       ].join(' '),
     ),
     expectedFiles: ['backdrop-forest.png', 'backdrop-crypt.png', 'backdrop-crystal-cave.png'],
-    notes: 'Runtime size is 2x the 1080x500 logical hero stage.',
+    notes: 'Runtime uses 864x700 logical hero-stage cover cropping; existing 2160x1000 source art is reused.',
   },
   {
     id: 'prompt.rig.mage',

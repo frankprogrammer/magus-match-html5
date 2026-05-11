@@ -99,16 +99,15 @@ describe('ThreeObjectFactory', () => {
   });
 
   it('computes cover sizing for wide and tall backdrop images', () => {
-    expect(backdropCoverSizeForImageAspect(3)).toEqual({
-      width: 15,
-      height: 5,
-      centerY: 0,
-    });
-    expect(backdropCoverSizeForImageAspect(1)).toEqual({
-      width: 10.8,
-      height: 10.8,
-      centerY: -2.9000000000000004,
-    });
+    const wide = backdropCoverSizeForImageAspect(3);
+    expect(wide.width).toBeCloseTo(26.25);
+    expect(wide.height).toBeCloseTo(8.75);
+    expect(wide.centerY).toBe(0);
+
+    const tall = backdropCoverSizeForImageAspect(1);
+    expect(tall.width).toBeCloseTo(10.8);
+    expect(tall.height).toBeCloseTo(10.8);
+    expect(tall.centerY).toBeCloseTo(-1.025);
   });
 
   it('documents the loaded mage FBX facing correction as -90 degrees around Y', () => {

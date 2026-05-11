@@ -1,21 +1,31 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
+import { HERO_STAGE_HEIGHT, LOGICAL_WIDTH } from '../src/core/Layout';
 import {
-  HERO_STAGE_ORTHO_VIEW_HEIGHT,
+  HERO_STAGE_ORTHO_VIEW_WIDTH,
   orthographicBoundsForAspect,
   ThreeCameraController,
 } from '../src/render-three/ThreeCameraController';
 import type { CameraState } from '../src/world-3d/HeroWorldState';
 
 describe('ThreeCameraController', () => {
-  it('computes orthographic bounds from a fixed 5-world-unit view height', () => {
-    const bounds = orthographicBoundsForAspect(1080 / 500);
+  it('computes orthographic bounds from a fixed 10.8-world-unit view width', () => {
+    const bounds = orthographicBoundsForAspect(LOGICAL_WIDTH / HERO_STAGE_HEIGHT);
 
-    expect(HERO_STAGE_ORTHO_VIEW_HEIGHT).toBe(5);
-    expect(bounds.top).toBe(2.5);
-    expect(bounds.bottom).toBe(-2.5);
+    expect(HERO_STAGE_ORTHO_VIEW_WIDTH).toBe(10.8);
     expect(bounds.left).toBeCloseTo(-5.4);
     expect(bounds.right).toBeCloseTo(5.4);
+    expect(bounds.top).toBeCloseTo(4.375);
+    expect(bounds.bottom).toBeCloseTo(-4.375);
+  });
+
+  it('keeps horizontal world width fixed for non-default aspects', () => {
+    const bounds = orthographicBoundsForAspect(2);
+
+    expect(bounds.left).toBeCloseTo(-5.4);
+    expect(bounds.right).toBeCloseTo(5.4);
+    expect(bounds.top).toBeCloseTo(2.7);
+    expect(bounds.bottom).toBeCloseTo(-2.7);
   });
 
   it('applies plain camera state to an orthographic camera', () => {
@@ -30,10 +40,10 @@ describe('ThreeCameraController', () => {
     new ThreeCameraController().apply(camera, state, 2);
 
     expect(camera).toBeInstanceOf(THREE.OrthographicCamera);
-    expect(camera.left).toBe(-5);
-    expect(camera.right).toBe(5);
-    expect(camera.top).toBe(2.5);
-    expect(camera.bottom).toBe(-2.5);
+    expect(camera.left).toBeCloseTo(-5.4);
+    expect(camera.right).toBeCloseTo(5.4);
+    expect(camera.top).toBeCloseTo(2.7);
+    expect(camera.bottom).toBeCloseTo(-2.7);
     expect(camera.position.toArray()).toEqual([1, 2, 12]);
   });
 });

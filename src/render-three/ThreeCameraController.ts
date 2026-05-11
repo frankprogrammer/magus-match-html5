@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { CameraState } from '../world-3d/HeroWorldState';
 
-export const HERO_STAGE_ORTHO_VIEW_HEIGHT = 5;
+export const HERO_STAGE_ORTHO_VIEW_WIDTH = 10.8;
 
 export interface OrthographicBounds {
   left: number;
@@ -12,8 +12,8 @@ export interface OrthographicBounds {
 
 export function orthographicBoundsForAspect(aspect: number): OrthographicBounds {
   const safeAspect = Number.isFinite(aspect) && aspect > 0 ? aspect : 1;
-  const halfHeight = HERO_STAGE_ORTHO_VIEW_HEIGHT / 2;
-  const halfWidth = halfHeight * safeAspect;
+  const halfWidth = HERO_STAGE_ORTHO_VIEW_WIDTH / 2;
+  const halfHeight = halfWidth / safeAspect;
   return {
     left: -halfWidth,
     right: halfWidth,

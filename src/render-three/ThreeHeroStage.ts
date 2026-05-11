@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { HERO_STAGE_HEIGHT, LOGICAL_WIDTH } from '../core/Layout';
 import type { HeroWorldState, ProjectileState } from '../world-3d/HeroWorldState';
 import type { WorldObjectState } from '../world-3d/WorldObjectState';
 import { orthographicBoundsForAspect, ThreeCameraController } from './ThreeCameraController';
@@ -15,7 +16,7 @@ const originalMaterialState = new WeakMap<OverrideableMaterial, {
 
 export class ThreeHeroStage {
   private readonly scene = new THREE.Scene();
-  private readonly camera = createHeroStageCamera(1080 / 500);
+  private readonly camera = createHeroStageCamera(LOGICAL_WIDTH / HERO_STAGE_HEIGHT);
   private readonly renderer: THREE.WebGLRenderer;
   private readonly factory = new ThreeObjectFactory();
   private readonly objectCache = new ThreeObjectCache();
@@ -29,7 +30,7 @@ export class ThreeHeroStage {
   constructor(private readonly container: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.setSize(1080, 500, false);
+    this.renderer.setSize(LOGICAL_WIDTH, HERO_STAGE_HEIGHT, false);
     this.renderer.domElement.className = 'hero-stage-canvas';
     this.container.appendChild(this.renderer.domElement);
 
@@ -59,8 +60,8 @@ export class ThreeHeroStage {
   }
 
   getMageParticleSourceLogicalPosition(
-    logicalWidth = 1080,
-    logicalHeight = 500,
+    logicalWidth = LOGICAL_WIDTH,
+    logicalHeight = HERO_STAGE_HEIGHT,
   ): { x: number; y: number } | null {
     return resolveMageParticleSourceLogicalPosition(
       this.objectCache.get('actor-mage'),

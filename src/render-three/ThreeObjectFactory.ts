@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
 import { AssetIds } from "../assets/AssetIds";
 import { getAssetManifestEntry } from "../assets/AssetManifest";
+import { HERO_STAGE_HEIGHT, LOGICAL_WIDTH } from "../core/Layout";
 import { resolveBrowserAssetUrl } from "../platform-browser/BrowserAssetUrl";
 import { HeroStageTemplateIds } from "../world-3d/HeroStageTemplates";
 import {
@@ -24,7 +25,8 @@ const MAGE_LOOP_END_FRAME = 60;
 export const MAGE_MODEL_Y_ROTATION_RAD = -Math.PI / 2;
 export const KOBOLD_MODEL_Y_ROTATION_RAD = -Math.PI / 2;
 export const HERO_BACKDROP_VIEW_WIDTH = 10.8;
-export const HERO_BACKDROP_VIEW_HEIGHT = 5;
+export const HERO_BACKDROP_VIEW_HEIGHT =
+  HERO_BACKDROP_VIEW_WIDTH / (LOGICAL_WIDTH / HERO_STAGE_HEIGHT);
 
 export class ThreeObjectFactory {
   private mageTemplate: THREE.Group | null = null;

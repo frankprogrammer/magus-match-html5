@@ -67,7 +67,7 @@ describe("AssetManifest", () => {
       "/assets/backdrops/bg1.png",
     );
     expect(AssetManifest[AssetIds.backdrops.castle].runtimeSize).toBe(
-      "cover 1080x500 hero stage",
+      "cover 864x700 hero stage",
     );
     expect(AssetManifest[AssetIds.ui.hudBanner].browserUrl).toBe(
       "/assets/ui/ui-banner.png",

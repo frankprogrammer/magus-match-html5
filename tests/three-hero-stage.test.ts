@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
+import { HERO_STAGE_HEIGHT, LOGICAL_WIDTH } from '../src/core/Layout';
 import {
   applyMaterialOverrides,
   createMageAnimationController,
@@ -122,7 +123,7 @@ describe('ThreeHeroStage projectile VFX', () => {
   });
 
   it('projects the mage particleSource into logical hero-stage coordinates', () => {
-    const camera = new THREE.OrthographicCamera(-5.4, 5.4, 2.5, -2.5, 0.1, 100);
+    const camera = new THREE.OrthographicCamera(-5.4, 5.4, 4.375, -4.375, 0.1, 100);
     camera.position.set(0, 0, 10);
     camera.lookAt(0, 0, 0);
     camera.updateProjectionMatrix();
@@ -133,24 +134,29 @@ describe('ThreeHeroStage projectile VFX', () => {
     particleSource.position.set(1, 1, 0);
     mage.add(particleSource);
 
-    const centered = projectWorldPositionToLogicalHeroStage({ x: 0, y: 0, z: 0 }, camera, 1080, 500);
-    const projected = resolveMageParticleSourceLogicalPosition(mage, camera, 1080, 500);
+    const centered = projectWorldPositionToLogicalHeroStage(
+      { x: 0, y: 0, z: 0 },
+      camera,
+      LOGICAL_WIDTH,
+      HERO_STAGE_HEIGHT,
+    );
+    const projected = resolveMageParticleSourceLogicalPosition(mage, camera, LOGICAL_WIDTH, HERO_STAGE_HEIGHT);
 
-    expect(centered).toEqual({ x: 540, y: 250 });
-    expect(projected?.x).toBeCloseTo(640);
-    expect(projected?.y).toBeCloseTo(150);
+    expect(centered).toEqual({ x: 432, y: 350 });
+    expect(projected?.x).toBeCloseTo(512);
+    expect(projected?.y).toBeCloseTo(270);
 
     particleSource.position.set(2, -0.5, 0);
-    const updated = resolveMageParticleSourceLogicalPosition(mage, camera, 1080, 500);
-    expect(updated?.x).toBeCloseTo(740);
-    expect(updated?.y).toBeCloseTo(300);
+    const updated = resolveMageParticleSourceLogicalPosition(mage, camera, LOGICAL_WIDTH, HERO_STAGE_HEIGHT);
+    expect(updated?.x).toBeCloseTo(592);
+    expect(updated?.y).toBeCloseTo(390);
   });
 
   it('returns null for logical particleSource projection when the source is missing', () => {
-    const camera = new THREE.OrthographicCamera(-5.4, 5.4, 2.5, -2.5, 0.1, 100);
+    const camera = new THREE.OrthographicCamera(-5.4, 5.4, 4.375, -4.375, 0.1, 100);
     camera.updateProjectionMatrix();
 
-    expect(resolveMageParticleSourceLogicalPosition(new THREE.Group(), camera, 1080, 500)).toBeNull();
+    expect(resolveMageParticleSourceLogicalPosition(new THREE.Group(), camera, LOGICAL_WIDTH, HERO_STAGE_HEIGHT)).toBeNull();
   });
 });
 

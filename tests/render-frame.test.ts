@@ -12,6 +12,7 @@ import {
   HUD_SCORE_LABEL_ROW_HEIGHT,
   HUD_SCORE_LABEL_VALUE_GAP_PX,
   LOGICAL_WIDTH,
+  LOGICAL_HEIGHT,
   HUD_TRIAL_FILLBAR_FRAME_HEIGHT,
   HUD_TRIAL_FILLBAR_FRAME_WIDTH,
   HUD_TRIAL_FILLBAR_KOBOLD_HEIGHT_FRAC,
@@ -60,8 +61,8 @@ function trialFillClipBounds(ratio: number): { clipX: number; clipY: number; cli
 describe('buildBoardCellVisuals', () => {
   it('builds stable cell bounds and overlay flags from render state', () => {
     const state: BoardRenderState = {
-      logicalWidth: 1080,
-      logicalHeight: 1920,
+      logicalWidth: LOGICAL_WIDTH,
+      logicalHeight: LOGICAL_HEIGHT,
       boardCells: [
         {
           tileId: 'tile-0',
@@ -97,10 +98,10 @@ describe('buildBoardCellVisuals', () => {
       coord: { col: 0, row: 0 },
       x: BOARD_RECT.x,
       y: BOARD_RECT.y,
-      width: 135,
-      height: 135,
-      centerX: 67.5,
-      centerY: BOARD_RECT.y + 67.5,
+      width: BOARD_RECT.cellSize,
+      height: BOARD_RECT.cellSize,
+      centerX: BOARD_RECT.x + BOARD_RECT.cellSize / 2,
+      centerY: BOARD_RECT.y + BOARD_RECT.cellSize / 2,
       tileType: 'FIRE',
       fillColor: '#eb5757',
       glyph: 'F',
@@ -116,8 +117,8 @@ describe('buildBoardCellVisuals', () => {
       coord: { col: 7, row: 7 },
       x: BOARD_RECT.x + 7 * BOARD_RECT.cellSize,
       y: BOARD_RECT.y + 7 * BOARD_RECT.cellSize,
-      width: 135,
-      height: 135,
+      width: BOARD_RECT.cellSize,
+      height: BOARD_RECT.cellSize,
       tileType: 'LAND',
       fillColor: '#8b6f47',
       glyph: 'P',
@@ -132,8 +133,8 @@ describe('buildBoardCellVisuals', () => {
 
   it('skips cells that do not have tile render data', () => {
     const state: BoardRenderState = {
-      logicalWidth: 1080,
-      logicalHeight: 1920,
+      logicalWidth: LOGICAL_WIDTH,
+      logicalHeight: LOGICAL_HEIGHT,
       boardCells: [],
       pathCells: [],
       mageCell: null,
@@ -237,9 +238,9 @@ describe('buildBoardCellVisuals', () => {
 
     renderFrame(renderer, oneTileState('tile.fire'), hudState(), 0);
 
-    expect(renderer.calls).not.toContain('rect:#241832:0,0,1080,1920');
-    expect(renderer.calls).not.toContain('rect:#1f1830:0,490,1080,150');
-    expect(renderer.calls).toContain(`image:${AssetIds.ui.hudBanner}:0,490,1080,150`);
+    expect(renderer.calls).not.toContain(`rect:#241832:0,0,${LOGICAL_WIDTH},${LOGICAL_HEIGHT}`);
+    expect(renderer.calls).not.toContain(`rect:#1f1830:0,${HUD_BAND_TOP_Y},${LOGICAL_WIDTH},150`);
+    expect(renderer.calls).toContain(`image:${AssetIds.ui.hudBanner}:0,${HUD_BAND_TOP_Y},${LOGICAL_WIDTH},150`);
     expect(renderer.calls).toContain(
       `rect:rgba(36, 24, 50, 0.92):${LEVEL_PANEL_X},${LEVEL_PANEL_TOP},${LEVEL_PANEL_WIDTH},${LEVEL_PANEL_HEIGHT}`,
     );
@@ -479,7 +480,7 @@ describe('buildBoardCellVisuals', () => {
     renderFrame(renderer, state, hudState(), 0);
 
     expect(renderer.calls).toContain(
-      `image:tile.fire:${BOARD_RECT.x + 8},${BOARD_RECT.y - BOARD_RECT.cellSize + 8},119,119`,
+      `image:tile.fire:${BOARD_RECT.x + 8},${BOARD_RECT.y - BOARD_RECT.cellSize + 8},${BOARD_RECT.cellSize - 16},${BOARD_RECT.cellSize - 16}`,
     );
     expect(renderer.calls).not.toContain(
       `rect:#171225:${BOARD_RECT.x},${BOARD_RECT.y - BOARD_RECT.cellSize},${BOARD_RECT.cellSize},${BOARD_RECT.cellSize}`,
@@ -755,8 +756,8 @@ describe('buildBoardCellVisuals', () => {
 
 function oneTileState(assetId: string): BoardRenderState {
   return {
-    logicalWidth: 1080,
-    logicalHeight: 1920,
+    logicalWidth: LOGICAL_WIDTH,
+    logicalHeight: LOGICAL_HEIGHT,
     boardCells: [
       {
         tileId: 'tile-0',

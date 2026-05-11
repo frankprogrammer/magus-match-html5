@@ -7,7 +7,7 @@ import {
 import { getBoardAnimationTraceDurationMs } from '../src/board/BoardAnimationTiming';
 import { createBoardFromTileTypes } from '../src/board/Board';
 import { AssetIds } from '../src/assets/AssetIds';
-import { BOARD_RECT } from '../src/core/Layout';
+import { BOARD_RECT, LOGICAL_HEIGHT, LOGICAL_WIDTH } from '../src/core/Layout';
 import { BoardAnimationPresenter } from '../src/render-2d/BoardAnimationPresenter';
 import type { BoardCellVisualState, BoardRenderState } from '../src/render-2d/BoardRenderState';
 import {
@@ -849,8 +849,8 @@ function nonstandardClearTrace(): BoardAnimationTrace {
 
 function boardState(trace: BoardAnimationTrace): BoardRenderState {
   return {
-    logicalWidth: 1080,
-    logicalHeight: 1920,
+    logicalWidth: LOGICAL_WIDTH,
+    logicalHeight: LOGICAL_HEIGHT,
     boardCells: trace.finalSnapshot.cells.map((cell) => renderCell(cell.tileId, cell.tileType, cell.coord.col, cell.coord.row)),
     pathCells: [],
     mageCell: null,

@@ -73,7 +73,7 @@ describe('HeroWorldState', () => {
     expect(track?.replication).toBe('localCosmetic');
     expect(fill?.replication).toBe('localCosmetic');
     expect(track?.transform.position.y).toBeGreaterThan(monster?.transform.position.y ?? 0);
-    expect((track?.transform.position.y ?? 0) - (monster?.transform.position.y ?? 0)).toBeCloseTo(2.56);
+    expect((track?.transform.position.y ?? 0) - (monster?.transform.position.y ?? 0)).toBeCloseTo(3.72);
     expect(fill?.transform.scale.x).toBeCloseTo(track?.transform.scale.x ?? 0);
     expect(track?.transform.scale.y).toBeCloseTo(0.18);
     expect(fill?.transform.scale.y).toBeCloseTo(0.11);
@@ -269,7 +269,7 @@ describe('HeroWorldState', () => {
 
     expect(journeyMage?.transform.scale).toEqual(MAGE_WORLD_SCALE);
     expect(trialMage?.transform.scale).toEqual(MAGE_WORLD_SCALE);
-    expect(MAGE_WORLD_SCALE).toEqual({ x: 2, y: 2, z: 2 });
+    expect(MAGE_WORLD_SCALE).toEqual({ x: 3, y: 3, z: 3 });
     expect(journeyMage?.transform.position.y).toBeLessThan(1.6);
     expect(trialMage?.transform.position.y).toBeLessThan(-0.85);
     expect(trialMage?.transform.position.x).toBeCloseTo(baseTrialMagePosition?.x ?? 0);
@@ -301,7 +301,7 @@ describe('HeroWorldState', () => {
     expect(monster?.transform.scale).toEqual(MAGE_WORLD_SCALE);
     expect(monster?.tintHex).toBeUndefined();
     expect(monster?.animationPaused).toBeUndefined();
-    expect(monster?.transform.position.y).toBeCloseTo((baseMonsterPosition?.y ?? -0.85) - 0.74 + visualYOffset);
+    expect(monster?.transform.position.y).toBeCloseTo((baseMonsterPosition?.y ?? -0.85) - 1.49 + visualYOffset);
   });
 
   it('emits a pulsing cyan tint for frozen Trial enemies without tinting health bars', () => {

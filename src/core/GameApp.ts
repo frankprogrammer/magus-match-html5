@@ -113,19 +113,19 @@ export interface MagusMatchGameAppOptions {
   debugStartLevel?: number;
 }
 
-export const MAGE_WORLD_SCALE: TransformState["scale"] = { x: 2, y: 2, z: 2 };
+export const MAGE_WORLD_SCALE: TransformState["scale"] = { x: 3, y: 3, z: 3 };
 
 interface RuntimeBoardVisualCue extends Omit<BoardVisualCueState, "value"> {
   remainingSec: number;
   durationSec: number;
 }
 
-const MAGE_WORLD_Y_OFFSET = -0.72;
+const MAGE_WORLD_Y_OFFSET = -1.47;
 const TRIAL_HEALTH_BAR_WIDTH = 0.92;
 const TRIAL_HEALTH_BAR_HEIGHT = 0.18;
 const TRIAL_HEALTH_BAR_FILL_HEIGHT = 0.11;
 const TRIAL_HEALTH_BAR_Z_OFFSET = 0.08;
-const TRIAL_KOBOLD_HEALTH_BAR_Y_OFFSET = 2.56;
+const TRIAL_KOBOLD_HEALTH_BAR_Y_OFFSET = 3.72;
 const TRIAL_HIT_SHAKE_X_AMPLITUDE = 0.14;
 const TRIAL_HIT_SHAKE_Y_AMPLITUDE = 0.045;
 const TRIAL_WALK_AUDIO_EPSILON_SEC = 0.000001;
@@ -1456,11 +1456,11 @@ function phaseToPrinceAnimation(phase: GamePhase): string {
 function trialMonsterWorldYOffset(kind: ActiveTrialMonster["kind"]): number {
   switch (kind) {
     case "kobold":
-      return -0.74;
+      return -1.49;
     case "tallKobold":
-      return -0.88;
+      return -1.63;
     case "miniBoss":
-      return -0.98;
+      return -1.73;
   }
 }
 

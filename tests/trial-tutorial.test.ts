@@ -11,10 +11,11 @@ describe('Trial tutorial setup', () => {
 
     expect(detectMatches(setup.board)).toHaveLength(0);
     expect(validateSwap(setup.board, setup.allowedSwap.from, setup.allowedSwap.to).valid).toBe(true);
-    expect(setup.flashCells).toHaveLength(4);
+    expect(setup.flashCells).toEqual([setup.allowedSwap.to, setup.allowedSwap.from]);
+    expect(setup.matchCells).toHaveLength(3);
     expect(setup.flashCells).toContainEqual(setup.allowedSwap.to);
     expect(
-      setup.flashCells
+      setup.matchCells
         .map((coord) => setup.board[coord.row][coord.col].tile?.type)
         .filter((type) => type === 'LIGHTNING'),
     ).toHaveLength(3);

@@ -16,6 +16,7 @@ export interface TrialTutorialBoardSetup {
   board: Board;
   allowedSwap: { from: CellCoord; to: CellCoord };
   flashCells: readonly CellCoord[];
+  matchCells: readonly CellCoord[];
   movingCell: CellCoord;
   direction: CellCoord;
 }
@@ -84,16 +85,17 @@ function tryCreateSetup(baseBoard: Board, origin: CellCoord): TrialTutorialBoard
     from: { col: origin.col + 1, row: origin.row + 1 },
     to: { col: origin.col + 1, row: origin.row },
   };
-  const flashCells = [
+  const matchCells = [
     { col: origin.col, row: origin.row },
-    { ...allowedSwap.to },
     { ...allowedSwap.from },
     { col: origin.col + 2, row: origin.row },
   ];
+  const flashCells = [{ ...allowedSwap.to }, { ...allowedSwap.from }];
   const setup: TrialTutorialBoardSetup = {
     board,
     allowedSwap,
     flashCells,
+    matchCells,
     movingCell: { ...allowedSwap.from },
     direction: {
       col: allowedSwap.to.col - allowedSwap.from.col,

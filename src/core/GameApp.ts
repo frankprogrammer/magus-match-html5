@@ -451,6 +451,7 @@ export class MagusMatchGameApp implements GameApp {
             to: { ...this.trialTutorial.allowedSwap.to },
           },
           flashCells: this.trialTutorial.flashCells.map((coord) => ({ ...coord })),
+          matchCells: this.trialTutorial.matchCells.map((coord) => ({ ...coord })),
           movingCell: { ...this.trialTutorial.movingCell },
           direction: { ...this.trialTutorial.direction },
         };
@@ -1370,20 +1371,24 @@ export class MagusMatchGameApp implements GameApp {
     if (this.phase !== "IDLE" || this.trialTutorial?.phase !== "active") {
       return null;
     }
+    const tutorial = this.trialTutorial;
 
     const progress =
       (this.matchHintTimerSec % MATCH_HINT_ACTIVE_SEC) / MATCH_HINT_ACTIVE_SEC;
     return {
       allowedSwap: {
-        from: { ...this.trialTutorial.allowedSwap.from },
-        to: { ...this.trialTutorial.allowedSwap.to },
+        from: { ...tutorial.allowedSwap.from },
+        to: { ...tutorial.allowedSwap.to },
       },
-      flashCells: this.trialTutorial.flashCells.map((coord) => ({ ...coord })),
-      movingCell: { ...this.trialTutorial.movingCell },
-      direction: { ...this.trialTutorial.direction },
+      flashCells: tutorial.flashCells.map((coord) => ({ ...coord })),
+      movingCell: { ...tutorial.movingCell },
+      direction: { ...tutorial.direction },
       progress,
       dimmedCells: getAllPlayableCoords(this.board).filter(
-        (coord) => !this.trialTutorial?.flashCells.some((flashCoord) => coordsEqual(flashCoord, coord)),
+        (coord) =>
+          ![...tutorial.flashCells, ...tutorial.matchCells].some((visibleCoord) =>
+            coordsEqual(visibleCoord, coord),
+          ),
       ),
     };
   }

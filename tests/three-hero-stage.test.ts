@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { HERO_STAGE_HEIGHT, LOGICAL_WIDTH } from '../src/core/Layout';
 import {
+  applyNodeVisibilityOverrides,
   applyMaterialOverrides,
   createMageAnimationController,
   earthImpactSpriteFrameIndex,
@@ -276,6 +277,78 @@ describe('ThreeHeroStage projectile VFX', () => {
     expect(resolveMageParticleSourceLogicalPosition(new THREE.Group(), camera, LOGICAL_WIDTH, HERO_STAGE_HEIGHT)).toBeNull();
   });
 });
+
+describe('ThreeHeroStage node visibility overrides', () => {
+  it('shows the selected kobold head and club while hiding the unselected nodes', () => {
+    const kobold = createNamedKoboldVariantObject();
+
+    applyNodeVisibilityOverrides(kobold, {
+      visibleNodeNames: ['k.head-2', 'k.club-3'],
+      hiddenNodeNames: ['k.head-1', 'k.head-3', 'k.club-1', 'k.club-2'],
+    });
+
+    expect(kobold.getObjectByName('k.head-2')?.visible).toBe(true);
+    expect(kobold.getObjectByName('k.club-3')?.visible).toBe(true);
+    expect(kobold.getObjectByName('k.head-1')?.visible).toBe(false);
+    expect(kobold.getObjectByName('k.head-3')?.visible).toBe(false);
+    expect(kobold.getObjectByName('k.club-1')?.visible).toBe(false);
+    expect(kobold.getObjectByName('k.club-2')?.visible).toBe(false);
+  });
+
+  it('matches sanitized FBX runtime node names and updates every matching node', () => {
+    const kobold = createNamedObject(['khead-1', 'khead-1', 'kclub-2']);
+
+    applyNodeVisibilityOverrides(kobold, {
+      visibleNodeNames: ['k.club-2'],
+      hiddenNodeNames: ['k.head-1', 'k.club-2'],
+    });
+
+    expect(nodesByName(kobold, 'khead-1').map((node) => node.visible)).toEqual([false, false]);
+    expect(kobold.getObjectByName('kclub-2')?.visible).toBe(true);
+  });
+
+  it('ignores missing node names and can apply a different variant later', () => {
+    const kobold = createNamedKoboldVariantObject();
+
+    applyNodeVisibilityOverrides(kobold, {
+      visibleNodeNames: ['k.head-2', 'k.club-3'],
+      hiddenNodeNames: ['k.head-1', 'missing-head', 'k.head-3', 'k.club-1', 'k.club-2'],
+    });
+    applyNodeVisibilityOverrides(kobold, {
+      visibleNodeNames: ['k.head-1', 'k.club-1'],
+      hiddenNodeNames: ['k.head-2', 'k.head-3', 'k.club-2', 'missing-club', 'k.club-3'],
+    });
+
+    expect(kobold.getObjectByName('k.head-1')?.visible).toBe(true);
+    expect(kobold.getObjectByName('k.club-1')?.visible).toBe(true);
+    expect(kobold.getObjectByName('k.head-2')?.visible).toBe(false);
+    expect(kobold.getObjectByName('k.club-3')?.visible).toBe(false);
+  });
+});
+
+function createNamedKoboldVariantObject(): THREE.Object3D {
+  return createNamedObject(['k.head-1', 'k.head-2', 'k.head-3', 'k.club-1', 'k.club-2', 'k.club-3']);
+}
+
+function createNamedObject(names: readonly string[]): THREE.Object3D {
+  const group = new THREE.Group();
+  for (const name of names) {
+    const child = new THREE.Object3D();
+    child.name = name;
+    group.add(child);
+  }
+  return group;
+}
+
+function nodesByName(object: THREE.Object3D, name: string): THREE.Object3D[] {
+  const nodes: THREE.Object3D[] = [];
+  object.traverse((child) => {
+    if (child.name === name) {
+      nodes.push(child);
+    }
+  });
+  return nodes;
+}
 
 describe('ThreeHeroStage material overrides', () => {
   it('restores original material color and opacity after temporary tint and fade overrides clear', () => {

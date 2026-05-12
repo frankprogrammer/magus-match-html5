@@ -10,7 +10,14 @@ import {
   phaseToCinematicState,
   trialMonsterHitShakeOffset,
 } from '../src/core/GameApp';
-import { getTrialMageWorldPosition, getTrialMonsterWorldPosition, KOBOLD_DEFEAT_FADE_SEC } from '../src/generator/TrialRules';
+import {
+  getTrialMageWorldPosition,
+  getTrialMonsterWorldPosition,
+  KOBOLD_CLUB_NODE_NAMES,
+  KOBOLD_DEFEAT_FADE_SEC,
+  KOBOLD_HEAD_NODE_NAMES,
+  koboldModelVariantForMonster,
+} from '../src/generator/TrialRules';
 import { HeroStageTemplateIds } from '../src/world-3d/HeroStageTemplates';
 
 describe('HeroWorldState', () => {
@@ -61,6 +68,51 @@ describe('HeroWorldState', () => {
     expect(state.levelType).toBe('TRIAL');
     expect(state.objects.some((object) => object.templateId === HeroStageTemplateIds.mage)).toBe(true);
     expect(state.objects.some((object) => object.templateId === HeroStageTemplateIds.monsterPlaceholder)).toBe(true);
+  });
+
+  it('emits node visibility overrides for Trial kobold head and club variants', () => {
+    const app = new MagusMatchGameApp(789);
+    const runtime = app.getTrialRuntimeForDebug();
+    const monster = runtime?.monsters[0];
+    if (monster == null) {
+      throw new Error('Expected Trial monster.');
+    }
+
+    const monsterObject = app
+      .getHeroWorldState()
+      .objects.find((object) => object.objectId === `trial-monster-${monster.monsterId}`);
+    const variant = monster.modelVariant ?? koboldModelVariantForMonster(789, monster.monsterId);
+
+    expect(monsterObject?.nodeVisibility?.visibleNodeNames).toEqual([
+      variant.headNodeName,
+      variant.clubNodeName,
+    ]);
+    expect(monsterObject?.nodeVisibility?.hiddenNodeNames).toEqual([
+      ...KOBOLD_HEAD_NODE_NAMES.filter((nodeName) => nodeName !== variant.headNodeName),
+      ...KOBOLD_CLUB_NODE_NAMES.filter((nodeName) => nodeName !== variant.clubNodeName),
+    ]);
+  });
+
+  it('emits node visibility overrides for tutorial kobolds', () => {
+    const app = new MagusMatchGameApp(555);
+    app.startFromTitle();
+
+    const runtime = app.getTrialRuntimeForDebug();
+    const level = app.getCurrentLevelForDebug();
+    const tutorialMonster = runtime?.monsters.find((monster) => monster.monsterId === 'tutorial-kobold-0');
+    const tutorialObject = app
+      .getHeroWorldState()
+      .objects.find((object) => object.objectId === 'trial-monster-tutorial-kobold-0');
+
+    expect(level?.type).toBe('TRIAL');
+    expect(tutorialMonster?.modelVariant).toEqual(
+      koboldModelVariantForMonster(level?.seed ?? 0, 'tutorial-kobold-0'),
+    );
+    expect(tutorialObject?.nodeVisibility?.visibleNodeNames).toEqual([
+      tutorialMonster?.modelVariant?.headNodeName,
+      tutorialMonster?.modelVariant?.clubNodeName,
+    ]);
+    expect(tutorialObject?.nodeVisibility?.hiddenNodeNames).toHaveLength(4);
   });
 
   it('includes stable Trial enemy health bar objects above alive monsters', () => {

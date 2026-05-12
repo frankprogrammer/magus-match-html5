@@ -45,10 +45,19 @@ export class ThreeObjectFactory {
   private koboldTextureLoadStarted = false;
   private koboldTextureDebugShown = false;
   private koboldBoneOnlyWarningShown = false;
+  private bossTemplate: THREE.Group | null = null;
+  private pendingBossTemplate: THREE.Group | null = null;
+  private bossTemplateVersion = 0;
+  private bossLoadStarted = false;
+  private bossTexture: THREE.Texture | null = null;
+  private bossTextureLoadStarted = false;
+  private bossTextureDebugShown = false;
+  private bossBoneOnlyWarningShown = false;
 
   constructor() {
     this.startMageModelLoad();
     this.startKoboldModelLoad();
+    this.startBossModelLoad();
   }
 
   create(templateId: string, backdropTextureId?: string): THREE.Object3D {
@@ -65,6 +74,8 @@ export class ThreeObjectFactory {
         return createPathMarker();
       case HeroStageTemplateIds.monsterPlaceholder:
         return this.createKobold();
+      case HeroStageTemplateIds.miniBoss:
+        return this.createBoss();
       case HeroStageTemplateIds.projectilePlaceholder:
         return createProjectilePlaceholder();
       case HeroStageTemplateIds.fireBurn:
@@ -91,6 +102,10 @@ export class ThreeObjectFactory {
 
     if (templateId === HeroStageTemplateIds.monsterPlaceholder) {
       return this.koboldTemplateVersion;
+    }
+
+    if (templateId === HeroStageTemplateIds.miniBoss) {
+      return this.bossTemplateVersion;
     }
 
     return 0;
@@ -128,6 +143,15 @@ export class ThreeObjectFactory {
       this.pendingKoboldTemplate = null;
     }
     this.koboldTexture = null;
+    if (this.bossTemplate != null) {
+      this.dispose(this.bossTemplate);
+      this.bossTemplate = null;
+    }
+    if (this.pendingBossTemplate != null) {
+      this.dispose(this.pendingBossTemplate);
+      this.pendingBossTemplate = null;
+    }
+    this.bossTexture = null;
   }
 
   private createMage(): THREE.Object3D {
@@ -143,6 +167,15 @@ export class ThreeObjectFactory {
     this.startKoboldModelLoad();
     if (this.koboldTemplate != null) {
       return cloneLoadedKoboldTemplate(this.koboldTemplate);
+    }
+
+    return new THREE.Group();
+  }
+
+  private createBoss(): THREE.Object3D {
+    this.startBossModelLoad();
+    if (this.bossTemplate != null) {
+      return cloneLoadedBossTemplate(this.bossTemplate);
     }
 
     return new THREE.Group();
@@ -358,6 +391,106 @@ export class ThreeObjectFactory {
     this.koboldTemplateVersion += 1;
     return true;
   }
+
+  private startBossModelLoad(): void {
+    if (this.bossLoadStarted || typeof window === "undefined") {
+      return;
+    }
+
+    const entry = getAssetManifestEntry(AssetIds.rigs.boss);
+    if (entry?.sourceFormat !== "fbx") {
+      return;
+    }
+
+    this.bossLoadStarted = true;
+    const loader = new FBXLoader();
+    const bossUrl = resolveBrowserAssetUrl(entry.browserUrl);
+    loader.load(
+      bossUrl,
+      (loaded) => {
+        const loadedHadRenderableGeometry = hasRenderableGeometry(loaded);
+        if (!loadedHadRenderableGeometry) {
+          const proxyAdded = addBoneProxyRig(loaded);
+          if (!this.bossBoneOnlyWarningShown) {
+            console.warn(
+              proxyAdded
+                ? `Boss FBX at ${bossUrl} has animation bones but no renderable meshes; using temporary bone proxy visuals.`
+                : `Boss FBX at ${bossUrl} has no renderable meshes and no usable bones; keeping placeholder boss.`,
+            );
+            this.bossBoneOnlyWarningShown = true;
+          }
+
+          if (!proxyAdded) {
+            return;
+          }
+        }
+
+        applyFallbackMaterialToUnmaterialedMeshes(loaded);
+        ensureMageMeshesVisibleWithoutOverridingTextures(loaded);
+        this.pendingBossTemplate = normalizeModelToActorBounds(
+          loaded,
+          KOBOLD_TARGET_HEIGHT,
+        );
+        this.pendingBossTemplate.animations = createKoboldAnimationClips(loaded.animations);
+        if (loadedHadRenderableGeometry) {
+          this.publishBossTemplateIfTextureReady();
+          this.startBossTextureLoad();
+        }
+      },
+      undefined,
+      (error) => {
+        console.warn(`Failed to load boss FBX from ${bossUrl}`, error);
+      },
+    );
+  }
+
+  private startBossTextureLoad(): void {
+    if (this.bossTextureLoadStarted || typeof window === "undefined") {
+      return;
+    }
+
+    const entry = getAssetManifestEntry(AssetIds.materials.bossTexture);
+    if (entry == null) {
+      return;
+    }
+
+    this.bossTextureLoadStarted = true;
+    const textureUrl = resolveBrowserAssetUrl(entry.browserUrl);
+    new THREE.TextureLoader().load(
+      textureUrl,
+      (texture) => {
+        texture.colorSpace = THREE.SRGBColorSpace;
+        this.bossTexture = createAlphaBleedCanvasTexture(texture);
+        this.publishBossTemplateIfTextureReady();
+      },
+      undefined,
+      (error) => {
+        console.warn(`Failed to load boss texture from ${textureUrl}`, error);
+      },
+    );
+  }
+
+  private publishBossTemplateIfTextureReady(): boolean {
+    if (this.pendingBossTemplate == null || this.bossTexture == null) {
+      return false;
+    }
+
+    applyMageTextureToMeshes(this.pendingBossTemplate, this.bossTexture);
+    if (!this.bossTextureDebugShown && import.meta.env.DEV) {
+      console.info(
+        "Applied forced boss texture to FBX meshes:",
+        getMageTextureDebugInfo(this.pendingBossTemplate),
+      );
+      this.bossTextureDebugShown = true;
+    }
+    if (this.bossTemplate != null) {
+      this.dispose(this.bossTemplate);
+    }
+    this.bossTemplate = this.pendingBossTemplate;
+    this.pendingBossTemplate = null;
+    this.bossTemplateVersion += 1;
+    return true;
+  }
 }
 
 function cloneLoadedMageTemplate(template: THREE.Group): THREE.Object3D {
@@ -373,6 +506,13 @@ export function applyMageModelFacingCorrection(object: THREE.Object3D): void {
 }
 
 function cloneLoadedKoboldTemplate(template: THREE.Group): THREE.Object3D {
+  const clone = normalizeModelToActorBounds(template, KOBOLD_TARGET_HEIGHT);
+  applyKoboldModelFacingCorrection(clone);
+  clone.animations = template.animations;
+  return clone;
+}
+
+function cloneLoadedBossTemplate(template: THREE.Group): THREE.Object3D {
   const clone = normalizeModelToActorBounds(template, KOBOLD_TARGET_HEIGHT);
   applyKoboldModelFacingCorrection(clone);
   clone.animations = template.animations;

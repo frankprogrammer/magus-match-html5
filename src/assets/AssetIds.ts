@@ -33,6 +33,7 @@ export const AssetIds = {
     prince: 'rig.prince',
     kobold: 'rig.kobold',
     tallKobold: 'rig.tallKobold',
+    boss: 'rig.boss',
   },
   props: {
     princeCage: 'prop.princeCage',
@@ -57,6 +58,7 @@ export const AssetIds = {
   materials: {
     mageTexture: 'material.mageTexture',
     koboldTexture: 'material.koboldTexture',
+    bossTexture: 'material.bossTexture',
   },
   spritesheets: {
     tntExplosion: 'spritesheet.tntExplosion',

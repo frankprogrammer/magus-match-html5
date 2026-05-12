@@ -236,4 +236,19 @@ describe('normalizeModelToActorBounds', () => {
     expect(clips[0].duration).toBeCloseTo(1);
     expect(clips[1].duration).toBeCloseTo(1);
   });
+
+  it('maps boss FBX walk and defeat clips to renderer animation ids', () => {
+    const walkClip = new THREE.AnimationClip('KB.Armature|KB.Walk', 2.04, [
+      new THREE.VectorKeyframeTrack('hips.position', [0, 2.04], [0, 0, 0, 0, 0, 0.1]),
+    ]);
+    const defeatClip = new THREE.AnimationClip('KB.Armature|KB.Defeat', 1.42, [
+      new THREE.VectorKeyframeTrack('hips.position', [0, 1.42], [0, 0, 0, 0, -0.25, 0]),
+    ]);
+
+    const clips = createKoboldAnimationClips([walkClip, defeatClip]);
+
+    expect(clips.map((clip) => clip.name)).toEqual(['walk', 'defeat']);
+    expect(clips[0].duration).toBeCloseTo(2.04);
+    expect(clips[1].duration).toBeCloseTo(1.42);
+  });
 });

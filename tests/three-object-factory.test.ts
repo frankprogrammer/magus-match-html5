@@ -75,6 +75,28 @@ describe('ThreeObjectFactory', () => {
     expect(firstMeshTexture(monster)).toBeInstanceOf(THREE.Texture);
   });
 
+  it('keeps the mini-boss invisible until the loaded boss FBX template has its forced texture applied', () => {
+    const factory = new ThreeObjectFactory();
+    const internals = factory as unknown as TextureGateTestInternals;
+    internals.pendingBossTemplate = createTexturableTemplate();
+
+    expect(internals.publishBossTemplateIfTextureReady()).toBe(false);
+    expect(factory.create(HeroStageTemplateIds.miniBoss).children).toHaveLength(0);
+    expect(factory.getTemplateVersion(HeroStageTemplateIds.miniBoss)).toBe(0);
+
+    const texture = new THREE.Texture();
+    internals.bossTexture = texture;
+
+    expect(internals.publishBossTemplateIfTextureReady()).toBe(true);
+    expect(factory.getTemplateVersion(HeroStageTemplateIds.miniBoss)).toBe(1);
+    expect(factory.getTemplateVersion(HeroStageTemplateIds.monsterPlaceholder)).toBe(0);
+
+    const boss = factory.create(HeroStageTemplateIds.miniBoss);
+    expect(countMeshes(boss)).toBeGreaterThan(0);
+    expect(firstMeshTexture(internals.bossTemplate)).toBe(texture);
+    expect(firstMeshTexture(boss)).toBeInstanceOf(THREE.Texture);
+  });
+
   it('creates a synchronous castle backdrop fallback object before the texture is loaded', () => {
     const backdrop = new ThreeObjectFactory().create(HeroStageTemplateIds.backdropForest);
     const plane = backdrop.getObjectByName('castle-backdrop-plane');
@@ -181,6 +203,10 @@ interface TextureGateTestInternals {
   pendingKoboldTemplate: THREE.Group | null;
   koboldTexture: THREE.Texture | null;
   publishKoboldTemplateIfTextureReady: () => boolean;
+  bossTemplate: THREE.Group | null;
+  pendingBossTemplate: THREE.Group | null;
+  bossTexture: THREE.Texture | null;
+  publishBossTemplateIfTextureReady: () => boolean;
 }
 
 function createTexturableTemplate(): THREE.Group {

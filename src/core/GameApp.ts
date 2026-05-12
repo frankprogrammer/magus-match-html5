@@ -124,6 +124,7 @@ export interface MagusMatchGameAppOptions {
 }
 
 export const MAGE_WORLD_SCALE: TransformState["scale"] = { x: 3, y: 3, z: 3 };
+export const MINI_BOSS_WORLD_SCALE: TransformState["scale"] = { x: 5.25, y: 5.25, z: 5.25 };
 
 interface RuntimeBoardVisualCue extends Omit<BoardVisualCueState, "value"> {
   remainingSec: number;
@@ -146,6 +147,7 @@ const TRIAL_FIRE_BURN_RENDER_ORDER = 12;
 const TRIAL_EARTH_IMPACT_SCALE = 2.4;
 const TRIAL_EARTH_IMPACT_Y_OFFSET = 0.625;
 const TRIAL_EARTH_IMPACT_RENDER_ORDER = 14;
+const TRIAL_MINI_BOSS_EXTRA_Y_OFFSET = -0.25;
 const TRIAL_HIT_SHAKE_X_AMPLITUDE = 0.14;
 const TRIAL_HIT_SHAKE_Y_AMPLITUDE = 0.045;
 const TRIAL_WALK_AUDIO_EPSILON_SEC = 0.000001;
@@ -1546,17 +1548,20 @@ export class MagusMatchGameApp implements GameApp {
       objects.push(
         createWorldObject(
           `trial-monster-${monster.monsterId}`,
-          HeroStageTemplateIds.monsterPlaceholder,
+          heroStageTemplateForTrialMonster(monster.kind),
           {
             position: monsterPosition,
-            scale: MAGE_WORLD_SCALE,
+            scale: scaleForTrialMonster(monster.kind),
             renderOrder: 4,
             animationId: animationForTrialMonster(monster, this.phase),
             opacity: opacityForTrialMonster(monster),
             tintHex: tintForTrialMonster(monster, this.trialRuntime.elapsedMs / 1000),
             animationPaused: animationPausedForTrialMonster(monster),
             animationTimeSec: animationTimeSecForTrialMonster(monster),
-            nodeVisibility: koboldNodeVisibilityForMonster(this.currentLevel.seed, monster),
+            nodeVisibility:
+              monster.kind === "miniBoss"
+                ? undefined
+                : koboldNodeVisibilityForMonster(this.currentLevel.seed, monster),
           },
         ),
         ...createTrialMonsterFireBurnObjects(monster, monsterPosition, this.trialRuntime.elapsedMs / 1000),
@@ -1665,8 +1670,12 @@ function trialMonsterWorldYOffset(kind: ActiveTrialMonster["kind"]): number {
     case "tallKobold":
       return -1.63;
     case "miniBoss":
-      return -1.73;
+      return -1.73 + TRIAL_MINI_BOSS_EXTRA_Y_OFFSET;
   }
+}
+
+function scaleForTrialMonster(kind: ActiveTrialMonster["kind"]): TransformState["scale"] {
+  return kind === "miniBoss" ? MINI_BOSS_WORLD_SCALE : MAGE_WORLD_SCALE;
 }
 
 function animationForTrialMonster(monster: ActiveTrialMonster, phase: GamePhase): string {
@@ -1888,6 +1897,12 @@ function hexByte(value: number): string {
 
 function healthBarYOffsetForTrialMonster(): number {
   return TRIAL_KOBOLD_HEALTH_BAR_Y_OFFSET;
+}
+
+function heroStageTemplateForTrialMonster(kind: ActiveTrialMonster["kind"]): string {
+  return kind === "miniBoss"
+    ? HeroStageTemplateIds.miniBoss
+    : HeroStageTemplateIds.monsterPlaceholder;
 }
 
 function createTrialTutorialRuntime(

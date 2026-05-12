@@ -105,16 +105,12 @@ describe('TrialGenerator', () => {
     [1, 'kobold', 72],
     [4, 'kobold', 104],
     [4, 'tallKobold', 130],
-    [5, 'miniBoss', 208],
     [8, 'kobold', 140],
     [8, 'tallKobold', 168],
-    [10, 'miniBoss', 224],
-    [15, 'kobold', 180],
-    [15, 'tallKobold', 210],
-    [15, 'miniBoss', 240],
-    [20, 'kobold', 154],
-    [20, 'tallKobold', 180],
-    [20, 'miniBoss', 207],
+    [15, 'kobold', 145],
+    [15, 'tallKobold', 170],
+    [20, 'kobold', 111],
+    [20, 'tallKobold', 130],
   ])('sets difficulty %s %s HP to tuned value %s', (difficulty, kind, maxHp) => {
     const config = getTrialDifficultyConfig(difficulty);
     const level = generateTrialLevel({ difficulty, seed: 8800 + difficulty });
@@ -124,6 +120,19 @@ describe('TrialGenerator', () => {
     expect(config.baseDamage).toBeGreaterThan(0);
     expect(monsters.every((monster) => monster.maxHp === maxHp)).toBe(true);
   });
+
+  it.each([5, 10, 15, 20, 25])(
+    'sets difficulty %s mini-boss HP to four times same-level kobold HP',
+    (difficulty) => {
+      const level = generateTrialLevel({ difficulty, seed: 8800 + difficulty });
+      const koboldHp = level.trial.waveManifest.find((monster) => monster.kind === 'kobold')?.maxHp;
+      const miniBosses = level.trial.waveManifest.filter((monster) => monster.kind === 'miniBoss');
+
+      expect(koboldHp).toBeGreaterThan(0);
+      expect(miniBosses.length).toBeGreaterThan(0);
+      expect(miniBosses.every((monster) => monster.maxHp === (koboldHp ?? 0) * 4)).toBe(true);
+    },
+  );
 
   it.each([
     [1, 0.3125],

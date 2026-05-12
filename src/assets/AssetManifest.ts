@@ -63,6 +63,10 @@ const TEMP_FBX_KOBOLD_NOTES =
   "Temporary browser hero-stage FBX kobold enemy model. Auto-normalized in Three.js and uses embedded walk/defeat clips.";
 const TEMP_FBX_KOBOLD_TEXTURE_NOTES =
   "Temporary browser hero-stage texture recovered from the kobold FBX .fbm export folder and applied to kobold meshes when the FBX material does not load a map.";
+const TEMP_FBX_BOSS_NOTES =
+  "Temporary browser hero-stage FBX mini-boss model. Auto-normalized in Three.js and uses embedded walk/defeat clips.";
+const TEMP_FBX_BOSS_TEXTURE_NOTES =
+  "Temporary browser hero-stage texture recovered from the boss FBX .fbm export folder and applied to boss meshes when the FBX material does not load a map.";
 const UI_BANNER_NOTES =
   "Runtime 1080x150 source PNG for the fixed middle HUD band; drawn full-width behind HUD text.";
 const BOARD_BACKGROUND_NOTES =
@@ -330,6 +334,22 @@ export const AssetManifest: Record<string, AssetManifestEntry> = {
     "Assets/Textures/Rigs/Kobold/kobold_texture.png",
     "prompt.rig.kobolds",
     TEMP_FBX_KOBOLD_TEXTURE_NOTES,
+  ),
+  [AssetIds.rigs.boss]: rig(
+    AssetIds.rigs.boss,
+    "/assets/rigs/boss.fbx",
+    "Assets/Rigs/Boss/boss.fbx",
+    "prompt.rig.kobolds",
+    "fbx",
+    "temporary FBX stand-in, auto-normalized to 1.16 world units",
+    TEMP_FBX_BOSS_NOTES,
+  ),
+  [AssetIds.materials.bossTexture]: material(
+    AssetIds.materials.bossTexture,
+    "/assets/rigs/boss.fbm/kobold_boss_texture.png",
+    "Assets/Textures/Rigs/Boss/kobold_boss_texture.png",
+    "prompt.rig.kobolds",
+    TEMP_FBX_BOSS_TEXTURE_NOTES,
   ),
   [AssetIds.rigs.tallKobold]: rig(
     AssetIds.rigs.tallKobold,

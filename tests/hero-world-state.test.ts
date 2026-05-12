@@ -7,6 +7,7 @@ import {
   healthBarTintForRatio,
   MagusMatchGameApp,
   MAGE_WORLD_SCALE,
+  MINI_BOSS_WORLD_SCALE,
   phaseToCinematicState,
   trialMonsterHitShakeOffset,
 } from '../src/core/GameApp';
@@ -91,6 +92,39 @@ describe('HeroWorldState', () => {
       ...KOBOLD_HEAD_NODE_NAMES.filter((nodeName) => nodeName !== variant.headNodeName),
       ...KOBOLD_CLUB_NODE_NAMES.filter((nodeName) => nodeName !== variant.clubNodeName),
     ]);
+  });
+
+  it('uses the boss template without kobold variation overrides for mini-boss monsters', () => {
+    const app = new MagusMatchGameApp(789);
+    const runtime = app.getTrialRuntimeForDebug();
+    if (runtime == null || runtime.monsters[0] == null) {
+      throw new Error('Expected Trial runtime.');
+    }
+
+    setTrialRuntimeForDebug(app, {
+      ...runtime,
+      monsters: [
+        {
+          ...runtime.monsters[0],
+          monsterId: 'boss',
+          kind: 'miniBoss',
+        },
+      ],
+    });
+
+    const level = app.getCurrentLevelForDebug();
+    if (level?.type !== 'TRIAL') {
+      throw new Error('Expected Trial level.');
+    }
+
+    const boss = app.getHeroWorldState().objects.find((object) => object.objectId === 'trial-monster-boss');
+    const baseMonsterPosition = getTrialMonsterWorldPosition(level, runtime.monsters[0]);
+    const visualYOffset = runtime.monsters[0].visualYOffset ?? 0;
+
+    expect(boss?.templateId).toBe(HeroStageTemplateIds.miniBoss);
+    expect(boss?.transform.scale).toEqual(MINI_BOSS_WORLD_SCALE);
+    expect(boss?.transform.position.y).toBeCloseTo(baseMonsterPosition.y - 1.98 + visualYOffset);
+    expect(boss?.nodeVisibility).toBeUndefined();
   });
 
   it('emits node visibility overrides for tutorial kobolds', () => {

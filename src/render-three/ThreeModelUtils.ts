@@ -118,8 +118,8 @@ export function createMageAnimationClips(
 }
 
 export function createKoboldAnimationClips(clips: readonly THREE.AnimationClip[]): THREE.AnimationClip[] {
-  const walkClip = findUsableClipByName(clips, KOBOLD_WALK_CLIP_NAME, 'kobold walk');
-  const defeatClip = findUsableClipByName(clips, KOBOLD_DEFEAT_CLIP_NAME, 'kobold defeat');
+  const walkClip = findUsableClipByName(clips, KOBOLD_WALK_CLIP_NAME, 'kobold walk', ['walk']);
+  const defeatClip = findUsableClipByName(clips, KOBOLD_DEFEAT_CLIP_NAME, 'kobold defeat', ['defeat']);
   const result: THREE.AnimationClip[] = [];
 
   if (walkClip != null) {
@@ -150,16 +150,21 @@ function findUsableClipByName(
   clips: readonly THREE.AnimationClip[],
   exactName: string,
   shortName: string,
+  aliases: readonly string[] = [],
 ): THREE.AnimationClip | undefined {
   const exactNormalized = exactName.trim().toLowerCase();
   const shortNormalized = shortName.trim().toLowerCase();
+  const aliasNormalized = aliases.map((alias) => alias.trim().toLowerCase());
   return clips.find((clip) => {
     const clipName = clip.name.trim().toLowerCase();
     return (
       isUsableClip(clip) &&
       (clipName === exactNormalized ||
         clipName.endsWith(`|${shortNormalized}`) ||
-        clipName.endsWith(shortNormalized))
+        clipName.endsWith(shortNormalized) ||
+        aliasNormalized.some(
+          (alias) => clipName === alias || clipName.endsWith(`|${alias}`) || clipName.endsWith(alias),
+        ))
     );
   });
 }

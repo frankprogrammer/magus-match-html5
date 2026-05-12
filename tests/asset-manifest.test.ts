@@ -91,6 +91,9 @@ describe("AssetManifest", () => {
     expect(AssetManifest[AssetIds.materials.koboldTexture].browserUrl).toBe(
       "/assets/rigs/kobold.fbm/kobold_texture.png",
     );
+    expect(AssetManifest[AssetIds.materials.bossTexture].browserUrl).toBe(
+      "/assets/rigs/boss.fbm/kobold_boss_texture.png",
+    );
     expect(AssetManifest[AssetIds.spritesheets.tntExplosion].browserUrl).toBe(
       "/assets/spritesheets/explosion-sprite.png",
     );
@@ -129,6 +132,15 @@ describe("AssetManifest", () => {
   it("maps the temporary kobold rig to the dropped FBX enemy model", () => {
     expect(AssetManifest[AssetIds.rigs.kobold]).toMatchObject({
       browserUrl: "/assets/rigs/kobold.fbx",
+      sourceFormat: "fbx",
+      pivot: "bottomCenter",
+      upAxis: "+Y",
+    });
+  });
+
+  it("maps the temporary boss rig to the dropped FBX mini-boss model", () => {
+    expect(AssetManifest[AssetIds.rigs.boss]).toMatchObject({
+      browserUrl: "/assets/rigs/boss.fbx",
       sourceFormat: "fbx",
       pivot: "bottomCenter",
       upAxis: "+Y",

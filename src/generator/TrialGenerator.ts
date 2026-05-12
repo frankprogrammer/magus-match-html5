@@ -160,8 +160,11 @@ function tuneManifestForClearability(
   manifest: readonly TrialMonsterManifestEntry[],
   baseDamage: number,
 ): TrialMonsterManifestEntry[] {
-  let tunedManifest = manifest.map((monster) => ({ ...monster }));
+  let tunedManifest = normalizeMiniBossHpToKobold(
+    manifest.map((monster) => ({ ...monster })),
+  );
   for (let attempt = 0; attempt < 10; attempt += 1) {
+    tunedManifest = normalizeMiniBossHpToKobold(tunedManifest);
     if (isTrialManifestClearable(tunedManifest, baseDamage)) {
       return tunedManifest;
     }
@@ -172,7 +175,22 @@ function tuneManifestForClearability(
     }));
   }
 
-  return tunedManifest;
+  return normalizeMiniBossHpToKobold(tunedManifest);
+}
+
+function normalizeMiniBossHpToKobold(
+  manifest: readonly TrialMonsterManifestEntry[],
+): TrialMonsterManifestEntry[] {
+  const koboldHp = manifest.find((monster) => monster.kind === 'kobold')?.maxHp;
+  if (koboldHp == null) {
+    return manifest.map((monster) => ({ ...monster }));
+  }
+
+  return manifest.map((monster) =>
+    monster.kind === 'miniBoss'
+      ? { ...monster, maxHp: koboldHp * 4 }
+      : { ...monster },
+  );
 }
 
 function hpForKind(

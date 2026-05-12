@@ -5,6 +5,7 @@ export const HeroStageTemplateIds = {
   goalFlag: 'prop.goalFlag',
   pathMarker: 'prop.pathMarker',
   monsterPlaceholder: 'actor.monster.placeholder',
+  miniBoss: 'actor.monster.miniBoss',
   projectilePlaceholder: 'vfx.projectile.placeholder',
   fireBurn: 'vfx.fireBurn',
   earthImpact: 'vfx.earthImpact',

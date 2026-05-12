@@ -3,6 +3,11 @@ import type { TransformState } from './TransformState';
 export type WorldObjectLifetime = 'persistent' | 'pooled' | 'oneShot';
 export type WorldObjectReplication = 'sharedGameplay' | 'localCosmetic';
 
+export interface WorldObjectNodeVisibility {
+  visibleNodeNames?: readonly string[];
+  hiddenNodeNames?: readonly string[];
+}
+
 export interface WorldObjectState {
   objectId: string;
   templateId: string;
@@ -19,5 +24,6 @@ export interface WorldObjectState {
   animationId?: string;
   animationTimeSec?: number;
   animationPaused?: boolean;
+  nodeVisibility?: WorldObjectNodeVisibility;
   tags?: readonly string[];
 }

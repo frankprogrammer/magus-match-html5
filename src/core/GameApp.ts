@@ -55,6 +55,9 @@ import {
   createTrialRuntime,
   getTrialMageWorldPosition,
   getTrialMonsterWorldPosition,
+  KOBOLD_CLUB_NODE_NAMES,
+  KOBOLD_HEAD_NODE_NAMES,
+  koboldModelVariantForMonster,
   processTrialPowerUpActivation,
   processTrialSwap,
   updateTrialRuntimeWithEvents,
@@ -1548,6 +1551,7 @@ export class MagusMatchGameApp implements GameApp {
             tintHex: tintForTrialMonster(monster, this.trialRuntime.elapsedMs / 1000),
             animationPaused: animationPausedForTrialMonster(monster),
             animationTimeSec: animationTimeSecForTrialMonster(monster),
+            nodeVisibility: koboldNodeVisibilityForMonster(this.currentLevel.seed, monster),
           },
         ),
         ...createTrialMonsterFireBurnObjects(monster, monsterPosition, this.trialRuntime.elapsedMs / 1000),
@@ -1902,6 +1906,7 @@ function createTrialTutorialRuntime(
       walkSpeed: 0,
       scoreValue: 0,
       visualYOffset: TRIAL_TUTORIAL_MONSTER_Y_OFFSETS[index] ?? 0,
+      modelVariant: koboldModelVariantForMonster(level.seed, `tutorial-kobold-${index}`),
       healthBarHp: tutorialHp,
     }),
   );
@@ -1960,6 +1965,7 @@ function createWorldObject(
     tintHex?: string;
     opacity?: number;
     animationTimeSec?: number;
+    nodeVisibility?: WorldObjectState["nodeVisibility"];
   },
 ): WorldObjectState {
   return {
@@ -1981,6 +1987,21 @@ function createWorldObject(
     animationId: options.animationId,
     animationTimeSec: options.animationTimeSec,
     animationPaused: options.animationPaused,
+    nodeVisibility: options.nodeVisibility,
+  };
+}
+
+function koboldNodeVisibilityForMonster(
+  levelSeed: number,
+  monster: ActiveTrialMonster,
+): WorldObjectState["nodeVisibility"] {
+  const variant = monster.modelVariant ?? koboldModelVariantForMonster(levelSeed, monster.monsterId);
+  return {
+    visibleNodeNames: [variant.headNodeName, variant.clubNodeName],
+    hiddenNodeNames: [
+      ...KOBOLD_HEAD_NODE_NAMES.filter((nodeName) => nodeName !== variant.headNodeName),
+      ...KOBOLD_CLUB_NODE_NAMES.filter((nodeName) => nodeName !== variant.clubNodeName),
+    ],
   };
 }
 

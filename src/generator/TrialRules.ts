@@ -59,6 +59,16 @@ export const FIRE_BURN_DURATION_SEC = FIRE_BURN_TICK_INTERVAL_SEC * FIRE_BURN_TI
 export const EARTH_IMPACT_SPRITE_FPS = 12;
 export const EARTH_IMPACT_SPRITE_FRAME_COUNT = 4;
 export const EARTH_IMPACT_VFX_DURATION_SEC = EARTH_IMPACT_SPRITE_FRAME_COUNT / EARTH_IMPACT_SPRITE_FPS;
+export const KOBOLD_HEAD_NODE_NAMES = ['k.head-1', 'k.head-2', 'k.head-3'] as const;
+export const KOBOLD_CLUB_NODE_NAMES = ['k.club-1', 'k.club-2', 'k.club-3'] as const;
+
+export type KoboldHeadNodeName = (typeof KOBOLD_HEAD_NODE_NAMES)[number];
+export type KoboldClubNodeName = (typeof KOBOLD_CLUB_NODE_NAMES)[number];
+
+export interface TrialMonsterModelVariant {
+  headNodeName: KoboldHeadNodeName;
+  clubNodeName: KoboldClubNodeName;
+}
 
 export interface TrialFireBurnStack {
   burnId: string;
@@ -80,6 +90,7 @@ export interface ActiveTrialMonster {
   walkSpeed: number;
   scoreValue: number;
   visualYOffset?: number;
+  modelVariant?: TrialMonsterModelVariant;
   defeatDelaySec?: number;
   defeatAnimationRemainingSec?: number;
   defeatAnimationDurationSec?: number;
@@ -1450,6 +1461,7 @@ function createActiveMonster(
     walkSpeed: manifestEntry.walkSpeed,
     scoreValue: manifestEntry.scoreValue,
     visualYOffset: visualYOffsetForMonster(level, manifestEntry.monsterId),
+    modelVariant: koboldModelVariantForMonster(level.seed, manifestEntry.monsterId),
   };
 }
 
@@ -1477,6 +1489,30 @@ export function visualYOffsetForMonster(
 ): number {
   const normalized = stableUnitHash(`${level.seed}:${monsterId}`);
   return (normalized * 2 - 1) * TRIAL_MONSTER_RANDOM_Y_OFFSET_AMPLITUDE;
+}
+
+export function koboldModelVariantForMonster(
+  levelSeed: number,
+  monsterId: string,
+): TrialMonsterModelVariant {
+  return {
+    headNodeName:
+      KOBOLD_HEAD_NODE_NAMES[
+        stableArrayIndex(KOBOLD_HEAD_NODE_NAMES, `${levelSeed}:${monsterId}:kobold-head`)
+      ],
+    clubNodeName:
+      KOBOLD_CLUB_NODE_NAMES[
+        stableArrayIndex(KOBOLD_CLUB_NODE_NAMES, `${levelSeed}:${monsterId}:kobold-club`)
+      ],
+  };
+}
+
+function stableArrayIndex(items: readonly unknown[], key: string): number {
+  if (items.length === 0) {
+    return 0;
+  }
+
+  return Math.min(items.length - 1, Math.floor(stableUnitHash(key) * items.length));
 }
 
 function expireProjectiles(runtime: TrialRuntimeState, dtSec: number): TrialRuntimeState {

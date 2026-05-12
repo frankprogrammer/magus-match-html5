@@ -24,8 +24,11 @@ import {
   EARTH_IMPACT_VFX_DURATION_SEC,
   FIRE_BURN_DURATION_SEC,
   FIRE_BURN_TICK_INTERVAL_SEC,
+  KOBOLD_CLUB_NODE_NAMES,
   KOBOLD_DEFEAT_ANIMATION_SEC,
   KOBOLD_DEFEAT_FADE_SEC,
+  KOBOLD_HEAD_NODE_NAMES,
+  koboldModelVariantForMonster,
   LIGHTNING_CHAIN_HOP_DELAY_SEC,
   SPELL_CAST_WINDUP_SEC,
   TRIAL_ICE_FREEZE_SEC,
@@ -119,6 +122,18 @@ describe('TrialRules', () => {
     expect(visualYOffset).toBeCloseTo(visualYOffsetForMonster(level, 'first'));
     expect(visualYOffset).toBe(secondRuntime.monsters[0].visualYOffset);
     expect(Math.abs(visualYOffset ?? 0)).toBeLessThanOrEqual(TRIAL_MONSTER_RANDOM_Y_OFFSET_AMPLITUDE);
+  });
+
+  it('assigns deterministic kobold model variants to spawned Trial monsters', () => {
+    const level = testTrialLevel([monster({ monsterId: 'first' })]);
+    const firstRuntime = createTrialRuntime(level);
+    const secondRuntime = createTrialRuntime(level);
+    const variant = firstRuntime.monsters[0].modelVariant;
+
+    expect(variant).toEqual(koboldModelVariantForMonster(level.seed, 'first'));
+    expect(variant).toEqual(secondRuntime.monsters[0].modelVariant);
+    expect(KOBOLD_HEAD_NODE_NAMES).toContain(variant?.headNodeName);
+    expect(KOBOLD_CLUB_NODE_NAMES).toContain(variant?.clubNodeName);
   });
 
   it('spawns the next due monster after the defeated monster disappears', () => {

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { HERO_STAGE_HEIGHT, LOGICAL_WIDTH } from '../core/Layout';
 import type { HeroWorldState, ProjectileState } from '../world-3d/HeroWorldState';
 import { HeroStageTemplateIds } from '../world-3d/HeroStageTemplates';
-import type { WorldObjectState } from '../world-3d/WorldObjectState';
+import type { WorldObjectNodeVisibility, WorldObjectState } from '../world-3d/WorldObjectState';
 import { HERO_STAGE_ORTHO_VIEW_WIDTH, orthographicBoundsForAspect, ThreeCameraController } from './ThreeCameraController';
 import { ThreeObjectFactory } from './ThreeObjectFactory';
 import { ThreeObjectCache } from './ThreePools';
@@ -573,6 +573,7 @@ function applyWorldObjectState(object: THREE.Object3D, objectState: WorldObjectS
   );
   object.scale.set(transform.scale.x, transform.scale.y, transform.scale.z);
   object.visible = objectState.visible;
+  applyNodeVisibilityOverrides(object, objectState.nodeVisibility);
 
   if (objectState.animationId === 'victory') {
     object.position.y += Math.sin(elapsedSec * 8) * 0.08;
@@ -596,6 +597,36 @@ function applyWorldObjectState(object: THREE.Object3D, objectState: WorldObjectS
         applyEarthImpactSpriteFrame(child.material, objectState.animationTimeSec ?? elapsedSec);
       }
       applyMaterialOverrides(child.material, objectState.tintHex, objectState.opacity);
+    }
+  });
+}
+
+export function applyNodeVisibilityOverrides(
+  object: THREE.Object3D,
+  nodeVisibility?: WorldObjectNodeVisibility,
+): void {
+  if (nodeVisibility == null) {
+    return;
+  }
+
+  for (const nodeName of nodeVisibility.hiddenNodeNames ?? []) {
+    setMatchingNodeVisibility(object, nodeName, false);
+  }
+
+  for (const nodeName of nodeVisibility.visibleNodeNames ?? []) {
+    setMatchingNodeVisibility(object, nodeName, true);
+  }
+}
+
+function setMatchingNodeVisibility(
+  object: THREE.Object3D,
+  nodeName: string,
+  visible: boolean,
+): void {
+  const names = new Set([nodeName, THREE.PropertyBinding.sanitizeNodeName(nodeName)]);
+  object.traverse((child) => {
+    if (names.has(child.name)) {
+      child.visible = visible;
     }
   });
 }

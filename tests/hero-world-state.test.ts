@@ -226,7 +226,7 @@ describe('HeroWorldState', () => {
     expect(bars).toEqual([]);
   });
 
-  it('keeps a lethal hit health bar visible until the delayed impact update arrives', () => {
+  it('omits lethal hit health bars even when stale delayed health state exists', () => {
     const bars = createTrialMonsterHealthBarObjects(
       {
         monsterId: 'pending-lethal',
@@ -243,12 +243,8 @@ describe('HeroWorldState', () => {
       },
       { x: 2, y: -0.5, z: 0.35 },
     );
-    const track = bars.find((object) => object.templateId === HeroStageTemplateIds.healthBarTrack);
-    const fill = bars.find((object) => object.templateId === HeroStageTemplateIds.healthBarFill);
 
-    expect(bars).toHaveLength(2);
-    expect(fill?.transform.scale.x).toBeCloseTo((track?.transform.scale.x ?? 0) * 0.5);
-    expect(fill?.tintHex).toBe('#f2c94c');
+    expect(bars).toEqual([]);
   });
 
   it('maps health bar color thresholds to green, gold, and red', () => {

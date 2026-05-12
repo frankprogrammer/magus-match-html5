@@ -1524,6 +1524,10 @@ export function createTrialMonsterHealthBarObjects(
   monster: ActiveTrialMonster,
   monsterPosition: TransformState["position"],
 ): WorldObjectState[] {
+  if (monster.hp <= 0) {
+    return [];
+  }
+
   const ratio = healthRatioForTrialMonster(monster);
   if (ratio <= 0) {
     return [];

@@ -448,6 +448,8 @@ describe('TrialRules', () => {
     ]);
     expect(lethalTick.scoreDelta).toBe(Math.round(5 * 2) + 11);
     expect(lethalTick.runtime.monsters[0]?.hp).toBe(0);
+    expect(lethalTick.runtime.monsters[0]?.healthBarHp).toBeUndefined();
+    expect(lethalTick.runtime.monsters[0]?.healthBarUpdateQueue).toBeUndefined();
     expect(lethalTick.runtime.monsters[0]?.defeatAnimationRemainingSec).toBeCloseTo(
       KOBOLD_DEFEAT_ANIMATION_SEC - 0.5,
     );
@@ -982,11 +984,8 @@ describe('TrialRules', () => {
       TILE_SWAP_RETARGET_MS / 1000 + SPELL_CAST_WINDUP_SEC + SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
     );
     expect(result.runtime.monsters[0].defeatAnimationRemainingSec).toBeUndefined();
-    expect(result.runtime.monsters[0].healthBarHp).toBe(5);
-    expect(result.runtime.monsters[0].healthBarUpdateQueue?.[0]).toMatchObject({ hp: 0 });
-    expect(result.runtime.monsters[0].healthBarUpdateQueue?.[0]?.delaySec).toBeCloseTo(
-      TILE_SWAP_RETARGET_MS / 1000 + SPELL_CAST_WINDUP_SEC + SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
-    );
+    expect(result.runtime.monsters[0].healthBarHp).toBeUndefined();
+    expect(result.runtime.monsters[0].healthBarUpdateQueue).toBeUndefined();
     expect(result.runtime.monsters[0].iceFreezeDelayQueueSec).toBeUndefined();
     expect(result.runtime.monsters[0].hitShakeDelaySec).toBeCloseTo(
       TILE_SWAP_RETARGET_MS / 1000 + SPELL_CAST_WINDUP_SEC + SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,

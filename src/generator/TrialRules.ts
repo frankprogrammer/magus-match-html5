@@ -1143,6 +1143,7 @@ function advancePendingDefeat(monster: ActiveTrialMonster, elapsedSec: number): 
   if (defeatDelaySec > TRIAL_DEFEAT_TIMER_EPSILON_SEC) {
     return {
       ...monster,
+      ...clearHealthBarUpdate(),
       defeatDelaySec,
       defeatAnimationRemainingSec,
       defeatAnimationDurationSec: defeatAnimationRemainingSec == null ? monster.defeatAnimationDurationSec : defeatAnimationDurationSec,
@@ -1164,6 +1165,7 @@ function advancePendingDefeat(monster: ActiveTrialMonster, elapsedSec: number): 
   if (defeatAnimationRemainingSec > TRIAL_DEFEAT_TIMER_EPSILON_SEC) {
     return {
       ...monster,
+      ...clearHealthBarUpdate(),
       defeatDelaySec: 0,
       defeatAnimationRemainingSec,
       defeatAnimationDurationSec,
@@ -1186,6 +1188,7 @@ function advancePendingDefeat(monster: ActiveTrialMonster, elapsedSec: number): 
 
   return {
     ...monster,
+    ...clearHealthBarUpdate(),
     defeatDelaySec: 0,
     defeatAnimationRemainingSec: 0,
     defeatAnimationDurationSec,
@@ -1217,6 +1220,10 @@ function scheduleHealthBarUpdate(
   impactDelaySec: number,
   hp: number,
 ): Pick<ActiveTrialMonster, 'healthBarHp' | 'healthBarUpdateQueue'> {
+  if (hp <= 0) {
+    return clearHealthBarUpdate();
+  }
+
   const visibleHp = monster.healthBarHp ?? monster.hp;
   const healthBarUpdateQueue = [
     ...(monster.healthBarUpdateQueue ?? []),
@@ -1226,6 +1233,13 @@ function scheduleHealthBarUpdate(
   return {
     healthBarHp: visibleHp,
     healthBarUpdateQueue,
+  };
+}
+
+function clearHealthBarUpdate(): Pick<ActiveTrialMonster, 'healthBarHp' | 'healthBarUpdateQueue'> {
+  return {
+    healthBarHp: undefined,
+    healthBarUpdateQueue: undefined,
   };
 }
 
@@ -1311,6 +1325,17 @@ function advanceMonsterIceFreeze(monster: ActiveTrialMonster, elapsedSec: number
 }
 
 function advanceMonsterHealthBarUpdates(monster: ActiveTrialMonster, elapsedSec: number): ActiveTrialMonster {
+  if (monster.hp <= 0) {
+    if (monster.healthBarHp == null && monster.healthBarUpdateQueue == null) {
+      return monster;
+    }
+
+    return {
+      ...monster,
+      ...clearHealthBarUpdate(),
+    };
+  }
+
   const queuedUpdates = monster.healthBarUpdateQueue ?? [];
   if (queuedUpdates.length <= 0) {
     if (monster.healthBarHp != null && monster.healthBarHp === monster.hp) {

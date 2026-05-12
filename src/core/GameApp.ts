@@ -141,13 +141,15 @@ const TRIAL_HEALTH_BAR_HEIGHT = 0.18;
 const TRIAL_HEALTH_BAR_FILL_HEIGHT = 0.11;
 const TRIAL_HEALTH_BAR_Z_OFFSET = 0.08;
 const TRIAL_KOBOLD_HEALTH_BAR_Y_OFFSET = 3.72;
+const TRIAL_MINI_BOSS_HEALTH_BAR_SCALE = 2;
+const TRIAL_MINI_BOSS_HEALTH_BAR_Y_OFFSET = 5.8;
 const TRIAL_FIRE_BURN_SCALE = 3.3;
 const TRIAL_FIRE_BURN_Y_OFFSET = 1.2425;
 const TRIAL_FIRE_BURN_RENDER_ORDER = 12;
 const TRIAL_EARTH_IMPACT_SCALE = 2.4;
 const TRIAL_EARTH_IMPACT_Y_OFFSET = 0.625;
 const TRIAL_EARTH_IMPACT_RENDER_ORDER = 14;
-const TRIAL_MINI_BOSS_EXTRA_Y_OFFSET = -0.25;
+const TRIAL_MINI_BOSS_EXTRA_Y_OFFSET = -0.55;
 const TRIAL_HIT_SHAKE_X_AMPLITUDE = 0.14;
 const TRIAL_HIT_SHAKE_Y_AMPLITUDE = 0.045;
 const TRIAL_WALK_AUDIO_EPSILON_SEC = 0.000001;
@@ -1736,12 +1738,15 @@ export function createTrialMonsterHealthBarObjects(
     return [];
   }
 
+  const healthBarWidth = healthBarWidthForTrialMonster(monster.kind);
+  const healthBarHeight = healthBarHeightForTrialMonster(monster.kind);
+  const healthBarFillHeight = healthBarFillHeightForTrialMonster(monster.kind);
   const barY =
-    monsterPosition.y + healthBarYOffsetForTrialMonster();
+    monsterPosition.y + healthBarYOffsetForTrialMonster(monster.kind);
   const barZ = monsterPosition.z + TRIAL_HEALTH_BAR_Z_OFFSET;
-  const fillWidth = TRIAL_HEALTH_BAR_WIDTH * ratio;
+  const fillWidth = healthBarWidth * ratio;
   const fillCenterX =
-    monsterPosition.x - TRIAL_HEALTH_BAR_WIDTH / 2 + fillWidth / 2;
+    monsterPosition.x - healthBarWidth / 2 + fillWidth / 2;
 
   return [
     createWorldObject(
@@ -1749,7 +1754,7 @@ export function createTrialMonsterHealthBarObjects(
       HeroStageTemplateIds.healthBarTrack,
       {
         position: { x: monsterPosition.x, y: barY, z: barZ },
-        scale: { x: TRIAL_HEALTH_BAR_WIDTH, y: TRIAL_HEALTH_BAR_HEIGHT, z: 1 },
+        scale: { x: healthBarWidth, y: healthBarHeight, z: 1 },
         renderOrder: 6,
         replication: "localCosmetic",
         opacity: 0.85,
@@ -1760,7 +1765,7 @@ export function createTrialMonsterHealthBarObjects(
       HeroStageTemplateIds.healthBarFill,
       {
         position: { x: fillCenterX, y: barY, z: barZ + 0.01 },
-        scale: { x: fillWidth, y: TRIAL_HEALTH_BAR_FILL_HEIGHT, z: 1 },
+        scale: { x: fillWidth, y: healthBarFillHeight, z: 1 },
         renderOrder: 7,
         replication: "localCosmetic",
         tintHex: healthBarTintForRatio(ratio),
@@ -1895,8 +1900,28 @@ function hexByte(value: number): string {
   return Math.max(0, Math.min(255, value)).toString(16).padStart(2, "0");
 }
 
-function healthBarYOffsetForTrialMonster(): number {
-  return TRIAL_KOBOLD_HEALTH_BAR_Y_OFFSET;
+function healthBarYOffsetForTrialMonster(kind: ActiveTrialMonster["kind"]): number {
+  return kind === "miniBoss"
+    ? TRIAL_MINI_BOSS_HEALTH_BAR_Y_OFFSET
+    : TRIAL_KOBOLD_HEALTH_BAR_Y_OFFSET;
+}
+
+function healthBarWidthForTrialMonster(kind: ActiveTrialMonster["kind"]): number {
+  return kind === "miniBoss"
+    ? TRIAL_HEALTH_BAR_WIDTH * TRIAL_MINI_BOSS_HEALTH_BAR_SCALE
+    : TRIAL_HEALTH_BAR_WIDTH;
+}
+
+function healthBarHeightForTrialMonster(kind: ActiveTrialMonster["kind"]): number {
+  return kind === "miniBoss"
+    ? TRIAL_HEALTH_BAR_HEIGHT * TRIAL_MINI_BOSS_HEALTH_BAR_SCALE
+    : TRIAL_HEALTH_BAR_HEIGHT;
+}
+
+function healthBarFillHeightForTrialMonster(kind: ActiveTrialMonster["kind"]): number {
+  return kind === "miniBoss"
+    ? TRIAL_HEALTH_BAR_FILL_HEIGHT * TRIAL_MINI_BOSS_HEALTH_BAR_SCALE
+    : TRIAL_HEALTH_BAR_FILL_HEIGHT;
 }
 
 function heroStageTemplateForTrialMonster(kind: ActiveTrialMonster["kind"]): string {

@@ -118,13 +118,23 @@ describe('HeroWorldState', () => {
     }
 
     const boss = app.getHeroWorldState().objects.find((object) => object.objectId === 'trial-monster-boss');
+    const bossTrack = app
+      .getHeroWorldState()
+      .objects.find((object) => object.objectId === 'trial-monster-boss-health-track');
+    const bossFill = app
+      .getHeroWorldState()
+      .objects.find((object) => object.objectId === 'trial-monster-boss-health-fill');
     const baseMonsterPosition = getTrialMonsterWorldPosition(level, runtime.monsters[0]);
     const visualYOffset = runtime.monsters[0].visualYOffset ?? 0;
 
     expect(boss?.templateId).toBe(HeroStageTemplateIds.miniBoss);
     expect(boss?.transform.scale).toEqual(MINI_BOSS_WORLD_SCALE);
-    expect(boss?.transform.position.y).toBeCloseTo(baseMonsterPosition.y - 1.98 + visualYOffset);
+    expect(boss?.transform.position.y).toBeCloseTo(baseMonsterPosition.y - 2.28 + visualYOffset);
     expect(boss?.nodeVisibility).toBeUndefined();
+    expect((bossTrack?.transform.position.y ?? 0) - (boss?.transform.position.y ?? 0)).toBeCloseTo(5.8);
+    expect(bossTrack?.transform.scale.x).toBeCloseTo(1.84);
+    expect(bossTrack?.transform.scale.y).toBeCloseTo(0.36);
+    expect(bossFill?.transform.scale.y).toBeCloseTo(0.22);
   });
 
   it('emits node visibility overrides for tutorial kobolds', () => {

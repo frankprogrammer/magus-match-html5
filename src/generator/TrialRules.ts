@@ -104,6 +104,8 @@ export interface TrialHealthBarUpdate {
 
 export interface TrialProjectileRuntimeState {
   projectileId: string;
+  attackId?: string;
+  targetMonsterId?: string;
   schoolId: SpellSchoolId;
   effectKind: 'match' | 'bomb';
   originKind?: 'mage' | 'world';
@@ -114,6 +116,21 @@ export interface TrialProjectileRuntimeState {
   chargeDurationSec: number;
   remainingSec: number;
   durationSec: number;
+}
+
+export interface TrialPendingAttackRuntimeState {
+  attackId: string;
+  schoolId: SpellSchoolId;
+  effectKind: TrialProjectileRuntimeState['effectKind'];
+  damage: number;
+  targetMonsterId: string;
+  impactDelaySec: number;
+  castActivationDelaySec: number;
+  projectileId?: string;
+  chainId?: string;
+  chainIndex?: number;
+  originAttackId?: string;
+  excludedMonsterIds?: readonly string[];
 }
 
 export interface TrialImpactVfxRuntimeState {
@@ -131,11 +148,13 @@ export interface TrialRuntimeState {
   nextSpawnIndex: number;
   monsters: readonly ActiveTrialMonster[];
   projectiles: readonly TrialProjectileRuntimeState[];
+  pendingAttacks: readonly TrialPendingAttackRuntimeState[];
   impactVfx?: readonly TrialImpactVfxRuntimeState[];
   defeatedMonsterIds: readonly string[];
   totalMonsters: number;
   result: LevelResult;
   nextProjectileIndex: number;
+  nextAttackIndex: number;
   nextBurnIndex: number;
   nextImpactVfxIndex?: number;
 }
@@ -151,12 +170,21 @@ export interface TrialDamageEvent {
   castActivationDelaySec: number;
 }
 
+export interface TrialQueuedAttackEvent {
+  attackId: string;
+  monsterId: string;
+  schoolId: SpellSchoolId;
+  damage: number;
+  castActivationDelaySec: number;
+}
+
 export interface TrialSwapResult {
   valid: boolean;
   board: Board;
   runtime: TrialRuntimeState;
   scoreDelta: number;
   damageEvents: readonly TrialDamageEvent[];
+  queuedAttackEvents: readonly TrialQueuedAttackEvent[];
   scoringStats: SwapScoringStats;
   animationTrace?: BoardAnimationTrace;
 }
@@ -196,10 +224,12 @@ export function createTrialRuntime(level: GeneratedTrialLevel): TrialRuntimeStat
       nextSpawnIndex: 0,
       monsters: [],
       projectiles: [],
+      pendingAttacks: [],
       defeatedMonsterIds: [],
       totalMonsters: level.trial.waveManifest.length,
       result: 'playing',
       nextProjectileIndex: 0,
+      nextAttackIndex: 0,
       nextBurnIndex: 0,
       nextImpactVfxIndex: 0,
     },
@@ -232,14 +262,16 @@ export function updateTrialRuntimeWithEvents(
   const elapsedSec = Math.max(0, dtSec);
   const visualRuntime = expireProjectiles(runtime, elapsedSec);
   const burnResult = advanceFireBurns(visualRuntime, elapsedSec);
-  const shakeRuntime = advanceHitShakes(burnResult.runtime, elapsedSec);
+  const burnCleanupRuntime = retargetOrCancelPendingAttacksForDeadTargets(burnResult.runtime, level);
+  const shakeRuntime = advanceHitShakes(burnCleanupRuntime, elapsedSec);
   const healthBarRuntime = advanceHealthBarUpdates(shakeRuntime, elapsedSec);
   const freezeRuntime = advanceIceFreezes(healthBarRuntime, elapsedSec);
   const defeatRuntime = advancePendingDefeats(freezeRuntime, elapsedSec);
+  const pendingAttackResult = advancePendingAttacks(defeatRuntime, level, elapsedSec);
   const movedRuntime = {
-    ...defeatRuntime,
+    ...pendingAttackResult.runtime,
     elapsedMs,
-    monsters: defeatRuntime.monsters.map((monster) =>
+    monsters: pendingAttackResult.runtime.monsters.map((monster) =>
       monster.hp > 0 && (monster.iceFreezeRemainingSec ?? 0) <= 0
         ? {
             ...monster,
@@ -262,8 +294,8 @@ export function updateTrialRuntimeWithEvents(
       ...spawnedRuntime,
       result,
     },
-    scoreDelta: burnResult.scoreDelta,
-    damageEvents: burnResult.damageEvents,
+    scoreDelta: burnResult.scoreDelta + pendingAttackResult.scoreDelta,
+    damageEvents: [...burnResult.damageEvents, ...pendingAttackResult.damageEvents],
   };
 }
 
@@ -363,6 +395,7 @@ export function processTrialSwap(
     runtime: damageApplication.runtime,
     scoreDelta: damageApplication.scoreDelta,
     damageEvents: damageApplication.damageEvents,
+    queuedAttackEvents: damageApplication.queuedAttackEvents,
     scoringStats: createSwapScoringStats(matchCount, powerUpsCreated),
     animationTrace,
   };
@@ -407,6 +440,7 @@ export function processTrialPowerUpActivation(
     runtime: damageApplication.runtime,
     scoreDelta: damageApplication.scoreDelta,
     damageEvents: damageApplication.damageEvents,
+    queuedAttackEvents: damageApplication.queuedAttackEvents,
     scoringStats: createSwapScoringStats(matchCount, powerUpsCreated),
     animationTrace: powerUpResolution.animationTrace,
   };
@@ -494,22 +528,31 @@ function applyDamageSources(
   runtime: TrialRuntimeState,
   level: GeneratedTrialLevel,
   sources: readonly TrialDamageSource[],
-): { runtime: TrialRuntimeState; scoreDelta: number; damageEvents: TrialDamageEvent[] } {
+): {
+  runtime: TrialRuntimeState;
+  scoreDelta: number;
+  damageEvents: TrialDamageEvent[];
+  queuedAttackEvents: TrialQueuedAttackEvent[];
+} {
   let nextRuntime: TrialRuntimeState = {
     ...runtime,
     monsters: runtime.monsters.map((monster) => cloneActiveTrialMonster(monster)),
     projectiles: runtime.projectiles.map((projectile) => ({ ...projectile })),
+    pendingAttacks: runtime.pendingAttacks.map((attack) => clonePendingAttack(attack)),
     impactVfx: runtime.impactVfx?.map((vfx) => ({ ...vfx, hitWorldPosition: { ...vfx.hitWorldPosition } })),
     defeatedMonsterIds: [...runtime.defeatedMonsterIds],
   };
-  let scoreDelta = 0;
-  const damageEvents: TrialDamageEvent[] = [];
+  const queuedAttackEvents: TrialQueuedAttackEvent[] = [];
 
   for (const source of sources) {
     if (source.schoolId === 'lightning') {
       const targets = aliveMonstersByTargetOrder(nextRuntime, level);
       const projectiles: TrialProjectileRuntimeState[] = [];
+      const pendingAttacks: TrialPendingAttackRuntimeState[] = [];
+      const chainId = `chain-${nextRuntime.nextAttackIndex}`;
       let previousTarget: ActiveTrialMonster | null = null;
+      let previousAttackId: string | undefined;
+      const excludedMonsterIds: string[] = [];
 
       for (const [chainIndex, target] of targets.entries()) {
         const currentTarget = nextRuntime.monsters.find((monster) => monster.monsterId === target.monsterId);
@@ -520,15 +563,17 @@ function applyDamageSources(
         const chainDelaySec = chainIndex * LIGHTNING_CHAIN_HOP_DELAY_SEC;
         const projectileActivationDelaySec = source.castActivationDelaySec + SPELL_CAST_WINDUP_SEC + chainDelaySec;
         const impactDelaySec = projectileActivationDelaySec + source.durationSec;
-        const damage = Math.min(currentTarget.hp, source.damage);
-        const nextHp = Math.max(0, currentTarget.hp - source.damage);
-        const defeated = nextHp <= 0;
+        const attackIndex = nextRuntime.nextAttackIndex + pendingAttacks.length;
+        const projectileIndex = nextRuntime.nextProjectileIndex + projectiles.length;
+        const attackId = `trial-attack-${attackIndex}`;
+        const projectileId = `trial-${projectileIndex}`;
         const projectile = createProjectile(
-          nextRuntime.nextProjectileIndex + projectiles.length,
+          projectileIndex,
           level,
           source,
           currentTarget,
           {
+            attackId,
             originKind: previousTarget == null ? 'mage' : 'world',
             from:
               previousTarget == null
@@ -539,41 +584,38 @@ function applyDamageSources(
             chargeDurationSec: previousTarget == null ? SPELL_CAST_WINDUP_SEC : 0,
           },
         );
-        const monsters = nextRuntime.monsters.map((monster) =>
-          monster.monsterId === currentTarget.monsterId
-            ? {
-                ...monster,
-                hp: nextHp,
-                defeatDelaySec: defeated ? impactDelaySec : monster.defeatDelaySec,
-                ...scheduleHitShake(monster, impactDelaySec),
-                ...scheduleHealthBarUpdate(monster, impactDelaySec, nextHp),
-              }
-            : monster,
-        );
+        const pendingAttack = createPendingAttack(attackIndex, source, currentTarget, {
+          attackId,
+          projectileId,
+          impactDelaySec,
+          castActivationDelaySec: source.castActivationDelaySec + chainDelaySec,
+          chainId,
+          chainIndex,
+          originAttackId: previousAttackId,
+          excludedMonsterIds,
+        });
 
-        nextRuntime = {
-          ...nextRuntime,
-          monsters,
-        };
+        pendingAttacks.push(pendingAttack);
         projectiles.push(projectile);
-
-        scoreDelta += Math.round(damage * 2) + (defeated ? currentTarget.scoreValue : 0);
-        damageEvents.push({
+        queuedAttackEvents.push({
+          attackId,
           monsterId: currentTarget.monsterId,
           schoolId: source.schoolId,
-          damage,
-          defeated,
-          impactDelaySec,
+          damage: source.damage,
           castActivationDelaySec: source.castActivationDelaySec + chainDelaySec,
         });
         previousTarget = target;
+        previousAttackId = attackId;
+        excludedMonsterIds.push(currentTarget.monsterId);
       }
 
-      if (projectiles.length > 0) {
+      if (pendingAttacks.length > 0) {
         nextRuntime = {
           ...nextRuntime,
           projectiles: [...nextRuntime.projectiles, ...projectiles],
+          pendingAttacks: [...nextRuntime.pendingAttacks, ...pendingAttacks],
           nextProjectileIndex: nextRuntime.nextProjectileIndex + projectiles.length,
+          nextAttackIndex: nextRuntime.nextAttackIndex + pendingAttacks.length,
         };
       }
 
@@ -586,18 +628,14 @@ function applyDamageSources(
         continue;
       }
 
-      const damage = Math.min(target.hp, source.damage);
-      const nextHp = Math.max(0, target.hp - source.damage);
-      const defeated = nextHp <= 0;
       const impactDelaySec = source.castActivationDelaySec + SPELL_CAST_WINDUP_SEC + source.durationSec;
-      const fireBurnStack = source.schoolId === 'fire' && !defeated
-        ? createFireBurnStack(nextRuntime.nextBurnIndex, source.damage, impactDelaySec)
-        : null;
-      const earthImpactVfx = source.schoolId === 'earth'
-        ? createEarthImpactVfx(nextRuntime.nextImpactVfxIndex ?? 0, level, target, impactDelaySec)
-        : null;
+      const attackIndex = nextRuntime.nextAttackIndex;
+      const attackId = `trial-attack-${attackIndex}`;
+      const projectileIndex = nextRuntime.nextProjectileIndex;
+      const projectileId = shotIndex < source.visualShotCount ? `trial-${projectileIndex}` : undefined;
       const projectile = shotIndex < source.visualShotCount
-        ? createProjectile(nextRuntime.nextProjectileIndex, level, source, target, {
+        ? createProjectile(projectileIndex, level, source, target, {
+            attackId,
             originKind: 'mage',
             from: getTrialSpellOriginWorldPosition(level),
             castActivationDelaySec: source.castActivationDelaySec,
@@ -605,43 +643,26 @@ function applyDamageSources(
             chargeDurationSec: SPELL_CAST_WINDUP_SEC,
           })
         : null;
-      const monsters = nextRuntime.monsters.map((monster) =>
-        monster.monsterId === target.monsterId
-          ? {
-              ...monster,
-              hp: nextHp,
-              defeatDelaySec: defeated ? impactDelaySec : monster.defeatDelaySec,
-              ...scheduleHitShake(monster, impactDelaySec),
-              ...scheduleHealthBarUpdate(monster, impactDelaySec, nextHp),
-              ...(source.schoolId === 'ice' && !defeated ? scheduleIceFreeze(monster, impactDelaySec) : {}),
-              ...(fireBurnStack == null
-                ? {}
-                : { fireBurnStacks: [...(monster.fireBurnStacks ?? []), fireBurnStack] }),
-            }
-          : monster,
-      );
+      const pendingAttack = createPendingAttack(attackIndex, source, target, {
+        attackId,
+        projectileId,
+        impactDelaySec,
+        castActivationDelaySec: source.castActivationDelaySec,
+      });
 
       nextRuntime = {
         ...nextRuntime,
-        monsters,
         projectiles: projectile == null ? nextRuntime.projectiles : [...nextRuntime.projectiles, projectile],
-        impactVfx: earthImpactVfx == null
-          ? nextRuntime.impactVfx
-          : [...(nextRuntime.impactVfx ?? []), earthImpactVfx],
+        pendingAttacks: [...nextRuntime.pendingAttacks, pendingAttack],
         nextProjectileIndex: projectile == null ? nextRuntime.nextProjectileIndex : nextRuntime.nextProjectileIndex + 1,
-        nextBurnIndex: fireBurnStack == null ? nextRuntime.nextBurnIndex : nextRuntime.nextBurnIndex + 1,
-        nextImpactVfxIndex: earthImpactVfx == null
-          ? nextRuntime.nextImpactVfxIndex
-          : (nextRuntime.nextImpactVfxIndex ?? 0) + 1,
+        nextAttackIndex: nextRuntime.nextAttackIndex + 1,
       };
 
-      scoreDelta += Math.round(damage * 2) + (defeated ? target.scoreValue : 0);
-      damageEvents.push({
+      queuedAttackEvents.push({
+        attackId,
         monsterId: target.monsterId,
         schoolId: source.schoolId,
-        damage,
-        defeated,
-        impactDelaySec,
+        damage: source.damage,
         castActivationDelaySec: source.castActivationDelaySec,
       });
     }
@@ -652,8 +673,9 @@ function applyDamageSources(
       ...nextRuntime,
       result: getTrialResult(nextRuntime, level),
     },
-    scoreDelta,
-    damageEvents,
+    scoreDelta: 0,
+    damageEvents: [],
+    queuedAttackEvents,
   };
 }
 
@@ -671,10 +693,48 @@ function cloneActiveTrialMonster(monster: ActiveTrialMonster): ActiveTrialMonste
   };
 }
 
+function clonePendingAttack(attack: TrialPendingAttackRuntimeState): TrialPendingAttackRuntimeState {
+  return {
+    ...attack,
+    excludedMonsterIds: attack.excludedMonsterIds == null ? undefined : [...attack.excludedMonsterIds],
+  };
+}
+
 function cloneFireBurnStack(stack: TrialFireBurnStack): TrialFireBurnStack {
   return {
     ...stack,
     tickDelayQueueSec: [...stack.tickDelayQueueSec],
+  };
+}
+
+function createPendingAttack(
+  attackIndex: number,
+  source: TrialDamageSource,
+  target: ActiveTrialMonster,
+  options: {
+    attackId?: string;
+    projectileId?: string;
+    impactDelaySec: number;
+    castActivationDelaySec: number;
+    chainId?: string;
+    chainIndex?: number;
+    originAttackId?: string;
+    excludedMonsterIds?: readonly string[];
+  },
+): TrialPendingAttackRuntimeState {
+  return {
+    attackId: options.attackId ?? `trial-attack-${attackIndex}`,
+    schoolId: source.schoolId,
+    effectKind: source.effectKind,
+    damage: source.damage,
+    targetMonsterId: target.monsterId,
+    impactDelaySec: Math.max(0, options.impactDelaySec),
+    castActivationDelaySec: Math.max(0, options.castActivationDelaySec),
+    projectileId: options.projectileId,
+    chainId: options.chainId,
+    chainIndex: options.chainIndex,
+    originAttackId: options.originAttackId,
+    excludedMonsterIds: options.excludedMonsterIds == null ? undefined : [...options.excludedMonsterIds],
   };
 }
 
@@ -803,6 +863,338 @@ function advanceFireBurns(
   };
 }
 
+function advancePendingAttacks(
+  runtime: TrialRuntimeState,
+  level: GeneratedTrialLevel,
+  dtSec: number,
+): { runtime: TrialRuntimeState; scoreDelta: number; damageEvents: TrialDamageEvent[] } {
+  const elapsed = Math.max(0, dtSec);
+  if (runtime.pendingAttacks.length <= 0) {
+    return { runtime, scoreDelta: 0, damageEvents: [] };
+  }
+
+  let workingRuntime: TrialRuntimeState = {
+    ...runtime,
+    projectiles: runtime.projectiles.map((projectile) => ({ ...projectile })),
+    pendingAttacks: [],
+  };
+  let futureAttacks: TrialPendingAttackRuntimeState[] = [];
+  let scoreDelta = 0;
+  const damageEvents: TrialDamageEvent[] = [];
+  const advancedAttacks = runtime.pendingAttacks
+    .map((attack) => ({
+      ...clonePendingAttack(attack),
+      impactDelaySec: attack.impactDelaySec - elapsed,
+    }))
+    .sort(comparePendingAttacks);
+
+  for (const attack of advancedAttacks) {
+    if (attack.impactDelaySec > TRIAL_DEFEAT_TIMER_EPSILON_SEC) {
+      workingRuntime = { ...workingRuntime, pendingAttacks: futureAttacks };
+      const futureTarget = resolveTargetForPendingAttack(workingRuntime, level, attack);
+      if (futureTarget == null) {
+        workingRuntime = removePendingAttackProjectile(workingRuntime, attack);
+        futureAttacks = [...workingRuntime.pendingAttacks];
+        continue;
+      }
+
+      const futureAttack =
+        futureTarget.monsterId === attack.targetMonsterId
+          ? attack
+          : {
+              ...attack,
+              targetMonsterId: futureTarget.monsterId,
+            };
+      if (futureTarget.monsterId !== attack.targetMonsterId) {
+        workingRuntime = retargetPendingAttackProjectile(workingRuntime, level, futureAttack, futureTarget);
+      }
+
+      futureAttacks.push(futureAttack);
+      workingRuntime = { ...workingRuntime, pendingAttacks: futureAttacks };
+      continue;
+    }
+
+    workingRuntime = { ...workingRuntime, pendingAttacks: futureAttacks };
+    const target = resolveTargetForPendingAttack(workingRuntime, level, attack);
+    if (target == null) {
+      workingRuntime = removePendingAttackProjectile(workingRuntime, attack);
+      futureAttacks = [...workingRuntime.pendingAttacks];
+      continue;
+    }
+
+    const resolvedAttack =
+      target.monsterId === attack.targetMonsterId
+        ? attack
+        : {
+            ...attack,
+            targetMonsterId: target.monsterId,
+          };
+    if (target.monsterId !== attack.targetMonsterId) {
+      workingRuntime = retargetPendingAttackProjectile(workingRuntime, level, resolvedAttack, target);
+    }
+
+    const attackResult = applyPendingAttackToTarget(workingRuntime, level, resolvedAttack, target);
+    workingRuntime = attackResult.runtime;
+    scoreDelta += attackResult.scoreDelta;
+    damageEvents.push(attackResult.damageEvent);
+
+    workingRuntime = updateFutureLightningChainAttacks(workingRuntime, level, resolvedAttack, target);
+    if (attackResult.damageEvent.defeated) {
+      workingRuntime = retargetOrCancelPendingAttacksForDeadTargets(workingRuntime, level);
+    }
+    futureAttacks = [...workingRuntime.pendingAttacks];
+  }
+
+  return {
+    runtime: {
+      ...workingRuntime,
+      pendingAttacks: futureAttacks,
+    },
+    scoreDelta,
+    damageEvents,
+  };
+}
+
+function comparePendingAttacks(
+  first: TrialPendingAttackRuntimeState,
+  second: TrialPendingAttackRuntimeState,
+): number {
+  return (
+    first.impactDelaySec - second.impactDelaySec ||
+    pendingAttackSortIndex(first) - pendingAttackSortIndex(second) ||
+    first.attackId.localeCompare(second.attackId)
+  );
+}
+
+function pendingAttackSortIndex(attack: Pick<TrialPendingAttackRuntimeState, 'attackId'>): number {
+  const match = /(\d+)$/.exec(attack.attackId);
+  return match == null ? 0 : Number.parseInt(match[1], 10);
+}
+
+function applyPendingAttackToTarget(
+  runtime: TrialRuntimeState,
+  level: GeneratedTrialLevel,
+  attack: TrialPendingAttackRuntimeState,
+  target: ActiveTrialMonster,
+): { runtime: TrialRuntimeState; scoreDelta: number; damageEvent: TrialDamageEvent } {
+  const damage = Math.min(target.hp, attack.damage);
+  const nextHp = Math.max(0, target.hp - attack.damage);
+  const defeated = nextHp <= 0;
+  const fireBurnStack = attack.schoolId === 'fire' && !defeated
+    ? createFireBurnStack(runtime.nextBurnIndex, attack.damage, 0)
+    : null;
+  const earthImpactVfx = attack.schoolId === 'earth'
+    ? createEarthImpactVfx(runtime.nextImpactVfxIndex ?? 0, level, target, 0)
+    : null;
+  const monsters = runtime.monsters.map((monster) =>
+    monster.monsterId === target.monsterId
+      ? {
+          ...monster,
+          hp: nextHp,
+          defeatDelaySec: defeated ? 0 : monster.defeatDelaySec,
+          defeatAnimationRemainingSec: defeated ? KOBOLD_DEFEAT_ANIMATION_SEC : monster.defeatAnimationRemainingSec,
+          defeatAnimationDurationSec: defeated ? KOBOLD_DEFEAT_ANIMATION_SEC : monster.defeatAnimationDurationSec,
+          defeatFadeRemainingSec: defeated ? undefined : monster.defeatFadeRemainingSec,
+          defeatFadeDurationSec: defeated ? undefined : monster.defeatFadeDurationSec,
+          ...startHitShake(),
+          ...clearHealthBarUpdate(),
+          ...(attack.schoolId === 'ice' && !defeated ? startIceFreeze() : {}),
+          ...(fireBurnStack == null
+            ? { fireBurnStacks: defeated ? undefined : monster.fireBurnStacks }
+            : { fireBurnStacks: [...(monster.fireBurnStacks ?? []), fireBurnStack] }),
+        }
+      : monster,
+  );
+
+  return {
+    runtime: {
+      ...runtime,
+      monsters,
+      impactVfx: earthImpactVfx == null
+        ? runtime.impactVfx
+        : [...(runtime.impactVfx ?? []), earthImpactVfx],
+      nextBurnIndex: fireBurnStack == null ? runtime.nextBurnIndex : runtime.nextBurnIndex + 1,
+      nextImpactVfxIndex: earthImpactVfx == null
+        ? runtime.nextImpactVfxIndex
+        : (runtime.nextImpactVfxIndex ?? 0) + 1,
+    },
+    scoreDelta: Math.round(damage * 2) + (defeated ? target.scoreValue : 0),
+    damageEvent: {
+      monsterId: target.monsterId,
+      schoolId: attack.schoolId,
+      damage,
+      defeated,
+      impactDelaySec: 0,
+      castActivationDelaySec: 0,
+    },
+  };
+}
+
+function resolveTargetForPendingAttack(
+  runtime: Pick<TrialRuntimeState, 'monsters'>,
+  level: GeneratedTrialLevel,
+  attack: TrialPendingAttackRuntimeState,
+): ActiveTrialMonster | null {
+  const excludedMonsterIds = new Set(attack.excludedMonsterIds ?? []);
+  const plannedTarget = runtime.monsters.find(
+    (monster) =>
+      monster.monsterId === attack.targetMonsterId &&
+      monster.hp > 0 &&
+      !excludedMonsterIds.has(monster.monsterId),
+  );
+  if (plannedTarget != null) {
+    return plannedTarget;
+  }
+
+  return aliveMonstersByTargetOrder(runtime, level).find((monster) => !excludedMonsterIds.has(monster.monsterId)) ?? null;
+}
+
+function retargetOrCancelPendingAttacksForDeadTargets(
+  runtime: TrialRuntimeState,
+  level: GeneratedTrialLevel,
+): TrialRuntimeState {
+  if (runtime.pendingAttacks.length <= 0) {
+    return runtime;
+  }
+
+  let nextRuntime: TrialRuntimeState = runtime;
+  const nextPendingAttacks: TrialPendingAttackRuntimeState[] = [];
+
+  for (const attack of runtime.pendingAttacks) {
+    const target = resolveTargetForPendingAttack(
+      {
+        monsters: nextRuntime.monsters,
+      },
+      level,
+      attack,
+    );
+    if (target == null) {
+      nextRuntime = removePendingAttackProjectile(nextRuntime, attack);
+      continue;
+    }
+
+    const nextAttack =
+      target.monsterId === attack.targetMonsterId
+        ? attack
+        : {
+            ...attack,
+            targetMonsterId: target.monsterId,
+          };
+    if (target.monsterId !== attack.targetMonsterId) {
+      nextRuntime = retargetPendingAttackProjectile(nextRuntime, level, nextAttack, target);
+    }
+    nextPendingAttacks.push(nextAttack);
+  }
+
+  return {
+    ...nextRuntime,
+    pendingAttacks: nextPendingAttacks,
+  };
+}
+
+function updateFutureLightningChainAttacks(
+  runtime: TrialRuntimeState,
+  level: GeneratedTrialLevel,
+  resolvedAttack: TrialPendingAttackRuntimeState,
+  actualTarget: ActiveTrialMonster,
+): TrialRuntimeState {
+  if (resolvedAttack.chainId == null) {
+    return runtime;
+  }
+
+  const actualTargetPosition = getTrialMonsterWorldPosition(level, actualTarget);
+  let nextRuntime = runtime;
+  const nextPendingAttacks = runtime.pendingAttacks.map((attack) => {
+    if (attack.chainId !== resolvedAttack.chainId) {
+      return attack;
+    }
+
+    const excludedMonsterIds = addUniqueMonsterId(attack.excludedMonsterIds ?? [], actualTarget.monsterId);
+    if (attack.originAttackId === resolvedAttack.attackId) {
+      nextRuntime = setPendingAttackProjectileFrom(nextRuntime, attack, actualTargetPosition);
+    }
+
+    return {
+      ...attack,
+      excludedMonsterIds,
+    };
+  });
+
+  return retargetOrCancelPendingAttacksForDeadTargets(
+    {
+      ...nextRuntime,
+      pendingAttacks: nextPendingAttacks,
+    },
+    level,
+  );
+}
+
+function addUniqueMonsterId(monsterIds: readonly string[], monsterId: string): readonly string[] {
+  return monsterIds.includes(monsterId) ? monsterIds : [...monsterIds, monsterId];
+}
+
+function retargetPendingAttackProjectile(
+  runtime: TrialRuntimeState,
+  level: GeneratedTrialLevel,
+  attack: TrialPendingAttackRuntimeState,
+  target: ActiveTrialMonster,
+): TrialRuntimeState {
+  if (attack.projectileId == null) {
+    return runtime;
+  }
+
+  const targetPosition = getTrialMonsterWorldPosition(level, target);
+  return {
+    ...runtime,
+    projectiles: runtime.projectiles.map((projectile) =>
+      projectile.projectileId === attack.projectileId
+        ? {
+            ...projectile,
+            targetMonsterId: target.monsterId,
+            to: targetPosition,
+          }
+        : projectile,
+    ),
+  };
+}
+
+function setPendingAttackProjectileFrom(
+  runtime: TrialRuntimeState,
+  attack: TrialPendingAttackRuntimeState,
+  from: Vec3Data,
+): TrialRuntimeState {
+  if (attack.projectileId == null) {
+    return runtime;
+  }
+
+  return {
+    ...runtime,
+    projectiles: runtime.projectiles.map((projectile) =>
+      projectile.projectileId === attack.projectileId
+        ? {
+            ...projectile,
+            from,
+            originKind: 'world',
+          }
+        : projectile,
+    ),
+  };
+}
+
+function removePendingAttackProjectile(
+  runtime: TrialRuntimeState,
+  attack: TrialPendingAttackRuntimeState,
+): TrialRuntimeState {
+  if (attack.projectileId == null) {
+    return runtime;
+  }
+
+  return {
+    ...runtime,
+    projectiles: runtime.projectiles.filter((projectile) => projectile.projectileId !== attack.projectileId),
+  };
+}
+
 function cascadeDamageSources(
   level: GeneratedTrialLevel,
   cascadeResult: CascadeResult,
@@ -883,6 +1275,7 @@ function createProjectile(
   source: TrialDamageSource,
   target: ActiveTrialMonster,
   options: {
+    attackId?: string;
     originKind: TrialProjectileRuntimeState['originKind'];
     from: Vec3Data;
     castActivationDelaySec: number;
@@ -892,6 +1285,8 @@ function createProjectile(
 ): TrialProjectileRuntimeState {
   return {
     projectileId: `trial-${projectileIndex}`,
+    attackId: options.attackId,
+    targetMonsterId: target.monsterId,
     schoolId: source.schoolId,
     effectKind: source.effectKind,
     originKind: options.originKind,
@@ -1215,6 +1610,18 @@ function scheduleHitShake(
   };
 }
 
+function startHitShake(): Pick<
+  ActiveTrialMonster,
+  'hitShakeDelaySec' | 'hitShakeQueueSec' | 'hitShakeRemainingSec' | 'hitShakeDurationSec'
+> {
+  return {
+    hitShakeDelaySec: undefined,
+    hitShakeQueueSec: undefined,
+    hitShakeRemainingSec: TRIAL_HIT_SHAKE_DURATION_SEC,
+    hitShakeDurationSec: TRIAL_HIT_SHAKE_DURATION_SEC,
+  };
+}
+
 function scheduleHealthBarUpdate(
   monster: ActiveTrialMonster,
   impactDelaySec: number,
@@ -1243,15 +1650,10 @@ function clearHealthBarUpdate(): Pick<ActiveTrialMonster, 'healthBarHp' | 'healt
   };
 }
 
-function scheduleIceFreeze(
-  monster: ActiveTrialMonster,
-  impactDelaySec: number,
-): Pick<ActiveTrialMonster, 'iceFreezeDelayQueueSec' | 'iceFreezeDurationSec'> {
+function startIceFreeze(): Pick<ActiveTrialMonster, 'iceFreezeDelayQueueSec' | 'iceFreezeRemainingSec' | 'iceFreezeDurationSec'> {
   return {
-    iceFreezeDelayQueueSec: [
-      ...(monster.iceFreezeDelayQueueSec ?? []),
-      Math.max(0, impactDelaySec),
-    ].sort((first, second) => first - second),
+    iceFreezeDelayQueueSec: undefined,
+    iceFreezeRemainingSec: TRIAL_ICE_FREEZE_SEC,
     iceFreezeDurationSec: TRIAL_ICE_FREEZE_SEC,
   };
 }
@@ -1541,6 +1943,7 @@ function invalidTrialSwap(
     runtime,
     scoreDelta: 0,
     damageEvents: [],
+    queuedAttackEvents: [],
     scoringStats: EMPTY_SWAP_SCORING_STATS,
     animationTrace,
   };

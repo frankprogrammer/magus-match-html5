@@ -11,6 +11,8 @@ export interface CameraState {
 
 export interface ProjectileState {
   projectileId: string;
+  attackId?: string;
+  targetMonsterId?: string;
   schoolId: 'fire' | 'ice' | 'lightning' | 'earth';
   effectKind: 'match' | 'bomb';
   originKind?: 'mage' | 'world';

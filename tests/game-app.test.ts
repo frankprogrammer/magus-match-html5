@@ -89,9 +89,12 @@ describe('MagusMatchGameApp', () => {
     tap(app, TITLE_PLAY_BUTTON_RECT);
     app.update(0, [{ type: 'swap', from: firstMove.from, to: firstMove.to }]);
 
-    expect(app.getRunStateForDebug().score).toBeGreaterThan(0);
     expect(app.getHeroWorldState().levelType).toBe('TRIAL');
     expect(app.getHeroWorldState().activeProjectiles.length).toBeGreaterThan(0);
+
+    const impactDelaySec = app.getTrialRuntimeForDebug()?.pendingAttacks[0]?.impactDelaySec ?? 0;
+    app.update(impactDelaySec, []);
+    expect(app.getRunStateForDebug().score).toBeGreaterThan(0);
   });
 
   it('shows a standard match hint after the idle delay', () => {
@@ -248,18 +251,20 @@ describe('MagusMatchGameApp', () => {
 
     app.update(0, [{ type: 'swap', from: firstMove.from, to: firstMove.to }]);
 
-    const defeatedRuntime = app.getTrialRuntimeForDebug();
-    const defeatDelaySec = defeatedRuntime?.monsters[0]?.defeatDelaySec;
+    const queuedRuntime = app.getTrialRuntimeForDebug();
+    const impactDelaySec = queuedRuntime?.pendingAttacks[0]?.impactDelaySec;
     expect(app.getHudState().phase).toBe('IDLE');
-    expect(defeatedRuntime?.monsters[0]).toMatchObject({ monsterId: 'final-monster', hp: 0 });
-    expect(defeatDelaySec).toBeGreaterThan(0);
+    expect(queuedRuntime?.monsters[0]).toMatchObject({ monsterId: 'final-monster', hp: 1 });
+    expect(impactDelaySec).toBeGreaterThan(0);
 
-    app.update((defeatDelaySec ?? 0) - 0.001, []);
+    app.update((impactDelaySec ?? 0) - 0.001, []);
     expect(app.getHudState().phase).toBe('IDLE');
     expect(app.getTrialRuntimeForDebug()?.monsters).toHaveLength(1);
+    expect(app.getTrialRuntimeForDebug()?.monsters[0]?.hp).toBe(1);
 
     app.update(0.001, []);
     expect(app.getHudState().phase).toBe('IDLE');
+    expect(app.getTrialRuntimeForDebug()?.monsters[0]?.hp).toBe(0);
     expect(app.getTrialRuntimeForDebug()?.monsters[0]?.defeatAnimationRemainingSec).toBeCloseTo(
       KOBOLD_DEFEAT_ANIMATION_SEC,
     );
@@ -321,8 +326,12 @@ describe('MagusMatchGameApp', () => {
     expect(sounds.indexOf(AssetIds.sounds.boardMove)).toBeLessThan(sounds.indexOf(AssetIds.sounds.mergeMatch));
     expect(sounds.indexOf(AssetIds.sounds.mergeMatch)).toBeLessThan(sounds.indexOf(AssetIds.sounds.matchCoin));
     expect(sounds.some((soundId) => soundId.endsWith('.whoosh'))).toBe(true);
+
+    const impactDelaySec = app.getTrialRuntimeForDebug()?.pendingAttacks[0]?.impactDelaySec ?? 0;
+    app.update(impactDelaySec, []);
+    const impactSounds = soundEvents(app.drainEvents()).map((event) => event.soundId);
     expect(
-      sounds.includes(AssetIds.sounds.monsterDamage) || sounds.includes(AssetIds.sounds.monsterDefeat),
+      impactSounds.includes(AssetIds.sounds.monsterDamage) || impactSounds.includes(AssetIds.sounds.monsterDefeat),
     ).toBe(true);
   });
 
@@ -426,9 +435,12 @@ describe('MagusMatchGameApp', () => {
     const validMove = findValidMoves(app.getBoardForDebug())[0];
     app.update(0.01, [{ type: 'swap', from: validMove.from, to: validMove.to }]);
 
-    expect(app.getRunStateForDebug().score).toBeGreaterThan(0);
     expect(app.getBoardRenderState().animationTrace?.kind).toBe('resolution');
     expect(app.getBoardRenderState().animationTrace?.revisionId).toBeGreaterThan(invalidRevision);
+
+    const impactDelaySec = app.getTrialRuntimeForDebug()?.pendingAttacks[0]?.impactDelaySec ?? 0;
+    app.update(impactDelaySec, []);
+    expect(app.getRunStateForDebug().score).toBeGreaterThan(0);
   });
 
   it('keeps Trial tile IDs unique across the reported two-swap cascade regression', () => {

@@ -48,6 +48,7 @@ import type {
   ActiveTrialMonster,
   SpellSchoolId,
   TrialDamageEvent,
+  TrialQueuedAttackEvent,
   TrialRuntimeState,
 } from "../generator/TrialRules";
 import {
@@ -406,6 +407,10 @@ export class MagusMatchGameApp implements GameApp {
           })),
           projectiles: this.trialRuntime.projectiles.map((projectile) => ({
             ...projectile,
+          })),
+          pendingAttacks: this.trialRuntime.pendingAttacks.map((attack) => ({
+            ...attack,
+            excludedMonsterIds: attack.excludedMonsterIds == null ? undefined : [...attack.excludedMonsterIds],
           })),
           defeatedMonsterIds: [...this.trialRuntime.defeatedMonsterIds],
         };
@@ -815,7 +820,7 @@ export class MagusMatchGameApp implements GameApp {
     this.captureBoardAnimationTrace(result.animationTrace);
     this.emitPowerUpActivationSound(trialSwapPowerUpType);
     this.emitMatchAudioAndJuice(result.scoringStats, to);
-    this.emitTrialAudioAndJuice(result.damageEvents, to);
+    this.emitTrialAudioAndJuice(result.queuedAttackEvents, to);
     const scoreDelta = result.scoreDelta + scoreSwapStats(result.scoringStats);
 
     if (scoreDelta > 0) {
@@ -860,7 +865,7 @@ export class MagusMatchGameApp implements GameApp {
     this.captureBoardAnimationTrace(result.animationTrace);
     this.emitPowerUpActivationSound(trialTapPowerUpType);
     this.emitMatchAudioAndJuice(result.scoringStats, origin);
-    this.emitTrialAudioAndJuice(result.damageEvents, origin);
+    this.emitTrialAudioAndJuice(result.queuedAttackEvents, origin);
     const scoreDelta = result.scoreDelta + scoreSwapStats(result.scoringStats);
 
     if (scoreDelta > 0) {
@@ -1053,7 +1058,7 @@ export class MagusMatchGameApp implements GameApp {
   }
 
   private emitTrialAudioAndJuice(
-    damageEvents: readonly TrialDamageEvent[],
+    damageEvents: readonly TrialQueuedAttackEvent[],
     anchor: CellCoord,
   ): void {
     for (const event of damageEvents.slice(0, 8)) {

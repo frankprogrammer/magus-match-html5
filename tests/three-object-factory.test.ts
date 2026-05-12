@@ -98,6 +98,37 @@ describe('ThreeObjectFactory', () => {
     expect(((fill as THREE.Mesh).material as THREE.MeshBasicMaterial).depthWrite).toBe(false);
   });
 
+  it('creates a depth-independent fire burn sprite plane', () => {
+    const fireBurn = new ThreeObjectFactory().create(HeroStageTemplateIds.fireBurn);
+
+    expect(fireBurn).toBeInstanceOf(THREE.Mesh);
+    expect(fireBurn.name).toBe('fire-burn-sprite');
+    expect(fireBurn.position.y).toBeCloseTo(0.5);
+    expect(fireBurn.renderOrder).toBe(12);
+    expect((fireBurn as THREE.Mesh).material).toBeInstanceOf(THREE.MeshBasicMaterial);
+    const material = (fireBurn as THREE.Mesh).material as THREE.MeshBasicMaterial;
+    expect(material.transparent).toBe(true);
+    expect(material.depthWrite).toBe(false);
+    expect(material.depthTest).toBe(false);
+    expect(material.side).toBe(THREE.DoubleSide);
+    expect(material.map).toBeInstanceOf(THREE.DataTexture);
+  });
+
+  it('creates a depth-independent earth impact sprite plane', () => {
+    const earthImpact = new ThreeObjectFactory().create(HeroStageTemplateIds.earthImpact);
+
+    expect(earthImpact).toBeInstanceOf(THREE.Mesh);
+    expect(earthImpact.name).toBe('earth-impact-sprite');
+    expect(earthImpact.renderOrder).toBe(14);
+    expect((earthImpact as THREE.Mesh).material).toBeInstanceOf(THREE.MeshBasicMaterial);
+    const material = (earthImpact as THREE.Mesh).material as THREE.MeshBasicMaterial;
+    expect(material.transparent).toBe(true);
+    expect(material.depthWrite).toBe(false);
+    expect(material.depthTest).toBe(false);
+    expect(material.side).toBe(THREE.DoubleSide);
+    expect(material.map).toBeInstanceOf(THREE.DataTexture);
+  });
+
   it('computes cover sizing for wide and tall backdrop images', () => {
     const wide = backdropCoverSizeForImageAspect(3);
     expect(wide.width).toBeCloseTo(26.25);

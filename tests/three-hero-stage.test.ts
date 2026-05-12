@@ -4,6 +4,8 @@ import { HERO_STAGE_HEIGHT, LOGICAL_WIDTH } from '../src/core/Layout';
 import {
   applyMaterialOverrides,
   createMageAnimationController,
+  earthImpactSpriteFrameIndex,
+  fireBurnSpriteFrameIndex,
   isProjectileChargeVisible,
   isProjectileCastReady,
   isProjectileVisible,
@@ -23,6 +25,7 @@ import {
   resolveMageParticleSourceWorldPosition,
   resolveProjectileRenderOrigin,
   setActorLoopAnimationPaused,
+  spriteSheetFrameUvTransform,
   triggerActorOneShotAnimation,
   triggerMageCastAnimation,
   updateMageAnimationController,
@@ -192,6 +195,47 @@ describe('ThreeHeroStage projectile VFX', () => {
     expect(geometry.centerline[0]).toEqual(projectile.from);
     expect(geometry.centerline.at(-1)).toEqual(projectile.to);
     expect(Math.hypot(geometry.positions[0] - geometry.positions[3], geometry.positions[1] - geometry.positions[4])).toBeCloseTo(0.1875);
+  });
+
+  it('selects looping fire burn sprite frames from a 4x2 UV grid', () => {
+    expect(fireBurnSpriteFrameIndex(0)).toBe(0);
+    expect(fireBurnSpriteFrameIndex(1 / 12)).toBe(1);
+    expect(fireBurnSpriteFrameIndex(8 / 12)).toBe(0);
+
+    expect(spriteSheetFrameUvTransform(0, 4, 2)).toEqual({
+      repeatX: 0.25,
+      repeatY: 0.5,
+      offsetX: 0,
+      offsetY: 0.5,
+    });
+    expect(spriteSheetFrameUvTransform(5, 4, 2)).toEqual({
+      repeatX: 0.25,
+      repeatY: 0.5,
+      offsetX: 0.25,
+      offsetY: 0,
+    });
+    expect(spriteSheetFrameUvTransform(8, 4, 2)).toEqual(spriteSheetFrameUvTransform(0, 4, 2));
+  });
+
+  it('selects non-looping earth impact sprite frames from a 2x2 UV grid', () => {
+    expect(earthImpactSpriteFrameIndex(0)).toBe(0);
+    expect(earthImpactSpriteFrameIndex(1 / 12)).toBe(1);
+    expect(earthImpactSpriteFrameIndex(2 / 12)).toBe(2);
+    expect(earthImpactSpriteFrameIndex(3 / 12)).toBe(3);
+    expect(earthImpactSpriteFrameIndex(8 / 12)).toBe(3);
+
+    expect(spriteSheetFrameUvTransform(0, 2, 2)).toEqual({
+      repeatX: 0.5,
+      repeatY: 0.5,
+      offsetX: 0,
+      offsetY: 0.5,
+    });
+    expect(spriteSheetFrameUvTransform(3, 2, 2)).toEqual({
+      repeatX: 0.5,
+      repeatY: 0.5,
+      offsetX: 0.5,
+      offsetY: 0,
+    });
   });
 
   it('projects the mage particleSource into logical hero-stage coordinates', () => {

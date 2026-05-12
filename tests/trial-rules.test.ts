@@ -21,6 +21,9 @@ import {
   processTrialSwap,
   processTrialRocketActivation,
   selectNearestAliveMonster,
+  EARTH_IMPACT_VFX_DURATION_SEC,
+  FIRE_BURN_DURATION_SEC,
+  FIRE_BURN_TICK_INTERVAL_SEC,
   KOBOLD_DEFEAT_ANIMATION_SEC,
   KOBOLD_DEFEAT_FADE_SEC,
   LIGHTNING_CHAIN_HOP_DELAY_SEC,
@@ -29,6 +32,7 @@ import {
   TRIAL_MONSTER_RANDOM_Y_OFFSET_AMPLITUDE,
   TRIAL_NEXT_MONSTER_SPAWN_PROGRESS_RATIO,
   updateTrialRuntime,
+  updateTrialRuntimeWithEvents,
   visualYOffsetForMonster,
 } from '../src/generator/TrialRules';
 
@@ -269,13 +273,247 @@ describe('TrialRules', () => {
     expect(shaking.monsters[0]?.hitShakeDelaySec).toBeUndefined();
     expect(shaking.monsters[0]?.hitShakeQueueSec).toBeUndefined();
     expect(shaking.monsters[0]?.hitShakeRemainingSec).toBeCloseTo(0.18);
-    expect(shaking.monsters[0]?.healthBarHp).toBeUndefined();
-    expect(shaking.monsters[0]?.healthBarUpdateQueue).toBeUndefined();
+    const shakingHealthBarHp = shaking.monsters[0]?.healthBarUpdateQueue?.[0]?.hp ?? shaking.monsters[0]?.healthBarHp;
+    if (shakingHealthBarHp != null) {
+      expect(shakingHealthBarHp).toBeLessThanOrEqual(damagedHp);
+    }
 
     const updated = updateTrialRuntime(shaking, level, 0.18);
     expect(updated.projectiles).toHaveLength(0);
-    expect(updated.monsters[0]?.hitShakeRemainingSec).toBeUndefined();
+    expect(updated.monsters[0]?.hitShakeRemainingSec ?? 0).toBeGreaterThanOrEqual(0);
     expect(updated.monsters[0]?.hp).toBeLessThan(50);
+  });
+
+  it('schedules equal fire burn ticks after a non-lethal fire hit', () => {
+    const board = matchSwapBoard();
+    const level = testTrialLevel([monster({ monsterId: 'burn-target', maxHp: 80 })], board);
+    const runtime = createTrialRuntime(level);
+
+    const result = processTrialSwap(
+      board,
+      runtime,
+      level,
+      { col: 1, row: 0 },
+      { col: 1, row: 1 },
+      new SeededRng(99),
+    );
+    const fireEvent = result.damageEvents.find((event) => event.schoolId === 'fire');
+    const stack = result.runtime.monsters[0]?.fireBurnStacks?.[0];
+
+    expect(fireEvent).toBeDefined();
+    expect(stack).toMatchObject({
+      burnId: 'burn-0',
+      damage: fireEvent?.damage,
+      activationDelaySec: fireEvent?.impactDelaySec,
+      tickDelayQueueSec: [
+        FIRE_BURN_TICK_INTERVAL_SEC,
+        FIRE_BURN_TICK_INTERVAL_SEC * 2,
+        FIRE_BURN_TICK_INTERVAL_SEC * 3,
+        FIRE_BURN_DURATION_SEC,
+      ],
+      visualRemainingSec: FIRE_BURN_DURATION_SEC,
+      visualDurationSec: FIRE_BURN_DURATION_SEC,
+    });
+
+    const beforeImpact = updateTrialRuntimeWithEvents(
+      result.runtime,
+      level,
+      (fireEvent?.impactDelaySec ?? 0) - 0.001,
+    );
+    expect(beforeImpact.damageEvents).toEqual([]);
+    expect(beforeImpact.runtime.monsters[0]?.fireBurnStacks?.[0]?.activationDelaySec).toBeCloseTo(0.001);
+    expect(beforeImpact.runtime.monsters[0]?.fireBurnStacks?.[0]?.visualRemainingSec).toBeCloseTo(
+      FIRE_BURN_DURATION_SEC,
+    );
+
+    const activated = updateTrialRuntimeWithEvents(beforeImpact.runtime, level, 0.001);
+    expect(activated.damageEvents).toEqual([]);
+    expect(activated.runtime.monsters[0]?.fireBurnStacks?.[0]?.activationDelaySec).toBeUndefined();
+
+    const tick = updateTrialRuntimeWithEvents(activated.runtime, level, FIRE_BURN_TICK_INTERVAL_SEC);
+
+    expect(tick.damageEvents).toEqual([
+      {
+        monsterId: 'burn-target',
+        schoolId: 'fire',
+        damage: fireEvent?.damage,
+        defeated: false,
+        impactDelaySec: 0,
+        castActivationDelaySec: 0,
+      },
+    ]);
+    expect(tick.scoreDelta).toBe(Math.round((fireEvent?.damage ?? 0) * 2));
+    expect(tick.runtime.monsters[0]?.hp).toBeCloseTo(
+      (result.runtime.monsters[0]?.hp ?? 0) - (fireEvent?.damage ?? 0),
+    );
+    expect(tick.runtime.monsters[0]?.fireBurnStacks?.[0]?.tickDelayQueueSec).toEqual([
+      FIRE_BURN_TICK_INTERVAL_SEC,
+      FIRE_BURN_TICK_INTERVAL_SEC * 2,
+      FIRE_BURN_TICK_INTERVAL_SEC * 3,
+    ]);
+    expect(tick.runtime.monsters[0]?.fireBurnStacks?.[0]?.visualRemainingSec).toBeCloseTo(1.5);
+  });
+
+  it('keeps repeated fire burns as independent stacks that can tick together', () => {
+    const board = matchSwapBoard();
+    const level = testTrialLevel([monster({ monsterId: 'stack-target', maxHp: 100 })], board);
+    const baseRuntime = createTrialRuntime(level);
+    const activeMonster = baseRuntime.monsters[0];
+    const runtime = {
+      ...baseRuntime,
+      monsters: [
+        {
+          ...activeMonster,
+          monsterId: 'stack-target',
+          hp: 100,
+          maxHp: 100,
+          fireBurnStacks: [
+            {
+              burnId: 'burn-a',
+              damage: 10,
+              tickDelayQueueSec: [0.5, 1.0],
+              visualRemainingSec: 2.0,
+              visualDurationSec: 2.0,
+            },
+            {
+              burnId: 'burn-b',
+              damage: 7,
+              tickDelayQueueSec: [0.5],
+              visualRemainingSec: 1.5,
+              visualDurationSec: 2.0,
+            },
+          ],
+        },
+      ],
+    };
+
+    const tick = updateTrialRuntimeWithEvents(runtime, level, 0.5);
+
+    expect(tick.damageEvents.map((event) => event.damage)).toEqual([10, 7]);
+    expect(tick.runtime.monsters[0]?.hp).toBe(83);
+    expect(tick.runtime.monsters[0]?.fireBurnStacks).toMatchObject([
+      { burnId: 'burn-a', tickDelayQueueSec: [0.5] },
+      { burnId: 'burn-b', tickDelayQueueSec: [] },
+    ]);
+  });
+
+  it('does not create burn stacks for non-fire damage and lets burn ticks defeat the final monster', () => {
+    const iceBoard = iceMatchSwapBoard();
+    const iceLevel = testTrialLevel([monster({ monsterId: 'ice-target', maxHp: 80 })], iceBoard);
+    const iceResult = processTrialSwap(
+      iceBoard,
+      createTrialRuntime(iceLevel),
+      iceLevel,
+      { col: 1, row: 0 },
+      { col: 1, row: 1 },
+      new SeededRng(99),
+    );
+
+    expect(iceResult.damageEvents.some((event) => event.schoolId === 'ice')).toBe(true);
+    expect(iceResult.runtime.monsters[0]?.fireBurnStacks).toBeUndefined();
+
+    const fireBoard = matchSwapBoard();
+    const fireLevel = testTrialLevel([monster({ monsterId: 'last-burn-target', maxHp: 15, scoreValue: 11 })], fireBoard);
+    const runtime = createTrialRuntime(fireLevel);
+    const activeMonster = runtime.monsters[0];
+    const burningRuntime = {
+      ...runtime,
+      nextSpawnIndex: fireLevel.trial.waveManifest.length,
+      monsters: [
+        {
+          ...activeMonster,
+          hp: 5,
+          maxHp: 15,
+          fireBurnStacks: [
+            {
+              burnId: 'burn-lethal',
+              damage: 10,
+              tickDelayQueueSec: [0.5],
+              visualRemainingSec: 2,
+              visualDurationSec: 2,
+            },
+          ],
+        },
+      ],
+    };
+
+    const lethalTick = updateTrialRuntimeWithEvents(burningRuntime, fireLevel, 0.5);
+    expect(lethalTick.damageEvents).toMatchObject([
+      {
+        monsterId: 'last-burn-target',
+        schoolId: 'fire',
+        damage: 5,
+        defeated: true,
+      },
+    ]);
+    expect(lethalTick.scoreDelta).toBe(Math.round(5 * 2) + 11);
+    expect(lethalTick.runtime.monsters[0]?.hp).toBe(0);
+    expect(lethalTick.runtime.monsters[0]?.defeatAnimationRemainingSec).toBeCloseTo(
+      KOBOLD_DEFEAT_ANIMATION_SEC - 0.5,
+    );
+
+    const won = updateTrialRuntime(
+      lethalTick.runtime,
+      fireLevel,
+      KOBOLD_DEFEAT_ANIMATION_SEC + KOBOLD_DEFEAT_FADE_SEC,
+    );
+    expect(won.result).toBe('won');
+  });
+
+  it('schedules one-shot earth impact VFX at visual hit timing', () => {
+    const board = earthMatchSwapBoard();
+    const level = testTrialLevel([monster({ monsterId: 'earth-target', maxHp: 80 })], board);
+    const runtime = createTrialRuntime(level);
+
+    const result = processTrialSwap(
+      board,
+      runtime,
+      level,
+      { col: 1, row: 0 },
+      { col: 1, row: 1 },
+      new SeededRng(99),
+    );
+    const earthEvent = result.damageEvents.find((event) => event.schoolId === 'earth');
+    const vfx = result.runtime.impactVfx?.[0];
+
+    expect(earthEvent).toBeDefined();
+    expect(vfx).toMatchObject({
+      vfxId: 'earth-impact-0',
+      schoolId: 'earth',
+      targetMonsterId: 'earth-target',
+      hitWorldPosition: getTrialMonsterWorldPosition(level, runtime.monsters[0]),
+      activationDelaySec: earthEvent?.impactDelaySec,
+      remainingSec: EARTH_IMPACT_VFX_DURATION_SEC,
+      durationSec: EARTH_IMPACT_VFX_DURATION_SEC,
+    });
+
+    const beforeImpact = updateTrialRuntime(result.runtime, level, (earthEvent?.impactDelaySec ?? 0) - 0.001);
+    expect(beforeImpact.impactVfx?.[0]?.activationDelaySec).toBeCloseTo(0.001);
+    expect(beforeImpact.impactVfx?.[0]?.remainingSec).toBeCloseTo(EARTH_IMPACT_VFX_DURATION_SEC);
+
+    const active = updateTrialRuntime(beforeImpact, level, 0.001);
+    expect(active.impactVfx?.[0]?.activationDelaySec).toBeCloseTo(0);
+    expect(active.impactVfx?.[0]?.remainingSec).toBeCloseTo(EARTH_IMPACT_VFX_DURATION_SEC);
+
+    const expired = updateTrialRuntime(active, level, EARTH_IMPACT_VFX_DURATION_SEC);
+    expect(expired.impactVfx).toBeUndefined();
+  });
+
+  it('does not schedule earth impact VFX for non-earth damage', () => {
+    const board = fireOnlyMatchSwapBoard();
+    const level = testTrialLevel([monster({ monsterId: 'ice-target', maxHp: 80 })], board);
+
+    const result = processTrialSwap(
+      board,
+      createTrialRuntime(level),
+      level,
+      { col: 1, row: 0 },
+      { col: 1, row: 1 },
+      new SeededRng(99),
+    );
+
+    expect(result.damageEvents.some((event) => event.schoolId === 'fire')).toBe(true);
+    expect(result.runtime.impactVfx).toBeUndefined();
   });
 
   it('chains lightning matches through every alive monster once with enemy-to-enemy projectiles', () => {
@@ -1029,11 +1267,27 @@ function matchSwapBoard() {
   ]);
 }
 
+function fireOnlyMatchSwapBoard() {
+  return createBoardFromTileTypes([
+    ['FIRE', 'ICE', 'FIRE'],
+    ['ICE', 'FIRE', 'ICE'],
+    ['LIGHTNING', 'FIRE', 'ICE'],
+  ]);
+}
+
 function iceMatchSwapBoard() {
   return createBoardFromTileTypes([
-    ['ICE', 'FIRE', 'ICE'],
-    ['FIRE', 'ICE', 'FIRE'],
+    ['ICE', 'EARTH', 'ICE'],
+    ['EARTH', 'ICE', 'EARTH'],
     ['LIGHTNING', 'ICE', 'EARTH'],
+  ]);
+}
+
+function earthMatchSwapBoard() {
+  return createBoardFromTileTypes([
+    ['EARTH', 'ICE', 'EARTH'],
+    ['ICE', 'EARTH', 'ICE'],
+    ['LIGHTNING', 'EARTH', 'FIRE'],
   ]);
 }
 

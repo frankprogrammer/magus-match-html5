@@ -67,6 +67,10 @@ export class ThreeObjectFactory {
         return this.createKobold();
       case HeroStageTemplateIds.projectilePlaceholder:
         return createProjectilePlaceholder();
+      case HeroStageTemplateIds.fireBurn:
+        return createFireBurnSprite();
+      case HeroStageTemplateIds.earthImpact:
+        return createEarthImpactSprite();
       case HeroStageTemplateIds.healthBarTrack:
         return createHealthBarPlane("#1f1830", 0.85);
       case HeroStageTemplateIds.healthBarFill:
@@ -544,6 +548,88 @@ function createProjectilePlaceholder(): THREE.Object3D {
     0,
     Math.PI / 2,
   );
+}
+
+function createFireBurnSprite(): THREE.Object3D {
+  const material = new THREE.MeshBasicMaterial({
+    map: createTransparentPlaceholderTexture(),
+    color: "#ffffff",
+    transparent: true,
+    opacity: 0.92,
+    depthWrite: false,
+    depthTest: false,
+    side: THREE.DoubleSide,
+  });
+  const plane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), material);
+  plane.name = "fire-burn-sprite";
+  plane.position.y = 0.5;
+  plane.renderOrder = 12;
+  startFireBurnTextureLoad(material);
+  return plane;
+}
+
+function createEarthImpactSprite(): THREE.Object3D {
+  const material = new THREE.MeshBasicMaterial({
+    map: createTransparentPlaceholderTexture(),
+    color: "#ffffff",
+    transparent: true,
+    opacity: 0.94,
+    depthWrite: false,
+    depthTest: false,
+    side: THREE.DoubleSide,
+  });
+  const plane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), material);
+  plane.name = "earth-impact-sprite";
+  plane.renderOrder = 14;
+  startSpriteTextureLoad(material, AssetIds.spritesheets.earthImpact, 2, 2, "earth impact");
+  return plane;
+}
+
+function startFireBurnTextureLoad(material: THREE.MeshBasicMaterial): void {
+  startSpriteTextureLoad(material, AssetIds.spritesheets.fireBurn, 4, 2, "fire burn");
+}
+
+function startSpriteTextureLoad(
+  material: THREE.MeshBasicMaterial,
+  assetId: string,
+  columns: number,
+  rows: number,
+  label: string,
+): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const entry = getAssetManifestEntry(assetId);
+  if (entry == null) {
+    return;
+  }
+
+  const textureUrl = resolveBrowserAssetUrl(entry.browserUrl);
+  new THREE.TextureLoader().load(
+    textureUrl,
+    (texture) => {
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.wrapS = THREE.ClampToEdgeWrapping;
+      texture.wrapT = THREE.ClampToEdgeWrapping;
+      texture.repeat.set(1 / columns, 1 / rows);
+      texture.offset.set(0, 1 - 1 / rows);
+      material.map?.dispose();
+      material.map = texture;
+      material.needsUpdate = true;
+    },
+    undefined,
+    (error) => {
+      console.warn(`Failed to load ${label} spritesheet from ${textureUrl}`, error);
+    },
+  );
+}
+
+function createTransparentPlaceholderTexture(): THREE.DataTexture {
+  const texture = new THREE.DataTexture(new Uint8Array([0, 0, 0, 0]), 1, 1, THREE.RGBAFormat);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.needsUpdate = true;
+  return texture;
 }
 
 function createHealthBarPlane(color: string, opacity: number): THREE.Object3D {

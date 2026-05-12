@@ -60,6 +60,8 @@ export const AssetIds = {
   spritesheets: {
     tntExplosion: 'spritesheet.tntExplosion',
     rocketCloud: 'spritesheet.rocketCloud',
+    fireBurn: 'spritesheet.fireBurn',
+    earthImpact: 'spritesheet.earthImpact',
   },
   sounds: {
     tileMatch: 'sound.tileMatch',

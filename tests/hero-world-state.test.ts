@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { AssetIds } from '../src/assets/AssetIds';
 import {
+  createTrialEarthImpactObjects,
+  createTrialMonsterFireBurnObjects,
   createTrialMonsterHealthBarObjects,
   healthBarTintForRatio,
   MagusMatchGameApp,
@@ -420,6 +422,229 @@ describe('HeroWorldState', () => {
     expect(monster?.opacity).toBeCloseTo(1 / 3);
     expect(state.objects.some((object) => object.templateId === HeroStageTemplateIds.healthBarTrack)).toBe(false);
     expect(state.objects.some((object) => object.templateId === HeroStageTemplateIds.healthBarFill)).toBe(false);
+  });
+
+  it('adds a fire burn sprite at a burning Trial monster feet', () => {
+    const app = new MagusMatchGameApp(789);
+    const runtime = app.getTrialRuntimeForDebug();
+    if (runtime == null) {
+      throw new Error('Expected Trial runtime.');
+    }
+
+    setTrialRuntimeForDebug(app, {
+      ...runtime,
+      elapsedMs: 1250,
+      monsters: [
+        {
+          ...runtime.monsters[0],
+          monsterId: 'burning',
+          hp: 25,
+          fireBurnStacks: [
+            {
+              burnId: 'burn-0',
+              damage: 10,
+              tickDelayQueueSec: [0.5, 1, 1.5, 2],
+              visualRemainingSec: 1.5,
+              visualDurationSec: 2,
+            },
+          ],
+        },
+      ],
+    });
+
+    const state = app.getHeroWorldState();
+    const monster = state.objects.find((object) => object.objectId === 'trial-monster-burning');
+    const fireBurn = state.objects.find((object) => object.templateId === HeroStageTemplateIds.fireBurn);
+
+    expect(fireBurn).toMatchObject({
+      objectId: 'trial-monster-burning-fire-burn',
+      visible: true,
+      replication: 'localCosmetic',
+      renderOrder: 12,
+      animationTimeSec: 1.25,
+      transform: {
+        scale: { x: 3.3, y: 3.3, z: 1 },
+      },
+    });
+    expect(fireBurn?.transform.position.x).toBeCloseTo(monster?.transform.position.x ?? 0);
+    expect(fireBurn?.transform.position.y).toBeGreaterThan(monster?.transform.position.y ?? 0);
+    expect(fireBurn?.transform.position.y).toBeCloseTo((monster?.transform.position.y ?? 0) + 1.2425);
+    expect(fireBurn?.transform.position.z).toBeGreaterThan(monster?.transform.position.z ?? 0);
+  });
+
+  it('keeps the fire burn visual while any active stack remains after activation delay', () => {
+    const position = { x: 1, y: 2, z: 3 };
+    const active = createTrialMonsterFireBurnObjects(
+      {
+        monsterId: 'stacked',
+        kind: 'kobold',
+        laneId: 0,
+        hp: 20,
+        maxHp: 30,
+        x: 1,
+        spawnTimeMs: 0,
+        walkSpeed: 0,
+        scoreValue: 5,
+        fireBurnStacks: [
+          {
+            burnId: 'expired',
+            damage: 10,
+            tickDelayQueueSec: [],
+            visualRemainingSec: 0,
+            visualDurationSec: 2,
+          },
+          {
+            burnId: 'active',
+            damage: 10,
+            tickDelayQueueSec: [0.5],
+            visualRemainingSec: 0.5,
+            visualDurationSec: 2,
+          },
+        ],
+      },
+      position,
+      0.75,
+    );
+    const expired = createTrialMonsterFireBurnObjects(
+      {
+        monsterId: 'expired',
+        kind: 'kobold',
+        laneId: 0,
+        hp: 20,
+        maxHp: 30,
+        x: 1,
+        spawnTimeMs: 0,
+        walkSpeed: 0,
+        scoreValue: 5,
+        fireBurnStacks: [
+          {
+            burnId: 'expired',
+            damage: 10,
+            tickDelayQueueSec: [],
+            visualRemainingSec: 0,
+            visualDurationSec: 2,
+          },
+        ],
+      },
+      position,
+      0.75,
+    );
+    const delayed = createTrialMonsterFireBurnObjects(
+      {
+        monsterId: 'delayed',
+        kind: 'kobold',
+        laneId: 0,
+        hp: 20,
+        maxHp: 30,
+        x: 1,
+        spawnTimeMs: 0,
+        walkSpeed: 0,
+        scoreValue: 5,
+        fireBurnStacks: [
+          {
+            burnId: 'delayed',
+            damage: 10,
+            activationDelaySec: 0.25,
+            tickDelayQueueSec: [0.5],
+            visualRemainingSec: 2,
+            visualDurationSec: 2,
+          },
+        ],
+      },
+      position,
+      0.75,
+    );
+
+    expect(active).toHaveLength(1);
+    expect(expired).toEqual([]);
+    expect(delayed).toEqual([]);
+  });
+
+  it('adds an earth impact sprite centered on the monster x and attack hit y', () => {
+    const app = new MagusMatchGameApp(789);
+    const runtime = app.getTrialRuntimeForDebug();
+    const level = app.getCurrentLevelForDebug();
+    if (runtime == null || level?.type !== 'TRIAL') {
+      throw new Error('Expected Trial runtime.');
+    }
+
+    const hitWorldPosition = getTrialMonsterWorldPosition(level, runtime.monsters[0]);
+    setTrialRuntimeForDebug(app, {
+      ...runtime,
+      impactVfx: [
+        {
+          vfxId: 'earth-impact-test',
+          schoolId: 'earth',
+          targetMonsterId: runtime.monsters[0].monsterId,
+          hitWorldPosition,
+          activationDelaySec: 0,
+          remainingSec: 0.25,
+          durationSec: 1 / 3,
+        },
+      ],
+    });
+
+    const state = app.getHeroWorldState();
+    const monster = state.objects.find((object) => object.templateId === HeroStageTemplateIds.monsterPlaceholder);
+    const earthImpact = state.objects.find((object) => object.templateId === HeroStageTemplateIds.earthImpact);
+
+    expect(earthImpact).toMatchObject({
+      objectId: 'trial-earth-impact-test',
+      renderOrder: 14,
+      replication: 'localCosmetic',
+      animationTimeSec: 1 / 3 - 0.25,
+      transform: {
+        scale: { x: 2.4, y: 2.4, z: 1 },
+      },
+    });
+    expect(earthImpact?.transform.position.x).toBeCloseTo(monster?.transform.position.x ?? 0);
+    expect(earthImpact?.transform.position.y).toBeCloseTo(hitWorldPosition.y + 0.625);
+    expect(earthImpact?.transform.position.y).toBeGreaterThan(monster?.transform.position.y ?? 0);
+  });
+
+  it('hides inactive and expired earth impact sprites', () => {
+    const active = createTrialEarthImpactObjects(
+      {
+        vfxId: 'active',
+        schoolId: 'earth',
+        targetMonsterId: 'target',
+        hitWorldPosition: { x: 1, y: 2, z: 3 },
+        activationDelaySec: 0,
+        remainingSec: 0.2,
+        durationSec: 1 / 3,
+      },
+      new Map([['target', { x: 4, y: -1, z: 0 }]]),
+    );
+    const delayed = createTrialEarthImpactObjects(
+      {
+        vfxId: 'delayed',
+        schoolId: 'earth',
+        targetMonsterId: 'target',
+        hitWorldPosition: { x: 1, y: 2, z: 3 },
+        activationDelaySec: 0.1,
+        remainingSec: 0.2,
+        durationSec: 1 / 3,
+      },
+      new Map([['target', { x: 4, y: -1, z: 0 }]]),
+    );
+    const expired = createTrialEarthImpactObjects(
+      {
+        vfxId: 'expired',
+        schoolId: 'earth',
+        targetMonsterId: 'target',
+        hitWorldPosition: { x: 1, y: 2, z: 3 },
+        activationDelaySec: 0,
+        remainingSec: 0,
+        durationSec: 1 / 3,
+      },
+      new Map([['target', { x: 4, y: -1, z: 0 }]]),
+    );
+
+    expect(active).toHaveLength(1);
+    expect(active[0].transform.position.x).toBeCloseTo(4);
+    expect(active[0].transform.position.y).toBeCloseTo(2.625);
+    expect(delayed).toEqual([]);
+    expect(expired).toEqual([]);
   });
 });
 

@@ -178,6 +178,53 @@ describe('MagusMatchGameApp', () => {
     expect(app.getHeroWorldState().activeProjectiles).toHaveLength(0);
   });
 
+  it('applies delayed Trial burn tick score and emits hit/defeat sounds during update', () => {
+    const app = new MagusMatchGameApp(667, { debugLevelType: 'TRIAL' });
+    tap(app, TITLE_PLAY_BUTTON_RECT);
+    const runtime = app.getTrialRuntimeForDebug();
+    const level = app.getCurrentLevelForDebug();
+    if (runtime == null || level?.type !== 'TRIAL') {
+      throw new Error('Expected generated Trial level.');
+    }
+
+    const activeMonster = runtime.monsters[0];
+    setTrialRuntimeForDebug(app, {
+      ...runtime,
+      nextSpawnIndex: level.trial.waveManifest.length,
+      monsters: [
+        {
+          ...activeMonster,
+          monsterId: 'burn-update-target',
+          hp: 8,
+          maxHp: 20,
+          scoreValue: 13,
+          fireBurnStacks: [
+            {
+              burnId: 'burn-update',
+              damage: 10,
+              tickDelayQueueSec: [0.5],
+              visualRemainingSec: 2,
+              visualDurationSec: 2,
+            },
+          ],
+        },
+      ],
+      defeatedMonsterIds: [],
+    });
+    app.drainEvents();
+
+    app.update(0.5, []);
+
+    const events = app.drainEvents();
+    expect(app.getRunStateForDebug().score).toBe(29);
+    expect(events).toContainEqual({ type: 'scoreChanged', score: 29 });
+    const sounds = soundEvents(events);
+    expect(sounds.map((event) => event.soundId)).toContain(AssetIds.sounds.monsterDamage);
+    expect(sounds.map((event) => event.soundId)).toContain(AssetIds.sounds.monsterDefeat);
+    expect(sounds.find((event) => event.soundId === AssetIds.sounds.monsterDamage)?.delaySec).toBe(0);
+    expect(sounds.find((event) => event.soundId === AssetIds.sounds.monsterDefeat)?.delaySec).toBe(0);
+  });
+
   it('delays Trial win transition until the final defeated monster disappears', () => {
     const app = new MagusMatchGameApp(666, { debugLevelType: 'TRIAL' });
     const firstMove = findValidMoves(app.getBoardForDebug())[0];

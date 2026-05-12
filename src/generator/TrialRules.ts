@@ -53,6 +53,21 @@ export const KOBOLD_DEFEAT_ANIMATION_SEC = 1.0;
 export const KOBOLD_DEFEAT_FADE_SEC = 0.15;
 export const TRIAL_ICE_FREEZE_SEC = 1.5;
 export const LIGHTNING_CHAIN_HOP_DELAY_SEC = 0.12;
+export const FIRE_BURN_TICK_INTERVAL_SEC = 0.5;
+export const FIRE_BURN_TICK_COUNT = 4;
+export const FIRE_BURN_DURATION_SEC = FIRE_BURN_TICK_INTERVAL_SEC * FIRE_BURN_TICK_COUNT;
+export const EARTH_IMPACT_SPRITE_FPS = 12;
+export const EARTH_IMPACT_SPRITE_FRAME_COUNT = 4;
+export const EARTH_IMPACT_VFX_DURATION_SEC = EARTH_IMPACT_SPRITE_FRAME_COUNT / EARTH_IMPACT_SPRITE_FPS;
+
+export interface TrialFireBurnStack {
+  burnId: string;
+  damage: number;
+  activationDelaySec?: number;
+  tickDelayQueueSec: readonly number[];
+  visualRemainingSec: number;
+  visualDurationSec: number;
+}
 
 export interface ActiveTrialMonster {
   monsterId: string;
@@ -79,6 +94,7 @@ export interface ActiveTrialMonster {
   iceFreezeRemainingSec?: number;
   iceFreezeDurationSec?: number;
   iceFreezeDelayQueueSec?: readonly number[];
+  fireBurnStacks?: readonly TrialFireBurnStack[];
 }
 
 export interface TrialHealthBarUpdate {
@@ -100,15 +116,28 @@ export interface TrialProjectileRuntimeState {
   durationSec: number;
 }
 
+export interface TrialImpactVfxRuntimeState {
+  vfxId: string;
+  schoolId: 'earth';
+  targetMonsterId: string;
+  hitWorldPosition: Vec3Data;
+  activationDelaySec: number;
+  remainingSec: number;
+  durationSec: number;
+}
+
 export interface TrialRuntimeState {
   elapsedMs: number;
   nextSpawnIndex: number;
   monsters: readonly ActiveTrialMonster[];
   projectiles: readonly TrialProjectileRuntimeState[];
+  impactVfx?: readonly TrialImpactVfxRuntimeState[];
   defeatedMonsterIds: readonly string[];
   totalMonsters: number;
   result: LevelResult;
   nextProjectileIndex: number;
+  nextBurnIndex: number;
+  nextImpactVfxIndex?: number;
 }
 
 export interface TrialDamageEvent {
@@ -130,6 +159,12 @@ export interface TrialSwapResult {
   damageEvents: readonly TrialDamageEvent[];
   scoringStats: SwapScoringStats;
   animationTrace?: BoardAnimationTrace;
+}
+
+export interface TrialRuntimeUpdateResult {
+  runtime: TrialRuntimeState;
+  scoreDelta: number;
+  damageEvents: readonly TrialDamageEvent[];
 }
 
 interface TrialDamageSource {
@@ -165,6 +200,8 @@ export function createTrialRuntime(level: GeneratedTrialLevel): TrialRuntimeStat
       totalMonsters: level.trial.waveManifest.length,
       result: 'playing',
       nextProjectileIndex: 0,
+      nextBurnIndex: 0,
+      nextImpactVfxIndex: 0,
     },
     level,
   );
@@ -175,14 +212,27 @@ export function updateTrialRuntime(
   level: GeneratedTrialLevel,
   dtSec: number,
 ): TrialRuntimeState {
+  return updateTrialRuntimeWithEvents(runtime, level, dtSec).runtime;
+}
+
+export function updateTrialRuntimeWithEvents(
+  runtime: TrialRuntimeState,
+  level: GeneratedTrialLevel,
+  dtSec: number,
+): TrialRuntimeUpdateResult {
   if (runtime.result !== 'playing') {
-    return expireProjectiles(runtime, dtSec);
+    return {
+      runtime: expireProjectiles(runtime, dtSec),
+      scoreDelta: 0,
+      damageEvents: [],
+    };
   }
 
   const elapsedMs = runtime.elapsedMs + Math.max(0, dtSec) * 1000;
   const elapsedSec = Math.max(0, dtSec);
   const visualRuntime = expireProjectiles(runtime, elapsedSec);
-  const shakeRuntime = advanceHitShakes(visualRuntime, elapsedSec);
+  const burnResult = advanceFireBurns(visualRuntime, elapsedSec);
+  const shakeRuntime = advanceHitShakes(burnResult.runtime, elapsedSec);
   const healthBarRuntime = advanceHealthBarUpdates(shakeRuntime, elapsedSec);
   const freezeRuntime = advanceIceFreezes(healthBarRuntime, elapsedSec);
   const defeatRuntime = advancePendingDefeats(freezeRuntime, elapsedSec);
@@ -208,8 +258,12 @@ export function updateTrialRuntime(
   const result = getTrialResult(spawnedRuntime, level);
 
   return {
-    ...spawnedRuntime,
-    result,
+    runtime: {
+      ...spawnedRuntime,
+      result,
+    },
+    scoreDelta: burnResult.scoreDelta,
+    damageEvents: burnResult.damageEvents,
   };
 }
 
@@ -443,8 +497,9 @@ function applyDamageSources(
 ): { runtime: TrialRuntimeState; scoreDelta: number; damageEvents: TrialDamageEvent[] } {
   let nextRuntime: TrialRuntimeState = {
     ...runtime,
-    monsters: runtime.monsters.map((monster) => ({ ...monster })),
+    monsters: runtime.monsters.map((monster) => cloneActiveTrialMonster(monster)),
     projectiles: runtime.projectiles.map((projectile) => ({ ...projectile })),
+    impactVfx: runtime.impactVfx?.map((vfx) => ({ ...vfx, hitWorldPosition: { ...vfx.hitWorldPosition } })),
     defeatedMonsterIds: [...runtime.defeatedMonsterIds],
   };
   let scoreDelta = 0;
@@ -535,6 +590,12 @@ function applyDamageSources(
       const nextHp = Math.max(0, target.hp - source.damage);
       const defeated = nextHp <= 0;
       const impactDelaySec = source.castActivationDelaySec + SPELL_CAST_WINDUP_SEC + source.durationSec;
+      const fireBurnStack = source.schoolId === 'fire' && !defeated
+        ? createFireBurnStack(nextRuntime.nextBurnIndex, source.damage, impactDelaySec)
+        : null;
+      const earthImpactVfx = source.schoolId === 'earth'
+        ? createEarthImpactVfx(nextRuntime.nextImpactVfxIndex ?? 0, level, target, impactDelaySec)
+        : null;
       const projectile = shotIndex < source.visualShotCount
         ? createProjectile(nextRuntime.nextProjectileIndex, level, source, target, {
             originKind: 'mage',
@@ -553,6 +614,9 @@ function applyDamageSources(
               ...scheduleHitShake(monster, impactDelaySec),
               ...scheduleHealthBarUpdate(monster, impactDelaySec, nextHp),
               ...(source.schoolId === 'ice' && !defeated ? scheduleIceFreeze(monster, impactDelaySec) : {}),
+              ...(fireBurnStack == null
+                ? {}
+                : { fireBurnStacks: [...(monster.fireBurnStacks ?? []), fireBurnStack] }),
             }
           : monster,
       );
@@ -561,7 +625,14 @@ function applyDamageSources(
         ...nextRuntime,
         monsters,
         projectiles: projectile == null ? nextRuntime.projectiles : [...nextRuntime.projectiles, projectile],
+        impactVfx: earthImpactVfx == null
+          ? nextRuntime.impactVfx
+          : [...(nextRuntime.impactVfx ?? []), earthImpactVfx],
         nextProjectileIndex: projectile == null ? nextRuntime.nextProjectileIndex : nextRuntime.nextProjectileIndex + 1,
+        nextBurnIndex: fireBurnStack == null ? nextRuntime.nextBurnIndex : nextRuntime.nextBurnIndex + 1,
+        nextImpactVfxIndex: earthImpactVfx == null
+          ? nextRuntime.nextImpactVfxIndex
+          : (nextRuntime.nextImpactVfxIndex ?? 0) + 1,
       };
 
       scoreDelta += Math.round(damage * 2) + (defeated ? target.scoreValue : 0);
@@ -580,6 +651,152 @@ function applyDamageSources(
     runtime: {
       ...nextRuntime,
       result: getTrialResult(nextRuntime, level),
+    },
+    scoreDelta,
+    damageEvents,
+  };
+}
+
+function cloneActiveTrialMonster(monster: ActiveTrialMonster): ActiveTrialMonster {
+  return {
+    ...monster,
+    hitShakeQueueSec: monster.hitShakeQueueSec == null ? undefined : [...monster.hitShakeQueueSec],
+    healthBarUpdateQueue: monster.healthBarUpdateQueue == null
+      ? undefined
+      : monster.healthBarUpdateQueue.map((update) => ({ ...update })),
+    iceFreezeDelayQueueSec: monster.iceFreezeDelayQueueSec == null ? undefined : [...monster.iceFreezeDelayQueueSec],
+    fireBurnStacks: monster.fireBurnStacks == null
+      ? undefined
+      : monster.fireBurnStacks.map((stack) => cloneFireBurnStack(stack)),
+  };
+}
+
+function cloneFireBurnStack(stack: TrialFireBurnStack): TrialFireBurnStack {
+  return {
+    ...stack,
+    tickDelayQueueSec: [...stack.tickDelayQueueSec],
+  };
+}
+
+function createFireBurnStack(burnIndex: number, damage: number, activationDelaySec: number): TrialFireBurnStack {
+  return {
+    burnId: `burn-${burnIndex}`,
+    damage,
+    activationDelaySec: Math.max(0, activationDelaySec),
+    tickDelayQueueSec: Array.from(
+      { length: FIRE_BURN_TICK_COUNT },
+      (_value, index) => (index + 1) * FIRE_BURN_TICK_INTERVAL_SEC,
+    ),
+    visualRemainingSec: FIRE_BURN_DURATION_SEC,
+    visualDurationSec: FIRE_BURN_DURATION_SEC,
+  };
+}
+
+function createEarthImpactVfx(
+  impactVfxIndex: number,
+  level: GeneratedTrialLevel,
+  target: ActiveTrialMonster,
+  activationDelaySec: number,
+): TrialImpactVfxRuntimeState {
+  return {
+    vfxId: `earth-impact-${impactVfxIndex}`,
+    schoolId: 'earth',
+    targetMonsterId: target.monsterId,
+    hitWorldPosition: getTrialMonsterWorldPosition(level, target),
+    activationDelaySec: Math.max(0, activationDelaySec),
+    remainingSec: EARTH_IMPACT_VFX_DURATION_SEC,
+    durationSec: EARTH_IMPACT_VFX_DURATION_SEC,
+  };
+}
+
+function advanceFireBurns(
+  runtime: TrialRuntimeState,
+  dtSec: number,
+): { runtime: TrialRuntimeState; scoreDelta: number; damageEvents: TrialDamageEvent[] } {
+  const elapsed = Math.max(0, dtSec);
+  if (elapsed <= 0) {
+    return { runtime, scoreDelta: 0, damageEvents: [] };
+  }
+
+  let scoreDelta = 0;
+  const damageEvents: TrialDamageEvent[] = [];
+  const monsters = runtime.monsters.map((monster) => {
+    const stacks = monster.fireBurnStacks ?? [];
+    if (stacks.length <= 0 || monster.hp <= 0) {
+      return monster.hp <= 0 && stacks.length > 0
+        ? { ...monster, fireBurnStacks: undefined }
+        : monster;
+    }
+
+    let nextMonster: ActiveTrialMonster = { ...monster };
+    const keptStacks: TrialFireBurnStack[] = [];
+
+    for (const stack of stacks) {
+      const activationDelaySec = stack.activationDelaySec ?? 0;
+      const activeElapsedSec = Math.max(0, elapsed - activationDelaySec);
+      const nextActivationDelaySec = Math.max(0, activationDelaySec - elapsed);
+      if (nextActivationDelaySec > TRIAL_DEFEAT_TIMER_EPSILON_SEC) {
+        keptStacks.push({
+          ...stack,
+          activationDelaySec: nextActivationDelaySec,
+        });
+        continue;
+      }
+
+      const advancedDelays = stack.tickDelayQueueSec
+        .map((delaySec) => delaySec - activeElapsedSec)
+        .sort((first, second) => first - second);
+      const dueTickCount = advancedDelays.filter((delaySec) => delaySec <= TRIAL_DEFEAT_TIMER_EPSILON_SEC).length;
+      const futureDelays = advancedDelays.filter((delaySec) => delaySec > TRIAL_DEFEAT_TIMER_EPSILON_SEC);
+      const visualRemainingSec = Math.max(0, stack.visualRemainingSec - activeElapsedSec);
+
+      for (let tickIndex = 0; tickIndex < dueTickCount && nextMonster.hp > 0; tickIndex += 1) {
+        const damage = Math.min(nextMonster.hp, stack.damage);
+        const nextHp = Math.max(0, nextMonster.hp - stack.damage);
+        const defeated = nextHp <= 0;
+
+        nextMonster = {
+          ...nextMonster,
+          hp: nextHp,
+          defeatDelaySec: defeated ? 0 : nextMonster.defeatDelaySec,
+          ...scheduleHitShake(nextMonster, 0),
+          ...scheduleHealthBarUpdate(nextMonster, 0, nextHp),
+        };
+        scoreDelta += Math.round(damage * 2) + (defeated ? nextMonster.scoreValue : 0);
+        damageEvents.push({
+          monsterId: nextMonster.monsterId,
+          schoolId: 'fire',
+          damage,
+          defeated,
+          impactDelaySec: 0,
+          castActivationDelaySec: 0,
+        });
+      }
+
+      if (nextMonster.hp <= 0) {
+        break;
+      }
+
+      if (futureDelays.length > 0 || visualRemainingSec > TRIAL_DEFEAT_TIMER_EPSILON_SEC) {
+        keptStacks.push({
+          ...stack,
+          activationDelaySec: undefined,
+          tickDelayQueueSec: futureDelays,
+          visualRemainingSec,
+        });
+      }
+    }
+
+    return {
+      ...nextMonster,
+      fireBurnStacks: nextMonster.hp > 0 && keptStacks.length > 0 ? keptStacks : undefined,
+    };
+  });
+
+  return {
+    runtime: {
+      ...runtime,
+      monsters,
     },
     scoreDelta,
     damageEvents,
@@ -869,11 +1086,15 @@ export function visualYOffsetForMonster(
 
 function expireProjectiles(runtime: TrialRuntimeState, dtSec: number): TrialRuntimeState {
   const elapsed = Math.max(0, dtSec);
+  const impactVfx = (runtime.impactVfx ?? [])
+    .map((vfx) => advanceImpactVfx(vfx, elapsed))
+    .filter((vfx) => vfx.activationDelaySec > 0 || vfx.remainingSec > TRIAL_DEFEAT_TIMER_EPSILON_SEC);
   return {
     ...runtime,
     projectiles: runtime.projectiles
       .map((projectile) => advanceProjectile(projectile, elapsed))
       .filter((projectile) => projectile.activationDelaySec > 0 || projectile.remainingSec > 0),
+    impactVfx: impactVfx.length > 0 ? impactVfx : undefined,
   };
 }
 
@@ -1187,6 +1408,28 @@ function advanceProjectile(projectile: TrialProjectileRuntimeState, elapsedSec: 
   return {
     ...projectile,
     castActivationDelaySec,
+    activationDelaySec: Math.max(0, activationDelaySec),
+    remainingSec,
+  };
+}
+
+function advanceImpactVfx(vfx: TrialImpactVfxRuntimeState, elapsedSec: number): TrialImpactVfxRuntimeState {
+  let remainingElapsedSec = elapsedSec;
+  let activationDelaySec = vfx.activationDelaySec;
+  let remainingSec = vfx.remainingSec;
+
+  if (activationDelaySec > 0) {
+    const consumedDelaySec = Math.min(activationDelaySec, remainingElapsedSec);
+    activationDelaySec -= consumedDelaySec;
+    remainingElapsedSec -= consumedDelaySec;
+  }
+
+  if (activationDelaySec <= 0 && remainingElapsedSec > 0) {
+    remainingSec -= remainingElapsedSec;
+  }
+
+  return {
+    ...vfx,
     activationDelaySec: Math.max(0, activationDelaySec),
     remainingSec,
   };

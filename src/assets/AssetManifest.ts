@@ -283,6 +283,22 @@ export const AssetManifest: Record<string, AssetManifestEntry> = {
     ROCKET_CLOUD_SPRITE_NOTES,
     "512x256, 8 frames at 128x128",
   ),
+  [AssetIds.spritesheets.fireBurn]: texture(
+    AssetIds.spritesheets.fireBurn,
+    "/assets/spritesheets/fire-sheet.png",
+    "Assets/Textures/Spritesheets/fire-sheet.png",
+    "prompt.powerups.standard",
+    "Looping fire burn sprite for Trial monster feet, sampled as a normalized 4x2 grid.",
+    "1774x887, 8 frames in a 4x2 grid",
+  ),
+  [AssetIds.spritesheets.earthImpact]: texture(
+    AssetIds.spritesheets.earthImpact,
+    "/assets/spritesheets/rock-sheet.png",
+    "Assets/Textures/Spritesheets/rock-sheet.png",
+    "prompt.powerups.standard",
+    "One-shot earth impact sprite for Trial monster hit positions, sampled as a normalized 2x2 grid.",
+    "1254x1254, 4 frames in a 2x2 grid",
+  ),
   [AssetIds.rigs.prince]: rig(
     AssetIds.rigs.prince,
     "/assets/rigs/prince/prince-parts-source.png",

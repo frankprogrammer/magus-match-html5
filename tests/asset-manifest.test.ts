@@ -97,6 +97,18 @@ describe("AssetManifest", () => {
     expect(AssetManifest[AssetIds.spritesheets.rocketCloud].runtimeSize).toBe(
       "512x256, 8 frames at 128x128",
     );
+    expect(AssetManifest[AssetIds.spritesheets.fireBurn].browserUrl).toBe(
+      "/assets/spritesheets/fire-sheet.png",
+    );
+    expect(AssetManifest[AssetIds.spritesheets.fireBurn].runtimeSize).toBe(
+      "1774x887, 8 frames in a 4x2 grid",
+    );
+    expect(AssetManifest[AssetIds.spritesheets.earthImpact].browserUrl).toBe(
+      "/assets/spritesheets/rock-sheet.png",
+    );
+    expect(AssetManifest[AssetIds.spritesheets.earthImpact].runtimeSize).toBe(
+      "1254x1254, 4 frames in a 2x2 grid",
+    );
   });
 
   it("maps the temporary mage rig to the dropped FBX player model", () => {

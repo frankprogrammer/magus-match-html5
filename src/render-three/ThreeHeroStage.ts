@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { HERO_STAGE_HEIGHT, LOGICAL_WIDTH } from '../core/Layout';
 import type { HeroWorldState, ProjectileState } from '../world-3d/HeroWorldState';
+import { HeroStageTemplateIds } from '../world-3d/HeroStageTemplates';
 import type { WorldObjectState } from '../world-3d/WorldObjectState';
 import { HERO_STAGE_ORTHO_VIEW_WIDTH, orthographicBoundsForAspect, ThreeCameraController } from './ThreeCameraController';
 import { ThreeObjectFactory } from './ThreeObjectFactory';
@@ -14,6 +15,14 @@ const LIGHTNING_RAY_SEGMENT_COUNT = 18;
 const LIGHTNING_RAY_WAVE_COUNT = 2.35;
 const LIGHTNING_RAY_WAVE_AMPLITUDE = 0.24;
 const LIGHTNING_RAY_WAVE_SPEED = Math.PI * 5.2;
+const FIRE_BURN_SPRITE_COLUMNS = 4;
+const FIRE_BURN_SPRITE_ROWS = 2;
+const FIRE_BURN_SPRITE_FRAME_COUNT = 8;
+const FIRE_BURN_SPRITE_FPS = 12;
+const EARTH_IMPACT_SPRITE_COLUMNS = 2;
+const EARTH_IMPACT_SPRITE_ROWS = 2;
+const EARTH_IMPACT_SPRITE_FRAME_COUNT = 4;
+const EARTH_IMPACT_SPRITE_FPS = 12;
 
 const originalMaterialState = new WeakMap<OverrideableMaterial, {
   color: THREE.Color;
@@ -553,9 +562,77 @@ function applyWorldObjectState(object: THREE.Object3D, objectState: WorldObjectS
   object.traverse((child) => {
     if (child instanceof THREE.Mesh) {
       child.renderOrder = objectState.renderOrder ?? 0;
+      if (objectState.templateId === HeroStageTemplateIds.fireBurn) {
+        applyFireBurnSpriteFrame(child.material, objectState.animationTimeSec ?? elapsedSec);
+      }
+      if (objectState.templateId === HeroStageTemplateIds.earthImpact) {
+        applyEarthImpactSpriteFrame(child.material, objectState.animationTimeSec ?? elapsedSec);
+      }
       applyMaterialOverrides(child.material, objectState.tintHex, objectState.opacity);
     }
   });
+}
+
+export function fireBurnSpriteFrameIndex(animationTimeSec: number): number {
+  return Math.floor(Math.max(0, animationTimeSec) * FIRE_BURN_SPRITE_FPS) % FIRE_BURN_SPRITE_FRAME_COUNT;
+}
+
+export function earthImpactSpriteFrameIndex(animationTimeSec: number): number {
+  return Math.min(
+    EARTH_IMPACT_SPRITE_FRAME_COUNT - 1,
+    Math.floor(Math.max(0, animationTimeSec) * EARTH_IMPACT_SPRITE_FPS),
+  );
+}
+
+export function spriteSheetFrameUvTransform(
+  frameIndex: number,
+  columns: number,
+  rows: number,
+): { repeatX: number; repeatY: number; offsetX: number; offsetY: number } {
+  const safeColumns = Math.max(1, Math.floor(columns));
+  const safeRows = Math.max(1, Math.floor(rows));
+  const frameCount = safeColumns * safeRows;
+  const normalizedFrame = ((Math.floor(frameIndex) % frameCount) + frameCount) % frameCount;
+  const column = normalizedFrame % safeColumns;
+  const row = Math.floor(normalizedFrame / safeColumns);
+  const repeatX = 1 / safeColumns;
+  const repeatY = 1 / safeRows;
+  return {
+    repeatX,
+    repeatY,
+    offsetX: column * repeatX,
+    offsetY: 1 - repeatY - row * repeatY,
+  };
+}
+
+function applyFireBurnSpriteFrame(material: THREE.Material | THREE.Material[], animationTimeSec: number): void {
+  const frame = fireBurnSpriteFrameIndex(animationTimeSec);
+  applySpriteSheetFrame(material, frame, FIRE_BURN_SPRITE_COLUMNS, FIRE_BURN_SPRITE_ROWS);
+}
+
+function applyEarthImpactSpriteFrame(material: THREE.Material | THREE.Material[], animationTimeSec: number): void {
+  const frame = earthImpactSpriteFrameIndex(animationTimeSec);
+  applySpriteSheetFrame(material, frame, EARTH_IMPACT_SPRITE_COLUMNS, EARTH_IMPACT_SPRITE_ROWS);
+}
+
+function applySpriteSheetFrame(
+  material: THREE.Material | THREE.Material[],
+  frame: number,
+  columns: number,
+  rows: number,
+): void {
+  const materials = Array.isArray(material) ? material : [material];
+  const uv = spriteSheetFrameUvTransform(frame, columns, rows);
+
+  for (const item of materials) {
+    if (!(item instanceof THREE.MeshBasicMaterial) || item.map == null) {
+      continue;
+    }
+
+    item.map.repeat.set(uv.repeatX, uv.repeatY);
+    item.map.offset.set(uv.offsetX, uv.offsetY);
+    item.map.needsUpdate = true;
+  }
 }
 
 export function applyMaterialOverrides(

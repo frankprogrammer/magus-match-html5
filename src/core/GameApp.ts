@@ -56,7 +56,7 @@ import {
   getTrialMonsterWorldPosition,
   processTrialPowerUpActivation,
   processTrialSwap,
-  updateTrialRuntime,
+  updateTrialRuntimeWithEvents,
   updateTrialVisuals,
 } from "../generator/TrialRules";
 import type {
@@ -126,6 +126,12 @@ const TRIAL_HEALTH_BAR_HEIGHT = 0.18;
 const TRIAL_HEALTH_BAR_FILL_HEIGHT = 0.11;
 const TRIAL_HEALTH_BAR_Z_OFFSET = 0.08;
 const TRIAL_KOBOLD_HEALTH_BAR_Y_OFFSET = 3.72;
+const TRIAL_FIRE_BURN_SCALE = 3.3;
+const TRIAL_FIRE_BURN_Y_OFFSET = 1.2425;
+const TRIAL_FIRE_BURN_RENDER_ORDER = 12;
+const TRIAL_EARTH_IMPACT_SCALE = 2.4;
+const TRIAL_EARTH_IMPACT_Y_OFFSET = 0.625;
+const TRIAL_EARTH_IMPACT_RENDER_ORDER = 14;
 const TRIAL_HIT_SHAKE_X_AMPLITUDE = 0.14;
 const TRIAL_HIT_SHAKE_Y_AMPLITUDE = 0.045;
 const TRIAL_WALK_AUDIO_EPSILON_SEC = 0.000001;
@@ -515,12 +521,20 @@ export class MagusMatchGameApp implements GameApp {
     }
 
     const previousResult = this.trialRuntime.result;
-    const nextRuntime = updateTrialRuntime(
+    const updateResult = updateTrialRuntimeWithEvents(
       this.trialRuntime,
       this.currentLevel,
       dtSec,
     );
+    const nextRuntime = updateResult.runtime;
     this.trialRuntime = nextRuntime;
+    if (updateResult.scoreDelta > 0) {
+      this.run = { ...this.run, score: this.run.score + updateResult.scoreDelta };
+      this.events.push({ type: "scoreChanged", score: this.run.score });
+    }
+    for (const damageEvent of updateResult.damageEvents) {
+      this.emitTrialMonsterHitSounds(damageEvent);
+    }
     this.maybeEmitTrialPlayerDefeatSfx(previousResult, nextRuntime.result);
     if (nextRuntime.result === "won") {
       this.beginLevelResult("win");
@@ -1333,6 +1347,7 @@ export class MagusMatchGameApp implements GameApp {
         opacity: 0.6,
       }),
     ];
+    const monsterPositions = new Map<string, TransformState["position"]>();
 
     for (const monster of this.trialRuntime.monsters) {
       const baseMonsterPosition = translateY(
@@ -1345,6 +1360,7 @@ export class MagusMatchGameApp implements GameApp {
         hitShakeOffset.x,
         hitShakeOffset.y,
       );
+      monsterPositions.set(monster.monsterId, monsterPosition);
       objects.push(
         createWorldObject(
           `trial-monster-${monster.monsterId}`,
@@ -1359,8 +1375,13 @@ export class MagusMatchGameApp implements GameApp {
             animationPaused: animationPausedForTrialMonster(monster),
           },
         ),
+        ...createTrialMonsterFireBurnObjects(monster, monsterPosition, this.trialRuntime.elapsedMs / 1000),
         ...createTrialMonsterHealthBarObjects(monster, monsterPosition),
       );
+    }
+
+    for (const impactVfx of this.trialRuntime.impactVfx ?? []) {
+      objects.push(...createTrialEarthImpactObjects(impactVfx, monsterPositions));
     }
 
     return objects;
@@ -1542,6 +1563,66 @@ export function createTrialMonsterHealthBarObjects(
   ];
 }
 
+export function createTrialMonsterFireBurnObjects(
+  monster: ActiveTrialMonster,
+  monsterPosition: TransformState["position"],
+  animationTimeSec: number,
+): WorldObjectState[] {
+  const hasActiveBurn = (monster.fireBurnStacks ?? []).some(
+    (stack) => (stack.activationDelaySec ?? 0) <= 0 && stack.visualRemainingSec > 0,
+  );
+  if (!hasActiveBurn || monster.hp <= 0) {
+    return [];
+  }
+
+  return [
+    createWorldObject(
+      `trial-monster-${monster.monsterId}-fire-burn`,
+      HeroStageTemplateIds.fireBurn,
+      {
+        position: {
+          x: monsterPosition.x,
+          y: monsterPosition.y + TRIAL_FIRE_BURN_Y_OFFSET,
+          z: monsterPosition.z + 0.12,
+        },
+        scale: { x: TRIAL_FIRE_BURN_SCALE, y: TRIAL_FIRE_BURN_SCALE, z: 1 },
+        renderOrder: TRIAL_FIRE_BURN_RENDER_ORDER,
+        replication: "localCosmetic",
+        animationTimeSec,
+      },
+    ),
+  ];
+}
+
+export function createTrialEarthImpactObjects(
+  impactVfx: NonNullable<TrialRuntimeState["impactVfx"]>[number],
+  monsterPositions: ReadonlyMap<string, TransformState["position"]>,
+): WorldObjectState[] {
+  if (impactVfx.schoolId !== "earth" || impactVfx.activationDelaySec > 0 || impactVfx.remainingSec <= 0) {
+    return [];
+  }
+
+  const monsterPosition = monsterPositions.get(impactVfx.targetMonsterId);
+  const animationTimeSec = Math.max(0, impactVfx.durationSec - impactVfx.remainingSec);
+  return [
+    createWorldObject(
+      `trial-${impactVfx.vfxId}`,
+      HeroStageTemplateIds.earthImpact,
+      {
+        position: {
+          x: monsterPosition?.x ?? impactVfx.hitWorldPosition.x,
+          y: impactVfx.hitWorldPosition.y + TRIAL_EARTH_IMPACT_Y_OFFSET,
+          z: impactVfx.hitWorldPosition.z + 0.16,
+        },
+        scale: { x: TRIAL_EARTH_IMPACT_SCALE, y: TRIAL_EARTH_IMPACT_SCALE, z: 1 },
+        renderOrder: TRIAL_EARTH_IMPACT_RENDER_ORDER,
+        replication: "localCosmetic",
+        animationTimeSec,
+      },
+    ),
+  ];
+}
+
 export function trialMonsterHitShakeOffset(monster: ActiveTrialMonster): { x: number; y: number } {
   const remainingSec = monster.hitShakeRemainingSec ?? 0;
   const durationSec = monster.hitShakeDurationSec ?? 0;
@@ -1648,6 +1729,7 @@ function createWorldObject(
     animationPaused?: boolean;
     tintHex?: string;
     opacity?: number;
+    animationTimeSec?: number;
   },
 ): WorldObjectState {
   return {
@@ -1667,6 +1749,7 @@ function createWorldObject(
     tintHex: options.tintHex,
     opacity: options.opacity,
     animationId: options.animationId,
+    animationTimeSec: options.animationTimeSec,
     animationPaused: options.animationPaused,
   };
 }

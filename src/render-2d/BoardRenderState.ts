@@ -50,6 +50,22 @@ export interface BoardBurstRingVisualState {
   zIndex: number;
 }
 
+export interface BoardLightballStreamVisualState {
+  streamId: string;
+  assetId: string;
+  startX: number;
+  startY: number;
+  length: number;
+  thickness: number;
+  angleDeg: number;
+  color: string;
+  alpha: number;
+  textureOffsetX: number;
+  tileWidth: number;
+  tileHeight: number;
+  zIndex: number;
+}
+
 export interface BoardTntExplosionSpriteVisualState {
   spriteId: string;
   assetId: string;
@@ -113,6 +129,7 @@ export interface BoardRenderState {
   particles?: readonly BoardParticleVisualState[];
   matchEnergyStreams?: readonly BoardMatchEnergyStreamVisualState[];
   burstRings?: readonly BoardBurstRingVisualState[];
+  lightballStreams?: readonly BoardLightballStreamVisualState[];
   tntExplosionSprites?: readonly BoardTntExplosionSpriteVisualState[];
   rocketCloudSprites?: readonly BoardRocketCloudSpriteVisualState[];
   emptyCells?: readonly BoardEmptyCellVisualState[];

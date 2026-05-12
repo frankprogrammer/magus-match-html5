@@ -396,6 +396,7 @@ function drawBoard(renderer: GameRenderer, boardState: BoardRenderState, elapsed
   for (const visual of visuals) {
     drawCell(renderer, visual);
   }
+  drawLightballStreams(renderer, boardState);
   drawTntExplosionSprites(renderer, boardState);
   drawRocketCloudSprites(renderer, boardState);
   drawBurstRings(renderer, boardState);
@@ -524,6 +525,42 @@ function drawMatchEnergyStreams(renderer: GameRenderer, boardState: BoardRenderS
       stream.width,
       stream.height,
     );
+    renderer.pop();
+  }
+}
+
+function drawLightballStreams(renderer: GameRenderer, boardState: BoardRenderState): void {
+  const streams = [...(boardState.lightballStreams ?? [])].sort((first, second) => first.zIndex - second.zIndex);
+  for (const stream of streams) {
+    if (stream.alpha <= 0 || stream.length <= 0 || stream.thickness <= 0 || stream.tileWidth <= 0 || stream.tileHeight <= 0) {
+      continue;
+    }
+
+    const imageRef = { id: stream.assetId };
+    if (!renderer.hasImage(imageRef)) {
+      continue;
+    }
+
+    renderer.pushAlpha(stream.alpha);
+    renderer.pushRotate(stream.angleDeg, stream.startX, stream.startY);
+    renderer.pushClipRect(stream.startX, stream.startY - stream.thickness / 2, stream.length, stream.thickness);
+    const normalizedOffset = ((stream.textureOffsetX % stream.tileWidth) + stream.tileWidth) % stream.tileWidth;
+    for (
+      let x = stream.startX - stream.tileWidth + normalizedOffset;
+      x < stream.startX + stream.length;
+      x += stream.tileWidth
+    ) {
+      renderer.drawTintedImage(
+        imageRef,
+        stream.color,
+        x,
+        stream.startY - stream.tileHeight / 2,
+        stream.tileWidth,
+        stream.tileHeight,
+      );
+    }
+    renderer.pop();
+    renderer.pop();
     renderer.pop();
   }
 }

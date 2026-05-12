@@ -14,6 +14,9 @@ import {
   INVALID_SWAP_FORWARD_MS,
   INVALID_SWAP_HOLD_MS,
   INVALID_SWAP_RETURN_MS,
+  LIGHTBALL_COLLECTION_STREAM_HOLD_MS,
+  LIGHTBALL_COLLECTION_STREAM_TRAVEL_MS,
+  LIGHTBALL_COLLECTION_WAVE_MS,
 } from '../src/data/tuning';
 
 describe('BoardAnimationPresenter', () => {
@@ -224,6 +227,61 @@ describe('BoardAnimationPresenter', () => {
     expect(afterTnt.tntExplosionSprites ?? []).toHaveLength(0);
   });
 
+  it('emits scrolling Lightball lightning streams toward delayed target-color clears', () => {
+    const presenter = new BoardAnimationPresenter();
+    const trace = lightballWaveTrace();
+    const state = boardState(trace);
+
+    presenter.present(state, 0);
+    const early = presenter.present(state, 0.13);
+    const travel = presenter.present(state, 0.25);
+    const hold = presenter.present(state, 0.42);
+    const laterHold = presenter.present(state, 0.62);
+    const repeatedHold = presenter.present(state, 0.62);
+    const afterTargetClear = presenter.present(state, 0.88);
+
+    const earlyStream = early.lightballStreams?.[0];
+    const travelStream = travel.lightballStreams?.[0];
+    const holdStream = hold.lightballStreams?.[0];
+    const laterHoldStream = laterHold.lightballStreams?.[0];
+    const origin = {
+      x: BOARD_RECT.x + BOARD_RECT.cellSize / 2,
+      y: BOARD_RECT.y + BOARD_RECT.cellSize / 2,
+    };
+    const target = {
+      x: BOARD_RECT.x + BOARD_RECT.cellSize * 2 + BOARD_RECT.cellSize / 2,
+      y: BOARD_RECT.y + BOARD_RECT.cellSize / 2,
+    };
+    const fullLength = distance(origin, target);
+
+    expect(early.lightballStreams).toHaveLength(1);
+    expect(earlyStream).toMatchObject({
+      streamId: 'lightball-lightball-stream-fire',
+      assetId: AssetIds.powerUps.lightballStream,
+      startX: origin.x,
+      startY: origin.y,
+      color: '#ff7000',
+      alpha: 0.96,
+      thickness: 64,
+      tileWidth: 192,
+      tileHeight: 64,
+      angleDeg: 0,
+    });
+    expect(earlyStream?.length).toBeGreaterThan(0);
+    expect(earlyStream?.length).toBeLessThan(fullLength * 0.1);
+    expect(travelStream?.length).toBeGreaterThan(earlyStream?.length ?? 0);
+    expect(travelStream?.length).toBeLessThan(fullLength);
+    expect(holdStream?.length).toBeCloseTo(fullLength);
+    expect(laterHoldStream?.length).toBeCloseTo(fullLength);
+    expect(laterHoldStream?.textureOffsetX).not.toBe(holdStream?.textureOffsetX);
+    expect(laterHold.lightballStreams).toEqual(repeatedHold.lightballStreams);
+    expect(afterTargetClear.lightballStreams ?? []).toHaveLength(0);
+    expect(trace.cascadeSteps[0].clearedTiles[1].clearDelayMs).toBe(LIGHTBALL_COLLECTION_WAVE_MS);
+    expect(LIGHTBALL_COLLECTION_WAVE_MS).toBe(
+      LIGHTBALL_COLLECTION_STREAM_TRAVEL_MS + LIGHTBALL_COLLECTION_STREAM_HOLD_MS,
+    );
+  });
+
   it('emits horizontal rocket cloud sprites along the row in delayed sweep timing', () => {
     const presenter = new BoardAnimationPresenter();
     const trace = horizontalRocketCloudTrace();
@@ -285,12 +343,14 @@ describe('BoardAnimationPresenter', () => {
     expect(presenter.present(boardState(introTrace), 0.1).tntExplosionSprites ?? []).toHaveLength(0);
     expect(presenter.present(boardState(introTrace), 0.1).rocketCloudSprites ?? []).toHaveLength(0);
     expect(presenter.present(boardState(introTrace), 0.1).matchEnergyStreams ?? []).toHaveLength(0);
+    expect(presenter.present(boardState(introTrace), 0.1).lightballStreams ?? []).toHaveLength(0);
 
     const secondPresenter = new BoardAnimationPresenter();
     secondPresenter.present(boardState(nonstandardTrace), 0);
     expect(secondPresenter.present(boardState(nonstandardTrace), 0.14).particles ?? []).toHaveLength(0);
     expect(secondPresenter.present(boardState(nonstandardTrace), 0.14).burstRings ?? []).toHaveLength(0);
     expect(secondPresenter.present(boardState(nonstandardTrace), 0.14).matchEnergyStreams ?? []).toHaveLength(0);
+    expect(secondPresenter.present(boardState(nonstandardTrace), 0.14).lightballStreams ?? []).toHaveLength(0);
   });
 
   it('retargets shared tiles from their current animated positions when a new trace arrives', () => {
@@ -786,6 +846,37 @@ function delayedTntTrace(): BoardAnimationTrace {
       },
     ],
     finalSnapshot: { cells: [] },
+  };
+}
+
+function lightballWaveTrace(): BoardAnimationTrace {
+  const cells = [
+    snapshotCell('lightball', 'LIGHTBALL', 0, 0),
+    snapshotCell('fire', 'FIRE', 2, 0),
+    snapshotCell('ice', 'ICE', 3, 0),
+  ];
+  return {
+    kind: 'resolution',
+    revisionId: 29,
+    swappedCells: null,
+    preSwapSnapshot: { cells },
+    postSwapSnapshot: { cells },
+    cascadeSteps: [
+      {
+        stepIndex: 0,
+        beforeClearSnapshot: { cells },
+        beforeGravitySnapshot: { cells: [cells[2]] },
+        afterGravitySnapshot: { cells: [cells[2]] },
+        finalSnapshot: { cells: [cells[2]] },
+        clearedTiles: [
+          cells[0],
+          { ...cells[1], clearDelayMs: LIGHTBALL_COLLECTION_WAVE_MS },
+        ],
+        fallingTiles: [],
+        refillTiles: [],
+      },
+    ],
+    finalSnapshot: { cells: [cells[2]] },
   };
 }
 

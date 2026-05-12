@@ -59,6 +59,12 @@ describe("AssetManifest", () => {
       "/assets/powerups/orb.png",
     );
     expect(AssetManifest[AssetIds.powerUps.orb].runtimeSize).toBe("256x256");
+    expect(AssetManifest[AssetIds.powerUps.lightballStream].browserUrl).toBe(
+      "/assets/powerups/lightning.png",
+    );
+    expect(AssetManifest[AssetIds.powerUps.lightballStream].runtimeSize).toBe(
+      "256x85",
+    );
     expect(AssetManifest[AssetIds.tiles.fire].runtimeSize).toBe("256x256");
     expect(AssetManifest[AssetIds.backdrops.forest].runtimeSize).toBe(
       "2160x1000",

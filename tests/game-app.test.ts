@@ -24,6 +24,7 @@ import {
 import { KOBOLD_DEFEAT_ANIMATION_SEC, KOBOLD_DEFEAT_FADE_SEC, type TrialRuntimeState } from '../src/generator/TrialRules';
 import { LEVEL_TRANSITION_HOLD_SEC } from '../src/run/RunProgression';
 import { BoardAnimationPresenter } from '../src/render-2d/BoardAnimationPresenter';
+import { HeroStageTemplateIds } from '../src/world-3d/HeroStageTemplates';
 
 describe('MagusMatchGameApp', () => {
   it('resets to the initial run values for a provided seed', () => {
@@ -67,6 +68,52 @@ describe('MagusMatchGameApp', () => {
     expect(app.getCurrentLevelForDebug()?.type).toBe('TRIAL');
     expect(app.getTrialRuntimeForDebug()?.monsters.length).toBe(1);
     expect(app.getJourneyRuntimeForDebug()).toBeNull();
+  });
+
+  it('starts a normal level 1 Trial session with the forced lightning tutorial after Play', () => {
+    const app = new MagusMatchGameApp(555);
+
+    tap(app, TITLE_PLAY_BUTTON_RECT);
+
+    const tutorial = app.getTrialTutorialStateForDebug();
+    const runtime = app.getTrialRuntimeForDebug();
+    expect(tutorial).toMatchObject({ phase: 'active' });
+    expect(app.getBoardRenderState().tutorialLock).toMatchObject({
+      allowedSwap: tutorial?.allowedSwap,
+      flashCells: tutorial?.flashCells,
+      movingCell: tutorial?.movingCell,
+      direction: tutorial?.direction,
+    });
+    expect(app.getBoardRenderState().matchHint).toBeNull();
+    expect(runtime?.monsters).toHaveLength(3);
+    expect(runtime?.monsters.every((monster) => monster.kind === 'kobold')).toBe(true);
+    expect(runtime?.monsters.every((monster) => monster.walkSpeed === 0)).toBe(true);
+    expect(runtime?.monsters.every((monster) => monster.hp / monster.maxHp <= 0.11)).toBe(true);
+    expect(runtime?.monsters.map((monster) => monster.x)).toEqual([-0.15, 2.25, 4.65]);
+    expect(runtime?.monsters.map((monster) => monster.visualYOffset)).toEqual([0.24, 0, -0.24]);
+    const tutorialKoboldObjects = app
+      .getHeroWorldState()
+      .objects.filter(
+        (object) =>
+          object.objectId.startsWith('trial-monster-tutorial-kobold-') &&
+          object.templateId === HeroStageTemplateIds.monsterPlaceholder,
+      );
+    expect(tutorialKoboldObjects.map((object) => object.animationId)).toEqual(['walk', 'walk', 'walk']);
+    expect(tutorialKoboldObjects.map((object) => object.animationPaused)).toEqual([true, true, true]);
+    expect(tutorialKoboldObjects.map((object) => object.animationTimeSec)).toEqual([0, 0, 0]);
+  });
+
+  it('skips the session tutorial for explicit debug options', () => {
+    const forcedTrial = new MagusMatchGameApp(555, { debugLevelType: 'TRIAL' });
+    const debugSeedSession = new MagusMatchGameApp(555, { skipTutorial: true });
+
+    tap(forcedTrial, TITLE_PLAY_BUTTON_RECT);
+    tap(debugSeedSession, TITLE_PLAY_BUTTON_RECT);
+
+    expect(forcedTrial.getTrialTutorialStateForDebug()).toBeNull();
+    expect(debugSeedSession.getTrialTutorialStateForDebug()).toBeNull();
+    expect(forcedTrial.getTrialRuntimeForDebug()?.monsters).toHaveLength(1);
+    expect(debugSeedSession.getTrialRuntimeForDebug()?.monsters).toHaveLength(1);
   });
 
   it('can still start level 1 as Journey through an override', () => {
@@ -141,6 +188,56 @@ describe('MagusMatchGameApp', () => {
     app.update(0, [{ type: 'swap', from: hint.from, to: hint.to }]);
 
     expect(app.getBoardRenderState().matchHint).toBeNull();
+  });
+
+  it('only accepts the tutorial lightning swap while the tutorial is active', () => {
+    const app = new MagusMatchGameApp(777);
+    tap(app, TITLE_PLAY_BUTTON_RECT);
+    const tutorial = app.getTrialTutorialStateForDebug();
+    if (tutorial == null) {
+      throw new Error('Expected active tutorial.');
+    }
+    const beforeBoard = boardTileSignature(app.getBoardForDebug());
+    const beforeStats = app.getLevelStatsForDebug();
+
+    app.update(0, [{ type: 'swap', from: { col: 0, row: 0 }, to: { col: 1, row: 0 } }]);
+
+    expect(app.getTrialTutorialStateForDebug()?.phase).toBe('active');
+    expect(boardTileSignature(app.getBoardForDebug())).toBe(beforeBoard);
+    expect(app.getLevelStatsForDebug()).toEqual(beforeStats);
+
+    app.update(0, [{ type: 'swap', from: tutorial.allowedSwap.from, to: tutorial.allowedSwap.to }]);
+
+    expect(app.getTrialTutorialStateForDebug()?.phase).toBe('resolving');
+    expect(app.getBoardRenderState().animationTrace?.kind).toBe('resolution');
+    expect(app.getHeroWorldState().activeProjectiles.some((projectile) => projectile.schoolId === 'lightning')).toBe(true);
+    expect(app.getLevelStatsForDebug()).toEqual(beforeStats);
+    expect(app.getRunStateForDebug().score).toBe(0);
+  });
+
+  it('clears the tutorial overlay and resumes normal Trial level 1 after tutorial kobolds die', () => {
+    const app = new MagusMatchGameApp(778);
+    tap(app, TITLE_PLAY_BUTTON_RECT);
+    const tutorial = app.getTrialTutorialStateForDebug();
+    if (tutorial == null) {
+      throw new Error('Expected active tutorial.');
+    }
+
+    app.update(0, [{ type: 'swap', from: tutorial.allowedSwap.to, to: tutorial.allowedSwap.from }]);
+    for (let tick = 0; tick < 80 && app.getTrialTutorialStateForDebug() != null; tick += 1) {
+      app.update(0.1, []);
+    }
+
+    const runtime = app.getTrialRuntimeForDebug();
+    expect(app.getTrialTutorialStateForDebug()).toBeNull();
+    expect(app.getBoardRenderState().tutorialLock).toBeNull();
+    expect(runtime?.result).toBe('playing');
+    expect(runtime?.totalMonsters).toBe(3);
+    expect(runtime?.monsters).toHaveLength(1);
+    expect(runtime?.monsters[0]?.monsterId.startsWith('tutorial-')).toBe(false);
+    expect(app.getRunStateForDebug().score).toBe(0);
+    expect(app.getLevelStatsForDebug()).toEqual({ matchCount: 0, validSwapCount: 0 });
+    expect(app.getElapsedSecForDebug()).toBe(0);
   });
 
   it('continues Trial projectile visual timers during win transitions', () => {

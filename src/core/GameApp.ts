@@ -60,6 +60,11 @@ import {
   updateTrialRuntimeWithEvents,
   updateTrialVisuals,
 } from "../generator/TrialRules";
+import {
+  createTrialTutorialBoardSetup,
+  isTrialTutorialSwap,
+  type TrialTutorialBoardSetup,
+} from "../generator/TrialTutorial";
 import type {
   BoardRenderState,
   BoardVisualCueKind,
@@ -112,6 +117,7 @@ export interface GameApp {
 export interface MagusMatchGameAppOptions {
   debugLevelType?: LevelType;
   debugStartLevel?: number;
+  skipTutorial?: boolean;
 }
 
 export const MAGE_WORLD_SCALE: TransformState["scale"] = { x: 3, y: 3, z: 3 };
@@ -119,6 +125,10 @@ export const MAGE_WORLD_SCALE: TransformState["scale"] = { x: 3, y: 3, z: 3 };
 interface RuntimeBoardVisualCue extends Omit<BoardVisualCueState, "value"> {
   remainingSec: number;
   durationSec: number;
+}
+
+export interface TrialTutorialState extends TrialTutorialBoardSetup {
+  phase: "active" | "resolving";
 }
 
 const MAGE_WORLD_Y_OFFSET = -1.47;
@@ -137,6 +147,10 @@ const TRIAL_HIT_SHAKE_X_AMPLITUDE = 0.14;
 const TRIAL_HIT_SHAKE_Y_AMPLITUDE = 0.045;
 const TRIAL_WALK_AUDIO_EPSILON_SEC = 0.000001;
 const TRIAL_PLAYER_DEATH_SFX_DELAY_SEC = 0.18;
+const TRIAL_TUTORIAL_KOBOLD_COUNT = 3;
+const TRIAL_TUTORIAL_HP_RATIO = 0.1;
+const TRIAL_TUTORIAL_MONSTER_X_POSITIONS = [-0.15, 2.25, 4.65] as const;
+const TRIAL_TUTORIAL_MONSTER_Y_OFFSETS = [0.24, 0, -0.24] as const;
 
 export class MagusMatchGameApp implements GameApp {
   private events: GameEvent[] = [];
@@ -166,6 +180,7 @@ export class MagusMatchGameApp implements GameApp {
   private nextBoardAnimationRevision = 1;
   private matchHintTimerSec = 0;
   private trialPlayerDefeatSfxEmitted = false;
+  private trialTutorial: TrialTutorialState | null = null;
 
   constructor(
     seed?: number,
@@ -267,6 +282,7 @@ export class MagusMatchGameApp implements GameApp {
       visualCues: this.getBoardVisualCueState(),
       animationTrace: this.latestBoardAnimationTrace,
       matchHint: this.getMatchHintVisualState(),
+      tutorialLock: this.getTrialTutorialVisualState(),
     };
   }
 
@@ -371,6 +387,7 @@ export class MagusMatchGameApp implements GameApp {
     this.phase = "TITLE";
     this.events = [];
     this.bgmMuted = false;
+    this.trialTutorial = null;
   }
 
   getRunStateForDebug(): RunState {
@@ -421,6 +438,22 @@ export class MagusMatchGameApp implements GameApp {
       matchCount: this.levelMatchCount,
       validSwapCount: this.levelValidSwapCount,
     };
+  }
+
+  getTrialTutorialStateForDebug(): TrialTutorialState | null {
+    return this.trialTutorial == null
+      ? null
+      : {
+          ...this.trialTutorial,
+          board: cloneBoard(this.trialTutorial.board),
+          allowedSwap: {
+            from: { ...this.trialTutorial.allowedSwap.from },
+            to: { ...this.trialTutorial.allowedSwap.to },
+          },
+          flashCells: this.trialTutorial.flashCells.map((coord) => ({ ...coord })),
+          movingCell: { ...this.trialTutorial.movingCell },
+          direction: { ...this.trialTutorial.direction },
+        };
   }
 
   getLatestBoardAnimationEndsAtSecForDebug(): number {
@@ -494,6 +527,7 @@ export class MagusMatchGameApp implements GameApp {
     this.latestBoardAnimationEndsAtSec = this.animationClockSec;
     this.resetMatchHintTimer();
     this.trialPlayerDefeatSfxEmitted = false;
+    this.trialTutorial = null;
   }
 
   private startPreparedLevel(): void {
@@ -505,6 +539,7 @@ export class MagusMatchGameApp implements GameApp {
     this.elapsedSec = 0;
     this.transitionTimerSec = 0;
     this.resetMatchHintTimer();
+    this.startTrialTutorialIfNeeded();
     this.captureBoardAnimationTrace(
       createLevelIntroBoardAnimationTrace(this.board, 0),
     );
@@ -520,6 +555,30 @@ export class MagusMatchGameApp implements GameApp {
     });
   }
 
+  private startTrialTutorialIfNeeded(): void {
+    if (!this.shouldStartTrialTutorial() || this.currentLevel?.type !== "TRIAL") {
+      return;
+    }
+
+    const setup = createTrialTutorialBoardSetup(this.board);
+    this.board = setup.board;
+    this.trialRuntime = createTrialTutorialRuntime(this.currentLevel);
+    this.trialTutorial = {
+      ...setup,
+      phase: "active",
+    };
+  }
+
+  private shouldStartTrialTutorial(): boolean {
+    return (
+      this.options.skipTutorial !== true &&
+      this.options.debugLevelType == null &&
+      this.options.debugStartLevel == null &&
+      this.run.levelNumber === 1 &&
+      this.currentLevel?.type === "TRIAL"
+    );
+  }
+
   private updateTrialStage(dtSec: number): void {
     if (this.currentLevel?.type !== "TRIAL" || this.trialRuntime == null) {
       return;
@@ -533,13 +592,22 @@ export class MagusMatchGameApp implements GameApp {
     );
     const nextRuntime = updateResult.runtime;
     this.trialRuntime = nextRuntime;
-    if (updateResult.scoreDelta > 0) {
+
+    const tutorialPhase = this.trialTutorial?.phase ?? null;
+    if (tutorialPhase == null && updateResult.scoreDelta > 0) {
       this.run = { ...this.run, score: this.run.score + updateResult.scoreDelta };
       this.events.push({ type: "scoreChanged", score: this.run.score });
     }
     for (const damageEvent of updateResult.damageEvents) {
       this.emitTrialMonsterHitSounds(damageEvent);
     }
+    if (tutorialPhase != null) {
+      if (tutorialPhase === "resolving" && nextRuntime.result === "won") {
+        this.completeTrialTutorial();
+      }
+      return;
+    }
+
     this.maybeEmitTrialPlayerDefeatSfx(previousResult, nextRuntime.result);
     if (nextRuntime.result === "won") {
       this.beginLevelResult("win");
@@ -554,6 +622,23 @@ export class MagusMatchGameApp implements GameApp {
     }
 
     this.trialRuntime = updateTrialVisuals(this.trialRuntime, dtSec);
+  }
+
+  private completeTrialTutorial(): void {
+    if (this.currentLevel?.type !== "TRIAL") {
+      this.trialTutorial = null;
+      return;
+    }
+
+    this.trialRuntime = createTrialRuntime(this.currentLevel);
+    this.trialTutorial = null;
+    this.elapsedSec = 0;
+    this.resetMatchHintTimer();
+    this.trialPlayerDefeatSfxEmitted = false;
+  }
+
+  private isTrialTutorialInputLocked(): boolean {
+    return this.trialTutorial != null;
   }
 
   private handleTap(x: number, y: number): void {
@@ -594,6 +679,10 @@ export class MagusMatchGameApp implements GameApp {
     }
 
     if (this.phase !== "IDLE") {
+      return;
+    }
+
+    if (this.isTrialTutorialInputLocked()) {
       return;
     }
 
@@ -677,6 +766,20 @@ export class MagusMatchGameApp implements GameApp {
     to: { col: number; row: number },
   ): void {
     if (this.phase !== "IDLE") {
+      return;
+    }
+
+    if (this.trialTutorial != null) {
+      if (this.trialTutorial.phase !== "active") {
+        return;
+      }
+
+      if (!isTrialTutorialSwap(this.trialTutorial, from, to)) {
+        return;
+      }
+
+      this.resetMatchHintTimer();
+      this.handleTrialTutorialSwap(from, to);
       return;
     }
 
@@ -836,6 +939,46 @@ export class MagusMatchGameApp implements GameApp {
       this.beginLevelResult("win");
     } else if (result.runtime.result === "lost") {
       this.beginLevelResult("loss");
+    }
+  }
+
+  private handleTrialTutorialSwap(from: CellCoord, to: CellCoord): void {
+    if (
+      this.currentLevel?.type !== "TRIAL" ||
+      this.trialRuntime == null ||
+      this.trialTutorial == null ||
+      this.trialTutorial.phase !== "active"
+    ) {
+      return;
+    }
+
+    const result = processTrialSwap(
+      this.board,
+      this.trialRuntime,
+      this.currentLevel,
+      from,
+      to,
+      this.rng,
+    );
+    if (!result.valid) {
+      return;
+    }
+
+    this.requestSound(AssetIds.sounds.boardMove, {
+      category: "match",
+      volume: 0.48,
+    });
+    this.board = result.board;
+    this.trialRuntime = result.runtime;
+    this.trialTutorial = {
+      ...this.trialTutorial,
+      phase: "resolving",
+    };
+    this.captureBoardAnimationTrace(result.animationTrace);
+    this.emitMatchAudioAndJuice(result.scoringStats, to);
+    this.emitTrialAudioAndJuice(result.queuedAttackEvents, to);
+    for (const damageEvent of result.damageEvents) {
+      this.emitTrialMonsterHitSounds(damageEvent);
     }
   }
 
@@ -1193,6 +1336,10 @@ export class MagusMatchGameApp implements GameApp {
       return null;
     }
 
+    if (this.trialTutorial != null) {
+      return null;
+    }
+
     if (this.matchHintTimerSec < MATCH_HINT_IDLE_DELAY_SEC) {
       return null;
     }
@@ -1216,6 +1363,28 @@ export class MagusMatchGameApp implements GameApp {
       movingCell: hint.movingCell,
       direction: hint.direction,
       progress: Math.max(0, Math.min(1, cyclePhaseSec / MATCH_HINT_ACTIVE_SEC)),
+    };
+  }
+
+  private getTrialTutorialVisualState(): BoardRenderState["tutorialLock"] {
+    if (this.phase !== "IDLE" || this.trialTutorial?.phase !== "active") {
+      return null;
+    }
+
+    const progress =
+      (this.matchHintTimerSec % MATCH_HINT_ACTIVE_SEC) / MATCH_HINT_ACTIVE_SEC;
+    return {
+      allowedSwap: {
+        from: { ...this.trialTutorial.allowedSwap.from },
+        to: { ...this.trialTutorial.allowedSwap.to },
+      },
+      flashCells: this.trialTutorial.flashCells.map((coord) => ({ ...coord })),
+      movingCell: { ...this.trialTutorial.movingCell },
+      direction: { ...this.trialTutorial.direction },
+      progress,
+      dimmedCells: getAllPlayableCoords(this.board).filter(
+        (coord) => !this.trialTutorial?.flashCells.some((flashCoord) => coordsEqual(flashCoord, coord)),
+      ),
     };
   }
 
@@ -1378,6 +1547,7 @@ export class MagusMatchGameApp implements GameApp {
             opacity: opacityForTrialMonster(monster),
             tintHex: tintForTrialMonster(monster, this.trialRuntime.elapsedMs / 1000),
             animationPaused: animationPausedForTrialMonster(monster),
+            animationTimeSec: animationTimeSecForTrialMonster(monster),
           },
         ),
         ...createTrialMonsterFireBurnObjects(monster, monsterPosition, this.trialRuntime.elapsedMs / 1000),
@@ -1513,7 +1683,17 @@ function opacityForTrialMonster(monster: ActiveTrialMonster): number | undefined
 }
 
 function animationPausedForTrialMonster(monster: ActiveTrialMonster): boolean | undefined {
-  return monster.hp > 0 && (monster.iceFreezeRemainingSec ?? 0) > 0 ? true : undefined;
+  return monster.hp > 0 && ((monster.iceFreezeRemainingSec ?? 0) > 0 || isTutorialTrialMonster(monster))
+    ? true
+    : undefined;
+}
+
+function animationTimeSecForTrialMonster(monster: ActiveTrialMonster): number | undefined {
+  return monster.hp > 0 && isTutorialTrialMonster(monster) ? 0 : undefined;
+}
+
+function isTutorialTrialMonster(monster: ActiveTrialMonster): boolean {
+  return monster.monsterId.startsWith("tutorial-kobold-");
 }
 
 function tintForTrialMonster(monster: ActiveTrialMonster, elapsedSec: number): string | undefined {
@@ -1699,6 +1879,47 @@ function hexByte(value: number): string {
 
 function healthBarYOffsetForTrialMonster(): number {
   return TRIAL_KOBOLD_HEALTH_BAR_Y_OFFSET;
+}
+
+function createTrialTutorialRuntime(
+  level: Extract<GeneratedLevel, { type: "TRIAL" }>,
+): TrialRuntimeState {
+  const lane = level.trial.lanes[0];
+  const koboldMaxHp =
+    level.trial.waveManifest.find((monster) => monster.kind === "kobold")?.maxHp ??
+    Math.max(1, level.trial.baseDamage);
+  const tutorialHp = Math.max(1, Math.floor(koboldMaxHp * TRIAL_TUTORIAL_HP_RATIO));
+  const monsters: ActiveTrialMonster[] = Array.from(
+    { length: TRIAL_TUTORIAL_KOBOLD_COUNT },
+    (_value, index) => ({
+      monsterId: `tutorial-kobold-${index}`,
+      kind: "kobold",
+      laneId: lane?.laneId ?? 0,
+      hp: tutorialHp,
+      maxHp: koboldMaxHp,
+      x: TRIAL_TUTORIAL_MONSTER_X_POSITIONS[index] ?? 2 + index * 0.8,
+      spawnTimeMs: 0,
+      walkSpeed: 0,
+      scoreValue: 0,
+      visualYOffset: TRIAL_TUTORIAL_MONSTER_Y_OFFSETS[index] ?? 0,
+      healthBarHp: tutorialHp,
+    }),
+  );
+
+  return {
+    elapsedMs: 0,
+    nextSpawnIndex: level.trial.waveManifest.length,
+    monsters,
+    projectiles: [],
+    pendingAttacks: [],
+    defeatedMonsterIds: [],
+    totalMonsters: monsters.length,
+    result: "playing",
+    nextProjectileIndex: 0,
+    nextAttackIndex: 0,
+    nextBurnIndex: 0,
+    nextImpactVfxIndex: 0,
+  };
 }
 
 function screenForPhase(phase: GamePhase): ScreenRenderState["screen"] {

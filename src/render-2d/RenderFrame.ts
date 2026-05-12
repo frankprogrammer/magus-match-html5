@@ -65,6 +65,7 @@ export interface BoardCellVisual {
   glyph: string;
   isPath: boolean;
   isHinted: boolean;
+  isDimmed: boolean;
   hasMage: boolean;
   hasGoal: boolean;
   alpha: number;
@@ -100,8 +101,10 @@ export function renderFrame(
 
 export function buildBoardCellVisuals(boardState: BoardRenderState, elapsedSec: number): BoardCellVisual[] {
   const hinted = new Set(boardState.hintedCells.map(coordKey));
-  const matchHinted = new Set(boardState.matchHint?.flashCells.map(coordKey) ?? []);
-  const movingHintKey = boardState.matchHint == null ? null : coordKey(boardState.matchHint.movingCell);
+  const activeMatchHint = boardState.tutorialLock ?? boardState.matchHint ?? null;
+  const matchHinted = new Set(activeMatchHint?.flashCells.map(coordKey) ?? []);
+  const tutorialDimmed = new Set(boardState.tutorialLock?.dimmedCells.map(coordKey) ?? []);
+  const movingHintKey = activeMatchHint == null ? null : coordKey(activeMatchHint.movingCell);
   const cuesByCoord = new Map<string, BoardRenderState['visualCues']>();
   for (const cue of boardState.visualCues) {
     const key = coordKey(cue.coord);
@@ -111,15 +114,15 @@ export function buildBoardCellVisuals(boardState: BoardRenderState, elapsedSec: 
   const visuals: BoardCellVisual[] = [];
   const hintPulse = (Math.sin(elapsedSec * Math.PI * 3) + 1) / 2;
   const matchHintPulse =
-    boardState.matchHint == null
+    activeMatchHint == null
       ? 0
-      : (Math.sin(boardState.matchHint.progress * Math.PI * 2 * 5) + 1) / 2;
+      : (Math.sin(activeMatchHint.progress * Math.PI * 2 * 5) + 1) / 2;
   const matchHintFlash =
-    boardState.matchHint == null ? 0 : 0.18 + matchHintPulse * 0.32;
+    activeMatchHint == null ? 0 : 0.18 + matchHintPulse * 0.32;
   const matchHintBounce =
-    boardState.matchHint == null
+    activeMatchHint == null
       ? { x: 0, y: 0 }
-      : hintBounceOffset(boardState.matchHint.direction, boardState.matchHint.progress);
+      : hintBounceOffset(activeMatchHint.direction, activeMatchHint.progress);
 
   for (const state of boardState.boardCells) {
       const coord = state.coord;
@@ -158,6 +161,7 @@ export function buildBoardCellVisuals(boardState: BoardRenderState, elapsedSec: 
         glyph: glyphForTile(state.tileType),
         isPath: state.isPath,
         isHinted,
+        isDimmed: tutorialDimmed.has(key),
         hasMage: coordsEqual(boardState.mageCell, coord),
         hasGoal: coordsEqual(boardState.goalCell, coord),
         alpha: state.alpha,
@@ -460,6 +464,10 @@ function drawCell(renderer: GameRenderer, visual: BoardCellVisual): void {
   }
 
   renderer.drawImage(imageRef, x, y, scaledWidth, scaledHeight);
+
+  if (visual.isDimmed) {
+    renderer.drawImageAlphaMaskFill(imageRef, '#000000', x, y, scaledWidth, scaledHeight, 0.62);
+  }
 
   if (visual.isPath) {
     renderer.drawRect('rgba(245, 233, 201, 0.55)', visual.x + 12, visual.y + 12, visual.width - 24, visual.height - 24);

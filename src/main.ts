@@ -57,9 +57,13 @@ if (root == null) {
   throw new Error('Missing #app root element.');
 }
 
-const app = new MagusMatchGameApp(parseDebugSeed(window.location.search), {
-  debugLevelType: parseDebugLevelType(window.location.search),
-  debugStartLevel: parseDebugLevelNumber(window.location.search),
+const debugSeed = parseDebugSeed(window.location.search);
+const debugLevelType = parseDebugLevelType(window.location.search);
+const debugStartLevel = parseDebugLevelNumber(window.location.search);
+const app = new MagusMatchGameApp(debugSeed, {
+  debugLevelType,
+  debugStartLevel,
+  skipTutorial: debugSeed != null || debugLevelType != null || debugStartLevel != null,
 });
 
 root.innerHTML = `

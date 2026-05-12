@@ -234,7 +234,12 @@ export class ThreeHeroStage {
       seen.add(objectState.objectId);
       const object = this.getOrCreateObject(objectState);
       applyWorldObjectState(object, objectState, this.elapsedSec);
-      this.syncObjectAnimation(objectState.objectId, objectState.animationId, objectState.animationPaused);
+      this.syncObjectAnimation(
+        objectState.objectId,
+        objectState.animationId,
+        objectState.animationPaused,
+        objectState.animationTimeSec,
+      );
     }
 
     for (const [objectId, object] of [...this.objectCache.entries()]) {
@@ -293,7 +298,12 @@ export class ThreeHeroStage {
     triggerMageCastAnimation(controller);
   }
 
-  private syncObjectAnimation(objectId: string, animationId?: string, animationPaused?: boolean): void {
+  private syncObjectAnimation(
+    objectId: string,
+    animationId?: string,
+    animationPaused?: boolean,
+    animationTimeSec?: number,
+  ): void {
     const controller = this.animationControllers.get(objectId);
     if (controller == null) {
       return;
@@ -306,6 +316,9 @@ export class ThreeHeroStage {
 
     if (animationId === 'walk' || animationId === 'idle') {
       playActorLoopAnimation(controller, animationId);
+      if (animationTimeSec != null) {
+        setActorLoopAnimationTime(controller, animationTimeSec);
+      }
       setActorLoopAnimationPaused(controller, animationPaused === true);
     }
   }
@@ -468,6 +481,20 @@ export function setActorLoopAnimationPaused(controller: MageAnimationController,
 
   if (controller.idleAction != null) {
     controller.idleAction.paused = paused;
+  }
+}
+
+export function setActorLoopAnimationTime(controller: MageAnimationController, animationTimeSec: number): void {
+  const clampedTimeSec = Math.max(0, animationTimeSec);
+  if (controller.activeLoopId === 'walk') {
+    if (controller.walkAction != null) {
+      controller.walkAction.time = clampedTimeSec;
+    }
+    return;
+  }
+
+  if (controller.idleAction != null) {
+    controller.idleAction.time = clampedTimeSec;
   }
 }
 

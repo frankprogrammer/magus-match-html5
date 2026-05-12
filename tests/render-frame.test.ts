@@ -189,6 +189,44 @@ describe('buildBoardCellVisuals', () => {
     expect(visuals[0].zIndex).toBeGreaterThan(visuals[1].zIndex);
   });
 
+  it('flashes tutorial cells and darkens non-tutorial board tiles', () => {
+    const state = oneTileState('tile.fire');
+    state.boardCells = [
+      {
+        tileId: 'tile-0',
+        coord: { col: 0, row: 0 },
+        assetId: 'tile.lightning',
+        tileType: 'LIGHTNING',
+        isPath: false,
+        alpha: 1,
+      },
+      {
+        tileId: 'tile-1',
+        coord: { col: 1, row: 0 },
+        assetId: 'tile.fire',
+        tileType: 'FIRE',
+        isPath: false,
+        alpha: 1,
+      },
+    ];
+    state.tutorialLock = {
+      allowedSwap: { from: { col: 0, row: 0 }, to: { col: 1, row: 0 } },
+      flashCells: [{ col: 0, row: 0 }],
+      movingCell: { col: 0, row: 0 },
+      direction: { col: 1, row: 0 },
+      progress: 1 / 12,
+      dimmedCells: [{ col: 1, row: 0 }],
+    };
+
+    const visuals = buildBoardCellVisuals(state, 0);
+
+    expect(visuals[0]).toMatchObject({ isHinted: true, isDimmed: false });
+    expect(visuals[1]).toMatchObject({ isHinted: false, isDimmed: true });
+    expect(visuals[0].flash).toBeGreaterThan(0);
+    expect(visuals[0].x).toBeCloseTo(BOARD_RECT.x + MATCH_HINT_BOUNCE_DISTANCE_PX);
+    expect(visuals[1].x).toBeCloseTo(BOARD_RECT.x + BOARD_RECT.cellSize);
+  });
+
   it('draws image assets when available', () => {
     const renderer = new FakeRenderer(new Set(['tile.fire']));
 
@@ -215,6 +253,23 @@ describe('buildBoardCellVisuals', () => {
 
     expect(renderer.calls).toContain('mask:tile.fire:#ffffff');
     expect(renderer.calls.some((call) => call.startsWith('rect:rgba(255, 255, 255'))).toBe(false);
+  });
+
+  it('draws tutorial dimming through the tile image alpha mask', () => {
+    const renderer = new FakeRenderer(new Set(['tile.fire']));
+    const state = oneTileState('tile.fire');
+    state.tutorialLock = {
+      allowedSwap: { from: { col: 0, row: 0 }, to: { col: 1, row: 0 } },
+      flashCells: [],
+      movingCell: { col: 0, row: 0 },
+      direction: { col: 1, row: 0 },
+      progress: 0,
+      dimmedCells: [{ col: 0, row: 0 }],
+    };
+
+    renderFrame(renderer, state, hudState(), 0);
+
+    expect(renderer.calls).toContain('mask:tile.fire:#000000');
   });
 
   it('draws no tile flash when tile images are unavailable', () => {

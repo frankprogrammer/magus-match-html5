@@ -122,6 +122,11 @@ export interface BoardMatchHintVisualState {
   progress: number;
 }
 
+export interface BoardTutorialLockVisualState extends BoardMatchHintVisualState {
+  allowedSwap: { from: CellCoord; to: CellCoord };
+  dimmedCells: readonly CellCoord[];
+}
+
 export interface BoardRenderState {
   logicalWidth: number;
   logicalHeight: number;
@@ -138,6 +143,7 @@ export interface BoardRenderState {
   goalCell: CellCoord | null;
   hintedCells: readonly CellCoord[];
   matchHint?: BoardMatchHintVisualState | null;
+  tutorialLock?: BoardTutorialLockVisualState | null;
   selectedCell: CellCoord | null;
   queuedSwap: { from: CellCoord; to: CellCoord } | null;
   shakePixels: number;

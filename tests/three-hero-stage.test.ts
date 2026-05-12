@@ -25,6 +25,7 @@ import {
   resolveMageParticleSourceWorldPosition,
   resolveProjectileRenderOrigin,
   setActorLoopAnimationPaused,
+  setActorLoopAnimationTime,
   spriteSheetFrameUvTransform,
   triggerActorOneShotAnimation,
   triggerMageCastAnimation,
@@ -421,6 +422,26 @@ describe('ThreeHeroStage mage animation controller', () => {
 
     expect(controller?.walkAction?.paused).toBe(false);
     expect(controller?.walkAction?.time ?? 0).toBeGreaterThan(timeBeforePause);
+  });
+
+  it('can hold a kobold walk loop on the first frame when explicitly timed and paused', () => {
+    const object = objectWithClips([
+      new THREE.AnimationClip('walk', 1, [
+        new THREE.VectorKeyframeTrack('.position', [0, 1], [0, 0, 0, 0, 0, 0.1]),
+      ]),
+    ]);
+    const controller = createMageAnimationController(object);
+    expect(controller).not.toBeNull();
+
+    updateMageAnimationController(controller!, 0.25);
+    expect(controller?.walkAction?.time ?? 0).toBeGreaterThan(0);
+
+    setActorLoopAnimationTime(controller!, 0);
+    setActorLoopAnimationPaused(controller!, true);
+    updateMageAnimationController(controller!, 0.4);
+
+    expect(controller?.walkAction?.paused).toBe(true);
+    expect(controller?.walkAction?.time).toBeCloseTo(0);
   });
 
   it('plays kobold defeat normally after a paused walk loop', () => {

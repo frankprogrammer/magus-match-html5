@@ -23,9 +23,14 @@ describe('TrialGenerator', () => {
   it.each([
     [1, 3, 0, 0, 1],
     [4, 5, 1, 0, 1],
+    [5, 5, 1, 1, 1],
     [8, 6, 2, 0, 1],
+    [10, 6, 2, 1, 1],
     [15, 7, 3, 1, 1],
-    [19, 8, 4, 2, 2],
+    [19, 8, 4, 0, 2],
+    [20, 8, 4, 2, 2],
+    [21, 8, 4, 0, 2],
+    [25, 8, 4, 2, 2],
   ])(
     'matches the difficulty band for difficulty %s',
     (difficulty, basicCount, tallCount, miniBossCount, waveCount) => {
@@ -100,14 +105,16 @@ describe('TrialGenerator', () => {
     [1, 'kobold', 72],
     [4, 'kobold', 104],
     [4, 'tallKobold', 130],
+    [5, 'miniBoss', 208],
     [8, 'kobold', 140],
     [8, 'tallKobold', 168],
+    [10, 'miniBoss', 224],
     [15, 'kobold', 180],
     [15, 'tallKobold', 210],
     [15, 'miniBoss', 240],
-    [19, 'kobold', 154],
-    [19, 'tallKobold', 180],
-    [19, 'miniBoss', 207],
+    [20, 'kobold', 154],
+    [20, 'tallKobold', 180],
+    [20, 'miniBoss', 207],
   ])('sets difficulty %s %s HP to tuned value %s', (difficulty, kind, maxHp) => {
     const config = getTrialDifficultyConfig(difficulty);
     const level = generateTrialLevel({ difficulty, seed: 8800 + difficulty });

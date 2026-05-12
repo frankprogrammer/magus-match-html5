@@ -43,7 +43,7 @@ export function getTrialDifficultyConfig(difficulty: number): TrialDifficultyCon
     return {
       basicKoboldCount: 3,
       tallKoboldCount: 0,
-      miniBossCount: 0,
+      miniBossCount: miniBossCountForTrialDifficulty(difficulty),
       waveCount: 1,
       spawnIntervalMs: 1200,
       waveGapMs: 0,
@@ -59,7 +59,7 @@ export function getTrialDifficultyConfig(difficulty: number): TrialDifficultyCon
     return {
       basicKoboldCount: 5,
       tallKoboldCount: 1,
-      miniBossCount: 0,
+      miniBossCount: miniBossCountForTrialDifficulty(difficulty),
       waveCount: 1,
       spawnIntervalMs: 1050,
       waveGapMs: 0,
@@ -75,7 +75,7 @@ export function getTrialDifficultyConfig(difficulty: number): TrialDifficultyCon
     return {
       basicKoboldCount: 6,
       tallKoboldCount: 2,
-      miniBossCount: 0,
+      miniBossCount: miniBossCountForTrialDifficulty(difficulty),
       waveCount: 1,
       spawnIntervalMs: 950,
       waveGapMs: 0,
@@ -91,7 +91,7 @@ export function getTrialDifficultyConfig(difficulty: number): TrialDifficultyCon
     return {
       basicKoboldCount: 7,
       tallKoboldCount: 3,
-      miniBossCount: difficulty % 3 === 0 ? 1 : 0,
+      miniBossCount: miniBossCountForTrialDifficulty(difficulty),
       waveCount: 1,
       spawnIntervalMs: 850,
       waveGapMs: 0,
@@ -106,7 +106,7 @@ export function getTrialDifficultyConfig(difficulty: number): TrialDifficultyCon
   return {
     basicKoboldCount: 8,
     tallKoboldCount: 4,
-    miniBossCount: 2,
+    miniBossCount: miniBossCountForTrialDifficulty(difficulty),
     waveCount: 2,
     spawnIntervalMs: 750,
     waveGapMs: 2200,
@@ -116,4 +116,12 @@ export function getTrialDifficultyConfig(difficulty: number): TrialDifficultyCon
     walkSpeed: 0.475,
     baseDamage: 16,
   };
+}
+
+function miniBossCountForTrialDifficulty(difficulty: number): number {
+  if (difficulty >= 20 && difficulty % 5 === 0) {
+    return 2;
+  }
+
+  return difficulty === 5 || difficulty === 10 || difficulty === 15 ? 1 : 0;
 }

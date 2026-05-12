@@ -8,7 +8,11 @@ import {
   resolvePowerUpChain,
   selectLightballTapTargetType,
 } from '../src/board/PowerUps';
-import { ROCKET_SWEEP_CLEAR_STAGGER_MS, TNT_EXPLOSION_RING_DELAY_MS } from '../src/data/tuning';
+import {
+  LIGHTBALL_COLLECTION_WAVE_MS,
+  ROCKET_SWEEP_CLEAR_STAGGER_MS,
+  TNT_EXPLOSION_RING_DELAY_MS,
+} from '../src/data/tuning';
 
 describe('power-up detonation patterns', () => {
   it('clears full row and column for rockets', () => {
@@ -111,11 +115,35 @@ describe('power-up detonation patterns', () => {
       ['FIRE', 'EARTH', 'FIRE'],
     ]);
 
-    expect(detonatePowerUp(board, { col: 0, row: 0 }, { lightballTargetType: 'FIRE' }).clearedCells).toEqual([
+    const detonation = detonatePowerUp(board, { col: 0, row: 0 }, { lightballTargetType: 'FIRE' });
+
+    expect(detonation.clearedCells).toEqual([
       { col: 0, row: 0 },
       { col: 1, row: 0 },
       { col: 0, row: 1 },
       { col: 2, row: 1 },
+    ]);
+    expect(detonation.clearTimings).toContainEqual({
+      coord: { col: 0, row: 0 },
+      clearDelayMs: 0,
+    });
+    expect(detonation.clearTimings.filter((timing) => timing.coord.col !== 0 || timing.coord.row !== 0)).toEqual(
+      expect.arrayContaining([
+        { coord: { col: 1, row: 0 }, clearDelayMs: LIGHTBALL_COLLECTION_WAVE_MS },
+        { coord: { col: 0, row: 1 }, clearDelayMs: LIGHTBALL_COLLECTION_WAVE_MS },
+        { coord: { col: 2, row: 1 }, clearDelayMs: LIGHTBALL_COLLECTION_WAVE_MS },
+      ]),
+    );
+  });
+
+  it('clears only the Lightball origin immediately when no target color is selected', () => {
+    const board = createBoardFromTileTypes([
+      ['FIRE', 'ICE'],
+      ['EARTH', 'LIGHTBALL'],
+    ]);
+
+    expect(detonatePowerUp(board, { col: 1, row: 1 }).clearTimings).toEqual([
+      { coord: { col: 1, row: 1 }, clearDelayMs: 0 },
     ]);
   });
 
@@ -210,6 +238,10 @@ describe('power-up detonation patterns', () => {
     expect(lightball?.clearedCells).toContainEqual({ col: 2, row: 0 });
     expect(lightball?.clearedCells).toContainEqual({ col: 2, row: 2 });
     expect(lightball?.clearedCells).toContainEqual({ col: 2, row: 3 });
+    expect(chain.clearTimings).toContainEqual({
+      coord: { col: 2, row: 0 },
+      clearDelayMs: 2 * ROCKET_SWEEP_CLEAR_STAGGER_MS + LIGHTBALL_COLLECTION_WAVE_MS,
+    });
   });
 
   it('does not clear void cells during chained detonations', () => {

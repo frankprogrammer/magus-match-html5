@@ -1,6 +1,6 @@
 import type { CellCoord } from '../core/Layout';
 import { BOARD_SIZE } from '../core/Layout';
-import { ROCKET_SWEEP_CLEAR_STAGGER_MS, TNT_EXPLOSION_RING_DELAY_MS } from '../data/tuning';
+import { LIGHTBALL_COLLECTION_WAVE_MS, ROCKET_SWEEP_CLEAR_STAGGER_MS, TNT_EXPLOSION_RING_DELAY_MS } from '../data/tuning';
 import type { Board } from './Board';
 import { cloneBoard, coordKey, getCell, isInBounds, sortCoords, uniqueCoords } from './Board';
 import {
@@ -226,7 +226,13 @@ function detonatePowerUpType(
         powerUpType,
         origin,
         clearedCells,
-        clearTimings: clearedCells.map((coord) => ({ coord, clearDelayMs: 0 })),
+        clearTimings: clearedCells.map((coord) => ({
+          coord,
+          clearDelayMs:
+            coord.col === origin.col && coord.row === origin.row
+              ? 0
+              : LIGHTBALL_COLLECTION_WAVE_MS,
+        })),
         lightballTargetType: options.lightballTargetType,
       };
     }

@@ -13,6 +13,7 @@ export const AssetIds = {
     rocketV: 'power.rocketV',
     tnt: 'power.tnt',
     lightball: 'power.lightball',
+    lightballStream: 'power.lightballStream',
     orb: 'power.orb',
   },
   backdrops: {

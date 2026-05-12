@@ -85,6 +85,8 @@ const ROCKET_CLOUD_SPRITE_NOTES =
   "Runtime transparent PNG spritesheet. Two rows by four columns, eight 128x128 frames, bottom-center origin, played at 30 FPS for rocket blast waves.";
 const MATCH_ORB_NOTES =
   "Runtime transparent static PNG, color-tinted for match energy streams flying from the board to the mage staff.";
+const LIGHTBALL_STREAM_NOTES =
+  "Runtime transparent PNG strip, tiled and color-tinted for Lightball collection links.";
 
 export const AssetManifest: Record<string, AssetManifestEntry> = {
   [AssetIds.tiles.fire]: texture(
@@ -163,6 +165,14 @@ export const AssetManifest: Record<string, AssetManifestEntry> = {
     "Assets/Textures/PowerUps/power-lightball.png",
     "prompt.powerups.standard",
     TILE_NOTES,
+  ),
+  [AssetIds.powerUps.lightballStream]: texture(
+    AssetIds.powerUps.lightballStream,
+    "/assets/powerups/lightning.png",
+    "Assets/Textures/PowerUps/lightning.png",
+    "prompt.powerups.standard",
+    LIGHTBALL_STREAM_NOTES,
+    "256x85",
   ),
   [AssetIds.powerUps.orb]: texture(
     AssetIds.powerUps.orb,

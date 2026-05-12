@@ -19,6 +19,8 @@ import {
   INVALID_SWAP_FORWARD_MS,
   INVALID_SWAP_HOLD_MS,
   INVALID_SWAP_RETURN_MS,
+  LIGHTBALL_COLLECTION_STREAM_TRAVEL_MS,
+  LIGHTBALL_COLLECTION_WAVE_MS,
   TILE_FALL_DURATION_PER_ROW_MS,
   TILE_FALL_MAX_MS,
   TILE_FALL_MIN_MS,
@@ -33,6 +35,7 @@ import {
 import type {
   BoardBurstRingVisualState,
   BoardCellVisualState,
+  BoardLightballStreamVisualState,
   BoardMatchEnergyStreamVisualState,
   BoardParticleVisualState,
   BoardRenderState,
@@ -72,6 +75,9 @@ const ROCKET_CLOUD_SPRITE_FRAME_COUNT = 8;
 const ROCKET_CLOUD_SPRITE_FPS = 30;
 const ROCKET_CLOUD_SPRITE_FRAME_MS = 1000 / ROCKET_CLOUD_SPRITE_FPS;
 const ROCKET_CLOUD_SPRITE_SPAWN_SPACING_PX = BOARD_RECT.cellSize * 0.6;
+const LIGHTBALL_STREAM_TILE_WIDTH_PX = 192;
+const LIGHTBALL_STREAM_TILE_HEIGHT_PX = 64;
+const LIGHTBALL_STREAM_SCROLL_SPEED_PX_PER_MS = 0.55;
 
 interface VisualSample {
   renderX: number;
@@ -141,6 +147,7 @@ export class BoardAnimationPresenter {
     const particles = sampleTraceParticles(trace, stepTimings, elapsedMs);
     const matchEnergyStreams = sampleTraceMatchEnergyStreams(trace, stepTimings, elapsedMs, options.matchEnergyTarget);
     const burstRings = sampleTraceBurstRings(trace, stepTimings, elapsedMs);
+    const lightballStreams = sampleTraceLightballStreams(trace, stepTimings, elapsedMs);
     const tntExplosionSprites = sampleTraceTntExplosionSprites(trace, stepTimings, elapsedMs);
     const rocketCloudSprites = sampleTraceRocketCloudSprites(trace, stepTimings, elapsedMs);
 
@@ -150,6 +157,7 @@ export class BoardAnimationPresenter {
       particles,
       matchEnergyStreams,
       burstRings,
+      lightballStreams,
       tntExplosionSprites,
       rocketCloudSprites,
     };
@@ -314,6 +322,90 @@ function sampleTraceRocketCloudSprites(
   }
 
   return activeStep.step.clearedTiles.flatMap((tile) => sampleRocketCloudSprites(tile, stepElapsedMs));
+}
+
+function sampleTraceLightballStreams(
+  trace: BoardAnimationTrace,
+  stepTimings: readonly BoardAnimationStepTiming[],
+  elapsedMs: number,
+): BoardLightballStreamVisualState[] {
+  if (trace.kind === 'levelIntro' || trace.kind === 'invalidSwap') {
+    return [];
+  }
+
+  return stepTimings.flatMap((timing) => {
+    const stepElapsedMs = elapsedMs - timing.popStartMs;
+    if (stepElapsedMs < 0) {
+      return [];
+    }
+
+    return sampleStepLightballStreams(timing.step, stepElapsedMs);
+  });
+}
+
+function sampleStepLightballStreams(
+  step: BoardAnimationCascadeStep,
+  stepElapsedMs: number,
+): BoardLightballStreamVisualState[] {
+  const lightballs = step.clearedTiles.filter((tile) => tile.tileType === 'LIGHTBALL');
+  if (lightballs.length === 0) {
+    return [];
+  }
+
+  return lightballs.flatMap((lightball) => {
+    const activationDelayMs = lightball.clearDelayMs ?? 0;
+    return step.clearedTiles
+      .filter((tile) =>
+        tile.tileId !== lightball.tileId &&
+        matchEnergyOrbColorForTileType(tile.tileType) != null &&
+        (tile.clearDelayMs ?? 0) === activationDelayMs + LIGHTBALL_COLLECTION_WAVE_MS)
+      .map((tile) => sampleLightballStream(lightball, tile, stepElapsedMs - activationDelayMs))
+      .filter((stream): stream is BoardLightballStreamVisualState => stream != null);
+  });
+}
+
+function sampleLightballStream(
+  lightball: BoardAnimationCascadeStep['clearedTiles'][number],
+  target: BoardAnimationCascadeStep['clearedTiles'][number],
+  localElapsedMs: number,
+): BoardLightballStreamVisualState | null {
+  if (localElapsedMs < 0 || localElapsedMs >= LIGHTBALL_COLLECTION_WAVE_MS) {
+    return null;
+  }
+
+  const color = matchEnergyOrbColorForTileType(target.tileType);
+  if (color == null) {
+    return null;
+  }
+
+  const start = cellCenter(lightball.coord);
+  const end = cellCenter(target.coord);
+  const fullLength = distance(start, end);
+  if (fullLength <= 0.001) {
+    return null;
+  }
+
+  const travelProgress = clamp01(localElapsedMs / LIGHTBALL_COLLECTION_STREAM_TRAVEL_MS);
+  const length = fullLength * travelProgress;
+  if (length <= 0.001) {
+    return null;
+  }
+
+  return {
+    streamId: `${lightball.tileId}-lightball-stream-${target.tileId}`,
+    assetId: AssetIds.powerUps.lightballStream,
+    startX: start.x,
+    startY: start.y,
+    length,
+    thickness: LIGHTBALL_STREAM_TILE_HEIGHT_PX,
+    angleDeg: radiansToDegrees(Math.atan2(end.y - start.y, end.x - start.x)),
+    color,
+    alpha: 0.96,
+    textureOffsetX: (localElapsedMs * LIGHTBALL_STREAM_SCROLL_SPEED_PX_PER_MS) % LIGHTBALL_STREAM_TILE_WIDTH_PX,
+    tileWidth: LIGHTBALL_STREAM_TILE_WIDTH_PX,
+    tileHeight: LIGHTBALL_STREAM_TILE_HEIGHT_PX,
+    zIndex: 19,
+  };
 }
 
 function sampleClearedTileEnergyStreams(
@@ -552,6 +644,14 @@ function cellCenter(coord: CellCoord): { x: number; y: number } {
     x: BOARD_RECT.x + coord.col * BOARD_RECT.cellSize + BOARD_RECT.cellSize / 2,
     y: BOARD_RECT.y + coord.row * BOARD_RECT.cellSize + BOARD_RECT.cellSize / 2,
   };
+}
+
+function distance(first: { x: number; y: number }, second: { x: number; y: number }): number {
+  return Math.hypot(second.x - first.x, second.y - first.y);
+}
+
+function radiansToDegrees(radians: number): number {
+  return (radians * 180) / Math.PI;
 }
 
 function sampleSwapCells(

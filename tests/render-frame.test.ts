@@ -508,7 +508,7 @@ describe('buildBoardCellVisuals', () => {
   });
 
   it('draws particles inside the clipped board layer after tiles and before the frame', () => {
-    const renderer = new FakeRenderer(new Set(['tile.fire', AssetIds.powerUps.orb]));
+    const renderer = new FakeRenderer(new Set(['tile.fire', AssetIds.powerUps.orb, AssetIds.powerUps.lightballStream]));
     const state = oneTileState('tile.fire');
     state.burstRings = [
       {
@@ -520,6 +520,23 @@ describe('buildBoardCellVisuals', () => {
         color: 'rgba(255, 255, 255, 0.85)',
         alpha: 0.8,
         zIndex: 15,
+      },
+    ];
+    state.lightballStreams = [
+      {
+        streamId: 'lightball-stream-0',
+        assetId: AssetIds.powerUps.lightballStream,
+        startX: BOARD_RECT.x + 40,
+        startY: BOARD_RECT.y + 40,
+        length: 150,
+        thickness: 64,
+        angleDeg: 22,
+        color: '#ff7000',
+        alpha: 0.94,
+        textureOffsetX: 20,
+        tileWidth: 100,
+        tileHeight: 64,
+        zIndex: 19,
       },
     ];
     state.particles = [
@@ -553,6 +570,13 @@ describe('buildBoardCellVisuals', () => {
       `clip:${BOARD_RECT.x},${BOARD_RECT.y},${BOARD_RECT.width},${BOARD_RECT.height}`,
     );
     const tileIndex = renderer.calls.indexOf('image:tile.fire');
+    const streamRotateIndex = renderer.calls.indexOf(`pushRotate:22,${BOARD_RECT.x + 40},${BOARD_RECT.y + 40}`);
+    const streamClipIndex = renderer.calls.indexOf(
+      `clip:${BOARD_RECT.x + 40},${BOARD_RECT.y + 8},150,64`,
+    );
+    const streamImageIndex = renderer.calls.indexOf(
+      `tintedImage:${AssetIds.powerUps.lightballStream}:#ff7000:${BOARD_RECT.x - 40},${BOARD_RECT.y + 8},100,64`,
+    );
     const ringIndex = renderer.calls.indexOf('ring:rgba(255, 255, 255, 0.85)');
     const particleIndex = renderer.calls.indexOf('ellipse:#eb5757');
     const streamIndex = renderer.calls.indexOf(
@@ -564,6 +588,10 @@ describe('buildBoardCellVisuals', () => {
       `rect:#c8a24b:${BOARD_RECT.x - 8},${BOARD_RECT.y - 8},${BOARD_RECT.width + 16},8`,
     );
 
+    expect(streamRotateIndex).toBeGreaterThan(tileIndex);
+    expect(streamClipIndex).toBeGreaterThan(streamRotateIndex);
+    expect(streamImageIndex).toBeGreaterThan(streamClipIndex);
+    expect(ringIndex).toBeGreaterThan(streamImageIndex);
     expect(ringIndex).toBeGreaterThan(tileIndex);
     expect(particleIndex).toBeGreaterThan(ringIndex);
     expect(particleIndex).toBeGreaterThan(tileIndex);
@@ -599,6 +627,32 @@ describe('buildBoardCellVisuals', () => {
 
     expect(renderer.calls.some((call) => call.startsWith(`tintedImage:${AssetIds.powerUps.orb}`))).toBe(false);
     expect(renderer.calls).not.toContain('ellipse:#38d5ff');
+  });
+
+  it('skips Lightball stream visuals when the lightning strip is missing', () => {
+    const renderer = new FakeRenderer(new Set(['tile.fire']));
+    const state = oneTileState('tile.fire');
+    state.lightballStreams = [
+      {
+        streamId: 'lightball-stream-0',
+        assetId: AssetIds.powerUps.lightballStream,
+        startX: BOARD_RECT.x + 40,
+        startY: BOARD_RECT.y + 40,
+        length: 150,
+        thickness: 64,
+        angleDeg: 0,
+        color: '#ff7000',
+        alpha: 0.94,
+        textureOffsetX: 20,
+        tileWidth: 100,
+        tileHeight: 64,
+        zIndex: 19,
+      },
+    ];
+
+    renderFrame(renderer, state, hudState(), 0);
+
+    expect(renderer.calls.some((call) => call.startsWith(`tintedImage:${AssetIds.powerUps.lightballStream}`))).toBe(false);
   });
 
   it('draws TNT explosion sprites inside the clipped board layer before match particles', () => {

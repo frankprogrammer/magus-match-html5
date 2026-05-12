@@ -80,7 +80,8 @@ describe('board animation traces', () => {
     );
 
     expect(result.valid).toBe(true);
-    expect(result.damageEvents.length).toBeGreaterThan(0);
+    expect(result.damageEvents).toEqual([]);
+    expect(result.queuedAttackEvents.length).toBeGreaterThan(0);
     expect(result.animationTrace?.cascadeSteps.length).toBeGreaterThan(0);
   });
 

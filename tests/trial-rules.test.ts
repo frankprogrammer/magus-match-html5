@@ -216,7 +216,7 @@ describe('TrialRules', () => {
     expect(damageMultiplierForMatch(tnt)).toBe(2.5);
   });
 
-  it('applies match damage instantly and queues cascade-timed match particle visuals', () => {
+  it('queues match damage until the projectile impact time', () => {
     const board = matchSwapBoard();
     const level = testTrialLevel([monster({ maxHp: 50 })], board);
     const runtime = createTrialRuntime(level);
@@ -231,8 +231,10 @@ describe('TrialRules', () => {
     );
 
     expect(result.valid).toBe(true);
-    expect(result.damageEvents.length).toBeGreaterThan(0);
-    expect(result.runtime.monsters[0]?.hp).toBeLessThan(50);
+    expect(result.damageEvents).toEqual([]);
+    expect(result.queuedAttackEvents.length).toBeGreaterThan(0);
+    expect(result.runtime.pendingAttacks.length).toBe(result.queuedAttackEvents.length);
+    expect(result.runtime.monsters[0]?.hp).toBe(50);
     expect(result.runtime.monsters[0]?.maxHp).toBe(50);
     expect(result.runtime.projectiles.length).toBeGreaterThan(0);
     expect(result.runtime.projectiles.every((projectile) => projectile.effectKind === 'match')).toBe(true);
@@ -245,40 +247,38 @@ describe('TrialRules', () => {
       durationSec: SPELL_MATCH_PROJECTILE_VISUAL_MS / 1000,
     });
     const hitDelaySec = TILE_SWAP_RETARGET_MS / 1000 + SPELL_CAST_WINDUP_SEC + SPELL_MATCH_PROJECTILE_VISUAL_MS / 1000;
-    const damagedHp = result.runtime.monsters[0]?.hp ?? 50;
-    expect(result.runtime.monsters[0]?.hitShakeDelaySec).toBeCloseTo(hitDelaySec);
-    expect(result.runtime.monsters[0]?.hitShakeQueueSec).toHaveLength(result.runtime.projectiles.length);
-    expect(result.runtime.monsters[0]?.hitShakeQueueSec?.[0]).toBeCloseTo(hitDelaySec);
-    expect(result.damageEvents[0]?.impactDelaySec).toBeCloseTo(hitDelaySec);
-    expect(result.damageEvents[0]?.castActivationDelaySec).toBeCloseTo(TILE_SWAP_RETARGET_MS / 1000);
-    expect(result.runtime.monsters[0]?.hitShakeDurationSec).toBeCloseTo(0.18);
-    expect(result.runtime.monsters[0]?.hitShakeRemainingSec).toBe(0);
-    expect(result.runtime.monsters[0]?.healthBarHp).toBe(50);
-    expect(result.runtime.monsters[0]?.healthBarUpdateQueue?.at(-1)).toMatchObject({ hp: damagedHp });
-    expect(result.runtime.monsters[0]?.healthBarUpdateQueue?.[0]?.delaySec).toBeCloseTo(hitDelaySec);
-    expect(result.scoreDelta).toBeGreaterThan(0);
+    expect(result.runtime.pendingAttacks[0]?.impactDelaySec).toBeCloseTo(hitDelaySec);
+    expect(result.queuedAttackEvents[0]?.castActivationDelaySec).toBeCloseTo(TILE_SWAP_RETARGET_MS / 1000);
+    expect(result.runtime.monsters[0]?.hitShakeRemainingSec).toBeUndefined();
+    expect(result.runtime.monsters[0]?.healthBarHp).toBeUndefined();
+    expect(result.runtime.monsters[0]?.healthBarUpdateQueue).toBeUndefined();
+    expect(result.scoreDelta).toBe(0);
 
-    const waiting = updateTrialRuntime(result.runtime, level, 0.08);
-    expect(waiting.projectiles[0].castActivationDelaySec).toBeCloseTo(TILE_SWAP_RETARGET_MS / 1000 - 0.08);
-    expect(waiting.projectiles[0].activationDelaySec).toBeCloseTo(
+    const waiting = updateTrialRuntimeWithEvents(result.runtime, level, 0.08);
+    expect(waiting.damageEvents).toEqual([]);
+    expect(waiting.runtime.projectiles[0].castActivationDelaySec).toBeCloseTo(TILE_SWAP_RETARGET_MS / 1000 - 0.08);
+    expect(waiting.runtime.projectiles[0].activationDelaySec).toBeCloseTo(
       TILE_SWAP_RETARGET_MS / 1000 + SPELL_CAST_WINDUP_SEC - 0.08,
     );
-    expect(waiting.projectiles[0].remainingSec).toBeCloseTo(SPELL_MATCH_PROJECTILE_VISUAL_MS / 1000);
-    expect(waiting.monsters[0]?.hitShakeDelaySec).toBeCloseTo(hitDelaySec - 0.08);
-    expect(waiting.monsters[0]?.hitShakeQueueSec?.[0]).toBeCloseTo(hitDelaySec - 0.08);
-    expect(waiting.monsters[0]?.healthBarHp).toBe(50);
-    expect(waiting.monsters[0]?.healthBarUpdateQueue?.[0]?.delaySec).toBeCloseTo(hitDelaySec - 0.08);
+    expect(waiting.runtime.projectiles[0].remainingSec).toBeCloseTo(SPELL_MATCH_PROJECTILE_VISUAL_MS / 1000);
+    expect(waiting.runtime.pendingAttacks[0]?.impactDelaySec).toBeCloseTo(hitDelaySec - 0.08);
+    expect(waiting.runtime.monsters[0]?.hp).toBe(50);
 
-    const shaking = updateTrialRuntime(waiting, level, hitDelaySec - 0.08);
-    expect(shaking.monsters[0]?.hitShakeDelaySec).toBeUndefined();
-    expect(shaking.monsters[0]?.hitShakeQueueSec).toBeUndefined();
-    expect(shaking.monsters[0]?.hitShakeRemainingSec).toBeCloseTo(0.18);
-    const shakingHealthBarHp = shaking.monsters[0]?.healthBarUpdateQueue?.[0]?.hp ?? shaking.monsters[0]?.healthBarHp;
-    if (shakingHealthBarHp != null) {
-      expect(shakingHealthBarHp).toBeLessThanOrEqual(damagedHp);
-    }
+    const impact = updateTrialRuntimeWithEvents(waiting.runtime, level, hitDelaySec - 0.08);
+    expect(impact.damageEvents.length).toBeGreaterThan(0);
+    expect(impact.damageEvents[0]).toMatchObject({
+      monsterId: result.runtime.pendingAttacks[0]?.targetMonsterId,
+      defeated: false,
+      impactDelaySec: 0,
+      castActivationDelaySec: 0,
+    });
+    expect(impact.scoreDelta).toBeGreaterThan(0);
+    expect(impact.runtime.monsters[0]?.hitShakeDelaySec).toBeUndefined();
+    expect(impact.runtime.monsters[0]?.hitShakeQueueSec).toBeUndefined();
+    expect(impact.runtime.monsters[0]?.hitShakeRemainingSec).toBeCloseTo(0.18);
+    expect(impact.runtime.monsters[0]?.hp).toBeLessThan(50);
 
-    const updated = updateTrialRuntime(shaking, level, 0.18);
+    const updated = updateTrialRuntime(impact.runtime, level, 0.18);
     expect(updated.projectiles).toHaveLength(0);
     expect(updated.monsters[0]?.hitShakeRemainingSec ?? 0).toBeGreaterThanOrEqual(0);
     expect(updated.monsters[0]?.hp).toBeLessThan(50);
@@ -297,14 +297,32 @@ describe('TrialRules', () => {
       { col: 1, row: 1 },
       new SeededRng(99),
     );
-    const fireEvent = result.damageEvents.find((event) => event.schoolId === 'fire');
-    const stack = result.runtime.monsters[0]?.fireBurnStacks?.[0];
+    const fireEvent = result.queuedAttackEvents.find((event) => event.schoolId === 'fire');
+    const fireAttack = result.runtime.pendingAttacks.find((attack) => attack.schoolId === 'fire');
 
     expect(fireEvent).toBeDefined();
+    expect(fireAttack).toBeDefined();
+    expect(result.runtime.monsters[0]?.fireBurnStacks).toBeUndefined();
+
+    const beforeImpact = updateTrialRuntimeWithEvents(
+      result.runtime,
+      level,
+      (fireAttack?.impactDelaySec ?? 0) - 0.001,
+    );
+    expect(beforeImpact.damageEvents).toEqual([]);
+    expect(beforeImpact.runtime.monsters[0]?.fireBurnStacks).toBeUndefined();
+
+    const activated = updateTrialRuntimeWithEvents(beforeImpact.runtime, level, 0.001);
+    const stack = activated.runtime.monsters[0]?.fireBurnStacks?.[0];
+    expect(activated.damageEvents.find((event) => event.schoolId === 'fire')).toMatchObject({
+      monsterId: 'burn-target',
+      damage: fireEvent?.damage,
+      defeated: false,
+    });
     expect(stack).toMatchObject({
       burnId: 'burn-0',
       damage: fireEvent?.damage,
-      activationDelaySec: fireEvent?.impactDelaySec,
+      activationDelaySec: 0,
       tickDelayQueueSec: [
         FIRE_BURN_TICK_INTERVAL_SEC,
         FIRE_BURN_TICK_INTERVAL_SEC * 2,
@@ -314,21 +332,6 @@ describe('TrialRules', () => {
       visualRemainingSec: FIRE_BURN_DURATION_SEC,
       visualDurationSec: FIRE_BURN_DURATION_SEC,
     });
-
-    const beforeImpact = updateTrialRuntimeWithEvents(
-      result.runtime,
-      level,
-      (fireEvent?.impactDelaySec ?? 0) - 0.001,
-    );
-    expect(beforeImpact.damageEvents).toEqual([]);
-    expect(beforeImpact.runtime.monsters[0]?.fireBurnStacks?.[0]?.activationDelaySec).toBeCloseTo(0.001);
-    expect(beforeImpact.runtime.monsters[0]?.fireBurnStacks?.[0]?.visualRemainingSec).toBeCloseTo(
-      FIRE_BURN_DURATION_SEC,
-    );
-
-    const activated = updateTrialRuntimeWithEvents(beforeImpact.runtime, level, 0.001);
-    expect(activated.damageEvents).toEqual([]);
-    expect(activated.runtime.monsters[0]?.fireBurnStacks?.[0]?.activationDelaySec).toBeUndefined();
 
     const tick = updateTrialRuntimeWithEvents(activated.runtime, level, FIRE_BURN_TICK_INTERVAL_SEC);
 
@@ -344,7 +347,7 @@ describe('TrialRules', () => {
     ]);
     expect(tick.scoreDelta).toBe(Math.round((fireEvent?.damage ?? 0) * 2));
     expect(tick.runtime.monsters[0]?.hp).toBeCloseTo(
-      (result.runtime.monsters[0]?.hp ?? 0) - (fireEvent?.damage ?? 0),
+      (activated.runtime.monsters[0]?.hp ?? 0) - (fireEvent?.damage ?? 0),
     );
     expect(tick.runtime.monsters[0]?.fireBurnStacks?.[0]?.tickDelayQueueSec).toEqual([
       FIRE_BURN_TICK_INTERVAL_SEC,
@@ -409,7 +412,7 @@ describe('TrialRules', () => {
       new SeededRng(99),
     );
 
-    expect(iceResult.damageEvents.some((event) => event.schoolId === 'ice')).toBe(true);
+    expect(iceResult.queuedAttackEvents.some((event) => event.schoolId === 'ice')).toBe(true);
     expect(iceResult.runtime.monsters[0]?.fireBurnStacks).toBeUndefined();
 
     const fireBoard = matchSwapBoard();
@@ -475,27 +478,27 @@ describe('TrialRules', () => {
       { col: 1, row: 1 },
       new SeededRng(99),
     );
-    const earthEvent = result.damageEvents.find((event) => event.schoolId === 'earth');
-    const vfx = result.runtime.impactVfx?.[0];
+    const earthEvent = result.queuedAttackEvents.find((event) => event.schoolId === 'earth');
+    const earthAttack = result.runtime.pendingAttacks.find((attack) => attack.schoolId === 'earth');
 
     expect(earthEvent).toBeDefined();
+    expect(earthAttack).toBeDefined();
+    expect(result.runtime.impactVfx).toBeUndefined();
+
+    const beforeImpact = updateTrialRuntime(result.runtime, level, (earthAttack?.impactDelaySec ?? 0) - 0.001);
+    expect(beforeImpact.impactVfx).toBeUndefined();
+
+    const active = updateTrialRuntime(beforeImpact, level, 0.001);
+    const vfx = active.impactVfx?.[0];
     expect(vfx).toMatchObject({
       vfxId: 'earth-impact-0',
       schoolId: 'earth',
       targetMonsterId: 'earth-target',
-      hitWorldPosition: getTrialMonsterWorldPosition(level, runtime.monsters[0]),
-      activationDelaySec: earthEvent?.impactDelaySec,
+      hitWorldPosition: getTrialMonsterWorldPosition(level, beforeImpact.monsters[0]),
+      activationDelaySec: 0,
       remainingSec: EARTH_IMPACT_VFX_DURATION_SEC,
       durationSec: EARTH_IMPACT_VFX_DURATION_SEC,
     });
-
-    const beforeImpact = updateTrialRuntime(result.runtime, level, (earthEvent?.impactDelaySec ?? 0) - 0.001);
-    expect(beforeImpact.impactVfx?.[0]?.activationDelaySec).toBeCloseTo(0.001);
-    expect(beforeImpact.impactVfx?.[0]?.remainingSec).toBeCloseTo(EARTH_IMPACT_VFX_DURATION_SEC);
-
-    const active = updateTrialRuntime(beforeImpact, level, 0.001);
-    expect(active.impactVfx?.[0]?.activationDelaySec).toBeCloseTo(0);
-    expect(active.impactVfx?.[0]?.remainingSec).toBeCloseTo(EARTH_IMPACT_VFX_DURATION_SEC);
 
     const expired = updateTrialRuntime(active, level, EARTH_IMPACT_VFX_DURATION_SEC);
     expect(expired.impactVfx).toBeUndefined();
@@ -514,7 +517,7 @@ describe('TrialRules', () => {
       new SeededRng(99),
     );
 
-    expect(result.damageEvents.some((event) => event.schoolId === 'fire')).toBe(true);
+    expect(result.queuedAttackEvents.some((event) => event.schoolId === 'fire')).toBe(true);
     expect(result.runtime.impactVfx).toBeUndefined();
   });
 
@@ -534,9 +537,9 @@ describe('TrialRules', () => {
       ...baseRuntime,
       nextSpawnIndex: 3,
       monsters: [
-        { ...activeMonster, monsterId: 'first', hp: 30, maxHp: 30, x: level.trial.mageX + 1 },
-        { ...activeMonster, monsterId: 'second', hp: 30, maxHp: 30, x: level.trial.mageX + 2 },
-        { ...activeMonster, monsterId: 'third', hp: 30, maxHp: 30, x: level.trial.mageX + 3 },
+        { ...activeMonster, monsterId: 'first', hp: 30, maxHp: 30, x: level.trial.mageX + 3 },
+        { ...activeMonster, monsterId: 'second', hp: 30, maxHp: 30, x: level.trial.mageX + 4 },
+        { ...activeMonster, monsterId: 'third', hp: 30, maxHp: 30, x: level.trial.mageX + 5 },
       ],
     };
 
@@ -548,7 +551,7 @@ describe('TrialRules', () => {
       { col: 1, row: 1 },
       new SeededRng(99),
     );
-    const lightningEvents = result.damageEvents.filter((event) => event.schoolId === 'lightning');
+    const lightningEvents = result.queuedAttackEvents.filter((event) => event.schoolId === 'lightning');
     const lightningProjectiles = result.runtime.projectiles.filter((projectile) => projectile.schoolId === 'lightning');
     const firstImpactDelaySec =
       TILE_SWAP_RETARGET_MS / 1000 + SPELL_CAST_WINDUP_SEC + SPELL_MATCH_PROJECTILE_VISUAL_MS / 1000;
@@ -556,13 +559,13 @@ describe('TrialRules', () => {
     expect(result.valid).toBe(true);
     expect(lightningEvents.map((event) => event.monsterId)).toEqual(['first', 'second', 'third']);
     expect(lightningEvents.map((event) => event.damage)).toEqual([10, 10, 10]);
-    expect(lightningEvents[0].impactDelaySec).toBeCloseTo(firstImpactDelaySec);
-    expect(lightningEvents[1].impactDelaySec).toBeCloseTo(firstImpactDelaySec + LIGHTNING_CHAIN_HOP_DELAY_SEC);
-    expect(lightningEvents[2].impactDelaySec).toBeCloseTo(firstImpactDelaySec + LIGHTNING_CHAIN_HOP_DELAY_SEC * 2);
+    expect(result.runtime.pendingAttacks[0]?.impactDelaySec).toBeCloseTo(firstImpactDelaySec);
+    expect(result.runtime.pendingAttacks[1]?.impactDelaySec).toBeCloseTo(firstImpactDelaySec + LIGHTNING_CHAIN_HOP_DELAY_SEC);
+    expect(result.runtime.pendingAttacks[2]?.impactDelaySec).toBeCloseTo(firstImpactDelaySec + LIGHTNING_CHAIN_HOP_DELAY_SEC * 2);
     expect(result.runtime.monsters.map((target) => ({ id: target.monsterId, hp: target.hp }))).toEqual([
-      { id: 'first', hp: 20 },
-      { id: 'second', hp: 20 },
-      { id: 'third', hp: 20 },
+      { id: 'first', hp: 30 },
+      { id: 'second', hp: 30 },
+      { id: 'third', hp: 30 },
     ]);
     expect(lightningProjectiles).toHaveLength(3);
     expect(lightningProjectiles[0]).toMatchObject({
@@ -583,17 +586,206 @@ describe('TrialRules', () => {
       chargeDurationSec: 0,
     });
 
+    const firstImpact = updateTrialRuntimeWithEvents(result.runtime, level, firstImpactDelaySec);
+    expect(firstImpact.runtime.pendingAttacks).toHaveLength(2);
+    const remainingImpacts = updateTrialRuntimeWithEvents(
+      firstImpact.runtime,
+      level,
+      LIGHTNING_CHAIN_HOP_DELAY_SEC * 2 + 0.001,
+    );
+    const impactEvents = [
+      ...firstImpact.damageEvents,
+      ...remainingImpacts.damageEvents,
+    ].filter((event) => event.schoolId === 'lightning');
+
+    expect(impactEvents.map((event) => event.monsterId)).toEqual(['first', 'second', 'third']);
+    expect(impactEvents.map((event) => event.damage)).toEqual([10, 10, 10]);
+    expect(remainingImpacts.runtime.monsters.map((target) => ({ id: target.monsterId, hp: target.hp }))).toEqual([
+      { id: 'first', hp: 20 },
+      { id: 'second', hp: 20 },
+      { id: 'third', hp: 20 },
+    ]);
+
     const stacked = processTrialSwap(
       board,
-      result.runtime,
+      remainingImpacts.runtime,
       level,
       { col: 1, row: 0 },
       { col: 1, row: 1 },
       new SeededRng(100),
     );
 
-    expect(stacked.damageEvents.filter((event) => event.schoolId === 'lightning')).toHaveLength(3);
-    expect(stacked.runtime.monsters.map((target) => target.hp)).toEqual([10, 10, 10]);
+    const stackedFirstImpactDelaySec = stacked.runtime.pendingAttacks[0]?.impactDelaySec ?? 0;
+    const stackedFirstImpact = updateTrialRuntimeWithEvents(stacked.runtime, level, stackedFirstImpactDelaySec);
+    const stackedRemainingImpacts = updateTrialRuntimeWithEvents(
+      stackedFirstImpact.runtime,
+      level,
+      LIGHTNING_CHAIN_HOP_DELAY_SEC * 2 + 0.001,
+    );
+    expect([
+      ...stackedFirstImpact.damageEvents,
+      ...stackedRemainingImpacts.damageEvents,
+    ].filter((event) => event.schoolId === 'lightning')).toHaveLength(3);
+    expect(stackedRemainingImpacts.runtime.monsters.map((target) => target.hp)).toEqual([10, 10, 10]);
+  });
+
+  it('retargets future queued attacks and projectiles after their target dies', () => {
+    const level = testTrialLevel([
+      monster({ monsterId: 'first', maxHp: 5 }),
+      monster({ monsterId: 'second', maxHp: 30 }),
+    ]);
+    const baseRuntime = createTrialRuntime(level);
+    const first = { ...baseRuntime.monsters[0], monsterId: 'first', hp: 5, maxHp: 5, x: level.trial.mageX + 3 };
+    const second = { ...baseRuntime.monsters[0], monsterId: 'second', hp: 30, maxHp: 30, x: level.trial.mageX + 4 };
+    const runtime = {
+      ...baseRuntime,
+      nextSpawnIndex: level.trial.waveManifest.length,
+      monsters: [first, second],
+      pendingAttacks: [
+        {
+          attackId: 'trial-attack-0',
+          schoolId: 'fire' as const,
+          effectKind: 'match' as const,
+          damage: 10,
+          targetMonsterId: 'first',
+          impactDelaySec: 0.1,
+          castActivationDelaySec: 0,
+          projectileId: 'trial-0',
+        },
+        {
+          attackId: 'trial-attack-1',
+          schoolId: 'ice' as const,
+          effectKind: 'match' as const,
+          damage: 10,
+          targetMonsterId: 'first',
+          impactDelaySec: 0.3,
+          castActivationDelaySec: 0,
+          projectileId: 'trial-1',
+        },
+      ],
+      projectiles: [
+        testProjectile('trial-0', 'trial-attack-0', 'fire', first, level, 0, 0.1),
+        testProjectile('trial-1', 'trial-attack-1', 'ice', first, level, 0.2, 0.1),
+      ],
+    };
+
+    const impact = updateTrialRuntimeWithEvents(runtime, level, 0.1);
+
+    expect(impact.damageEvents).toMatchObject([
+      { monsterId: 'first', schoolId: 'fire', damage: 5, defeated: true },
+    ]);
+    expect(impact.runtime.monsters.map((target) => ({ id: target.monsterId, hp: target.hp }))).toEqual([
+      { id: 'first', hp: 0 },
+      { id: 'second', hp: 30 },
+    ]);
+    expect(impact.runtime.pendingAttacks).toMatchObject([
+      { attackId: 'trial-attack-1', targetMonsterId: 'second' },
+    ]);
+    expect(impact.runtime.projectiles.find((projectile) => projectile.projectileId === 'trial-1')).toMatchObject({
+      targetMonsterId: 'second',
+      to: getTrialMonsterWorldPosition(level, second),
+    });
+  });
+
+  it('cancels future queued attacks and projectiles when no living target remains', () => {
+    const level = testTrialLevel([monster({ monsterId: 'only', maxHp: 5 })]);
+    const baseRuntime = createTrialRuntime(level);
+    const only = { ...baseRuntime.monsters[0], monsterId: 'only', hp: 5, maxHp: 5, x: level.trial.mageX + 3 };
+    const runtime = {
+      ...baseRuntime,
+      nextSpawnIndex: level.trial.waveManifest.length,
+      monsters: [only],
+      pendingAttacks: [
+        {
+          attackId: 'trial-attack-0',
+          schoolId: 'fire' as const,
+          effectKind: 'match' as const,
+          damage: 10,
+          targetMonsterId: 'only',
+          impactDelaySec: 0.1,
+          castActivationDelaySec: 0,
+          projectileId: 'trial-0',
+        },
+        {
+          attackId: 'trial-attack-1',
+          schoolId: 'earth' as const,
+          effectKind: 'match' as const,
+          damage: 10,
+          targetMonsterId: 'only',
+          impactDelaySec: 0.3,
+          castActivationDelaySec: 0,
+          projectileId: 'trial-1',
+        },
+      ],
+      projectiles: [
+        testProjectile('trial-0', 'trial-attack-0', 'fire', only, level, 0, 0.1),
+        testProjectile('trial-1', 'trial-attack-1', 'earth', only, level, 0.2, 0.1),
+      ],
+    };
+
+    const impact = updateTrialRuntimeWithEvents(runtime, level, 0.1);
+
+    expect(impact.damageEvents).toMatchObject([
+      { monsterId: 'only', schoolId: 'fire', damage: 5, defeated: true },
+    ]);
+    expect(impact.runtime.pendingAttacks).toEqual([]);
+    expect(impact.runtime.projectiles).toEqual([]);
+  });
+
+  it('retargets queued attacks when a fire burn tick kills their target', () => {
+    const level = testTrialLevel([
+      monster({ monsterId: 'burned', maxHp: 5 }),
+      monster({ monsterId: 'next', maxHp: 30 }),
+    ]);
+    const baseRuntime = createTrialRuntime(level);
+    const burned = {
+      ...baseRuntime.monsters[0],
+      monsterId: 'burned',
+      hp: 5,
+      maxHp: 5,
+      x: level.trial.mageX + 3,
+      fireBurnStacks: [
+        {
+          burnId: 'burn-kill',
+          damage: 10,
+          tickDelayQueueSec: [0.5],
+          visualRemainingSec: 1,
+          visualDurationSec: 2,
+        },
+      ],
+    };
+    const next = { ...baseRuntime.monsters[0], monsterId: 'next', hp: 30, maxHp: 30, x: level.trial.mageX + 4 };
+    const runtime = {
+      ...baseRuntime,
+      nextSpawnIndex: level.trial.waveManifest.length,
+      monsters: [burned, next],
+      pendingAttacks: [
+        {
+          attackId: 'trial-attack-0',
+          schoolId: 'earth' as const,
+          effectKind: 'match' as const,
+          damage: 10,
+          targetMonsterId: 'burned',
+          impactDelaySec: 0.8,
+          castActivationDelaySec: 0,
+          projectileId: 'trial-0',
+        },
+      ],
+      projectiles: [testProjectile('trial-0', 'trial-attack-0', 'earth', burned, level, 0.7, 0.1)],
+    };
+
+    const tick = updateTrialRuntimeWithEvents(runtime, level, 0.5);
+
+    expect(tick.damageEvents).toMatchObject([
+      { monsterId: 'burned', schoolId: 'fire', damage: 5, defeated: true },
+    ]);
+    expect(tick.runtime.pendingAttacks).toMatchObject([
+      { attackId: 'trial-attack-0', targetMonsterId: 'next' },
+    ]);
+    expect(tick.runtime.projectiles[0]).toMatchObject({
+      targetMonsterId: 'next',
+      to: getTrialMonsterWorldPosition(level, next),
+    });
   });
 
   it('starts ice freeze when the ice projectile visually impacts and stops movement while frozen', () => {
@@ -611,10 +803,10 @@ describe('TrialRules', () => {
     );
 
     expect(result.valid).toBe(true);
-    expect(result.damageEvents.some((event) => event.schoolId === 'ice')).toBe(true);
-    expect(result.runtime.monsters[0].hp).toBeLessThan(50);
+    expect(result.queuedAttackEvents.some((event) => event.schoolId === 'ice')).toBe(true);
+    expect(result.runtime.monsters[0].hp).toBe(50);
     expect(result.runtime.monsters[0].iceFreezeRemainingSec).toBeUndefined();
-    const impactDelaySec = result.runtime.monsters[0].iceFreezeDelayQueueSec?.[0] ?? 0;
+    const impactDelaySec = result.runtime.pendingAttacks.find((attack) => attack.schoolId === 'ice')?.impactDelaySec ?? 0;
     expect(impactDelaySec).toBeGreaterThan(0);
 
     const beforeImpact = updateTrialRuntime(result.runtime, level, impactDelaySec - 0.001);
@@ -623,9 +815,9 @@ describe('TrialRules', () => {
 
     const impact = updateTrialRuntime(beforeImpact, level, 0.002);
     const frozenX = impact.monsters[0].x;
-    expect(impact.monsters[0].iceFreezeRemainingSec).toBeCloseTo(TRIAL_ICE_FREEZE_SEC - 0.001);
+    expect(impact.monsters[0].iceFreezeRemainingSec).toBeCloseTo(TRIAL_ICE_FREEZE_SEC);
     expect(impact.monsters[0].iceFreezeDelayQueueSec).toBeUndefined();
-    expect(impact.monsters[0].x).toBeCloseTo(beforeImpact.monsters[0].x - impact.monsters[0].walkSpeed * 0.001);
+    expect(impact.monsters[0].x).toBeCloseTo(beforeImpact.monsters[0].x);
 
     const frozen = updateTrialRuntime(impact, level, 0.4);
     expect(frozen.monsters[0].x).toBeCloseTo(frozenX);
@@ -671,9 +863,16 @@ describe('TrialRules', () => {
     );
 
     expect(result.valid).toBe(true);
-    expect(result.runtime.monsters[0]).toMatchObject({ monsterId: 'ice-lethal', hp: 0 });
-    expect(result.runtime.monsters[0].iceFreezeDelayQueueSec).toBeUndefined();
-    expect(result.runtime.monsters[0].iceFreezeRemainingSec).toBeUndefined();
+    expect(result.runtime.monsters[0]).toMatchObject({ monsterId: 'ice-lethal', hp: 5 });
+    const impact = updateTrialRuntimeWithEvents(
+      result.runtime,
+      level,
+      result.runtime.pendingAttacks.find((attack) => attack.schoolId === 'ice')?.impactDelaySec ?? 0,
+    );
+    expect(impact.damageEvents[0]).toMatchObject({ monsterId: 'ice-lethal', defeated: true });
+    expect(impact.runtime.monsters[0]).toMatchObject({ monsterId: 'ice-lethal', hp: 0 });
+    expect(impact.runtime.monsters[0].iceFreezeDelayQueueSec).toBeUndefined();
+    expect(impact.runtime.monsters[0].iceFreezeRemainingSec).toBeUndefined();
   });
 
   it('plays queued hit shakes for later cascade-step impact timings', () => {
@@ -855,8 +1054,8 @@ describe('TrialRules', () => {
     );
 
     expect(result.valid).toBe(true);
-    expect(result.damageEvents.length).toBeGreaterThanOrEqual(3);
-    expect(result.damageEvents.slice(0, 3).every((event) => event.schoolId === 'earth')).toBe(true);
+    expect(result.queuedAttackEvents.length).toBeGreaterThanOrEqual(3);
+    expect(result.queuedAttackEvents.slice(0, 3).every((event) => event.schoolId === 'earth')).toBe(true);
     expect(result.animationTrace?.cascadeSteps[0].clearedTiles.find((tile) => tile.clearDelayMs === 0)?.coord).toEqual({
       col: 1,
       row: 0,
@@ -878,7 +1077,7 @@ describe('TrialRules', () => {
     const result = processTrialRocketActivation(board, runtime, level, { col: 0, row: 0 }, new SeededRng(43));
 
     expect(result.valid).toBe(true);
-    expect(result.damageEvents.length).toBeGreaterThanOrEqual(3);
+    expect(result.queuedAttackEvents.length).toBeGreaterThanOrEqual(3);
     expect(result.scoringStats.validSwapCount).toBe(1);
     expect(result.animationTrace?.cascadeSteps[0].clearedTiles.some((tile) => (tile.clearDelayMs ?? 0) > 0)).toBe(true);
   });
@@ -934,7 +1133,7 @@ describe('TrialRules', () => {
     const result = processTrialPowerUpActivation(board, runtime, level, { col: 1, row: 1 }, new SeededRng(44));
 
     expect(result.valid).toBe(true);
-    expect(result.damageEvents.length).toBeGreaterThanOrEqual(5);
+    expect(result.queuedAttackEvents.length).toBeGreaterThanOrEqual(5);
     expect(result.scoringStats.validSwapCount).toBe(1);
     const bombProjectiles = result.runtime.projectiles.filter((projectile) => projectile.effectKind === 'bomb');
     expect(bombProjectiles).toHaveLength(1);
@@ -946,15 +1145,11 @@ describe('TrialRules', () => {
       remainingSec: SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
       durationSec: SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
     });
-    expect(result.runtime.monsters[0]?.hitShakeDelaySec).toBeCloseTo(
+    expect(result.runtime.pendingAttacks[0]?.impactDelaySec).toBeCloseTo(
       TILE_SWAP_RETARGET_MS / 1000 + SPELL_CAST_WINDUP_SEC + SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
     );
-    expect(result.runtime.monsters[0]?.hitShakeQueueSec?.[0]).toBeCloseTo(
-      TILE_SWAP_RETARGET_MS / 1000 + SPELL_CAST_WINDUP_SEC + SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
-    );
-    expect(result.runtime.monsters[0]?.healthBarUpdateQueue?.[0]?.delaySec).toBeCloseTo(
-      TILE_SWAP_RETARGET_MS / 1000 + SPELL_CAST_WINDUP_SEC + SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
-    );
+    expect(result.runtime.monsters[0]?.hitShakeDelaySec).toBeUndefined();
+    expect(result.runtime.monsters[0]?.healthBarUpdateQueue).toBeUndefined();
     expect(result.animationTrace?.cascadeSteps[0].clearedTiles.find((tile) => tile.clearDelayMs === 0)?.coord).toEqual({
       col: 1,
       row: 1,
@@ -974,38 +1169,47 @@ describe('TrialRules', () => {
     const result = processTrialPowerUpActivation(board, runtime, level, { col: 1, row: 1 }, new SeededRng(44));
 
     expect(result.valid).toBe(true);
-    expect(result.damageEvents.some((event) => event.defeated)).toBe(true);
+    expect(result.damageEvents).toEqual([]);
+    expect(result.queuedAttackEvents).toHaveLength(5);
     expect(result.runtime.monsters).toHaveLength(1);
     expect(result.runtime.monsters[0]).toMatchObject({
       monsterId: 'bomb-target',
-      hp: 0,
+      hp: 5,
     });
-    expect(result.runtime.monsters[0].defeatDelaySec).toBeCloseTo(
+    expect(result.runtime.pendingAttacks[0]?.impactDelaySec).toBeCloseTo(
       TILE_SWAP_RETARGET_MS / 1000 + SPELL_CAST_WINDUP_SEC + SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
     );
     expect(result.runtime.monsters[0].defeatAnimationRemainingSec).toBeUndefined();
     expect(result.runtime.monsters[0].healthBarHp).toBeUndefined();
     expect(result.runtime.monsters[0].healthBarUpdateQueue).toBeUndefined();
     expect(result.runtime.monsters[0].iceFreezeDelayQueueSec).toBeUndefined();
-    expect(result.runtime.monsters[0].hitShakeDelaySec).toBeCloseTo(
-      TILE_SWAP_RETARGET_MS / 1000 + SPELL_CAST_WINDUP_SEC + SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
-    );
-    expect(result.runtime.monsters[0].hitShakeQueueSec?.[0]).toBeCloseTo(
-      TILE_SWAP_RETARGET_MS / 1000 + SPELL_CAST_WINDUP_SEC + SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
-    );
+    expect(result.runtime.monsters[0].hitShakeDelaySec).toBeUndefined();
+    expect(result.runtime.monsters[0].hitShakeQueueSec).toBeUndefined();
     expect(result.runtime.defeatedMonsterIds).toEqual([]);
     expect(result.runtime.result).toBe('playing');
 
-    const impact = updateTrialRuntime(
+    const impact = updateTrialRuntimeWithEvents(
       result.runtime,
       level,
       TILE_SWAP_RETARGET_MS / 1000 + SPELL_CAST_WINDUP_SEC + SPELL_BOMB_PROJECTILE_VISUAL_MS / 1000,
     );
-    expect(impact.monsters[0].defeatAnimationRemainingSec).toBeCloseTo(KOBOLD_DEFEAT_ANIMATION_SEC);
-    expect(impact.monsters[0].defeatFadeRemainingSec).toBeUndefined();
-    expect(impact.monsters[0].healthBarHp).toBeUndefined();
-    expect(impact.monsters[0].healthBarUpdateQueue).toBeUndefined();
-    expect(impact.defeatedMonsterIds).toEqual([]);
+    expect(impact.damageEvents).toEqual([
+      {
+        monsterId: 'bomb-target',
+        schoolId: 'fire',
+        damage: 5,
+        defeated: true,
+        impactDelaySec: 0,
+        castActivationDelaySec: 0,
+      },
+    ]);
+    expect(impact.runtime.monsters[0].defeatAnimationRemainingSec).toBeCloseTo(KOBOLD_DEFEAT_ANIMATION_SEC);
+    expect(impact.runtime.monsters[0].defeatFadeRemainingSec).toBeUndefined();
+    expect(impact.runtime.monsters[0].healthBarHp).toBeUndefined();
+    expect(impact.runtime.monsters[0].healthBarUpdateQueue).toBeUndefined();
+    expect(impact.runtime.pendingAttacks).toEqual([]);
+    expect(impact.runtime.projectiles).toEqual([]);
+    expect(impact.runtime.defeatedMonsterIds).toEqual([]);
   });
 
   it('expires active hit shake without changing monster gameplay state', () => {
@@ -1058,8 +1262,8 @@ describe('TrialRules', () => {
     const result = processTrialPowerUpActivation(board, runtime, level, { col: 1, row: 1 }, new SeededRng(47));
 
     expect(result.valid).toBe(true);
-    expect(result.damageEvents.length).toBeGreaterThan(0);
-    expect(result.damageEvents.every((event) => event.schoolId === 'ice')).toBe(true);
+    expect(result.queuedAttackEvents.length).toBeGreaterThan(0);
+    expect(result.queuedAttackEvents.every((event) => event.schoolId === 'ice')).toBe(true);
     expect(result.scoringStats.validSwapCount).toBe(1);
     expect(result.animationTrace?.cascadeSteps[0].clearedTiles.map((tile) => tile.coord)).toEqual([
       { col: 1, row: 1 },
@@ -1100,7 +1304,7 @@ describe('TrialRules', () => {
     );
 
     expect(result.valid).toBe(true);
-    expect(result.damageEvents[0]?.schoolId).toBe('earth');
+    expect(result.queuedAttackEvents[0]?.schoolId).toBe('earth');
     expect(result.animationTrace?.cascadeSteps[0].clearedTiles.find((tile) => tile.clearDelayMs === 0)?.coord).toEqual({
       col: 1,
       row: 0,
@@ -1131,7 +1335,7 @@ describe('TrialRules', () => {
 
     expect(result.valid).toBe(true);
     expect(result.scoringStats.validSwapCount).toBe(1);
-    expect(result.damageEvents.length).toBeGreaterThanOrEqual(8);
+    expect(result.queuedAttackEvents.length).toBeGreaterThanOrEqual(8);
     const firstStepTiles = result.animationTrace?.cascadeSteps[0].clearedTiles ?? [];
     expect(firstStepTiles).toContainEqual(expect.objectContaining({
       coord: { col: 2, row: 0 },
@@ -1173,18 +1377,20 @@ describe('TrialRules', () => {
     const defeatDelaySec = TILE_SWAP_RETARGET_MS / 1000 + SPELL_CAST_WINDUP_SEC + SPELL_MATCH_PROJECTILE_VISUAL_MS / 1000;
     expect(result.runtime.monsters).toHaveLength(1);
     expect(result.runtime.monsters[0]).toMatchObject({
-      hp: 0,
+      hp: 5,
     });
-    expect(result.runtime.monsters[0].defeatDelaySec).toBeCloseTo(defeatDelaySec);
+    expect(result.runtime.pendingAttacks[0]?.impactDelaySec).toBeCloseTo(defeatDelaySec);
     expect(result.runtime.defeatedMonsterIds).toEqual([]);
     expect(result.runtime.result).toBe('playing');
 
     const waiting = updateTrialRuntime(result.runtime, level, defeatDelaySec - 0.001);
     expect(waiting.monsters).toHaveLength(1);
+    expect(waiting.monsters[0].hp).toBe(5);
     expect(waiting.result).toBe('playing');
 
     const updated = updateTrialRuntime(waiting, level, 0.001);
     expect(updated.monsters).toHaveLength(1);
+    expect(updated.monsters[0].hp).toBe(0);
     expect(updated.monsters[0].defeatAnimationRemainingSec).toBeCloseTo(KOBOLD_DEFEAT_ANIMATION_SEC);
     expect(updated.defeatedMonsterIds).toHaveLength(0);
     expect(updated.result).toBe('playing');
@@ -1228,6 +1434,32 @@ describe('TrialRules', () => {
     expect(updated.defeatedMonsterIds).toEqual(['large-dt-target']);
   });
 });
+
+function testProjectile(
+  projectileId: string,
+  attackId: string,
+  schoolId: 'fire' | 'ice' | 'lightning' | 'earth',
+  target: ReturnType<typeof createTrialRuntime>['monsters'][number],
+  level: GeneratedTrialLevel,
+  activationDelaySec: number,
+  remainingSec: number,
+) {
+  return {
+    projectileId,
+    attackId,
+    targetMonsterId: target.monsterId,
+    schoolId,
+    effectKind: 'match' as const,
+    originKind: 'mage' as const,
+    from: getTrialSpellOriginWorldPosition(level),
+    to: getTrialMonsterWorldPosition(level, target),
+    castActivationDelaySec: 0,
+    activationDelaySec,
+    chargeDurationSec: 0,
+    remainingSec,
+    durationSec: remainingSec,
+  };
+}
 
 function testTrialLevel(
   manifest: readonly TrialMonsterManifestEntry[],

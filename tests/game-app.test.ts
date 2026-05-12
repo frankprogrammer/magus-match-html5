@@ -621,20 +621,25 @@ describe('MagusMatchGameApp', () => {
     const app = new MagusMatchGameApp(888, { debugLevelType: 'TRIAL' });
     tap(app, TITLE_PLAY_BUTTON_RECT);
     app.drainEvents();
+    const startingLevel = app.getRunStateForDebug().levelNumber;
 
     app.update(100, []);
-    expect(app.getRunStateForDebug().lives).toBe(2);
+    expect(app.getRunStateForDebug()).toMatchObject({ lives: 2, levelNumber: startingLevel, difficulty: startingLevel });
     expect(app.getHudState().phase).toBe('IDLE');
 
     app.update(100, []);
-    expect(app.getRunStateForDebug().lives).toBe(1);
+    expect(app.getRunStateForDebug()).toMatchObject({ lives: 1, levelNumber: startingLevel, difficulty: startingLevel });
     expect(app.getHudState().phase).toBe('IDLE');
 
     app.update(100, []);
-    expect(app.getRunStateForDebug().lives).toBe(0);
+    expect(app.getRunStateForDebug()).toMatchObject({ lives: 0, levelNumber: startingLevel, difficulty: startingLevel });
     expect(app.getHudState().phase).toBe('GAME_OVER');
     const events = app.drainEvents();
     expect(events.filter((event) => event.type === 'runEnded')).toHaveLength(1);
+    expect(events.filter((event) => event.type === 'levelStarted')).toEqual([
+      { type: 'levelStarted', levelNumber: startingLevel, levelType: 'TRIAL', seed: 888 },
+      { type: 'levelStarted', levelNumber: startingLevel, levelType: 'TRIAL', seed: 888 },
+    ]);
     const sounds = soundEvents(events);
     expect(sounds).toHaveLength(9);
     expect(sounds.filter((event) => event.soundId === AssetIds.sounds.levelStart)).toHaveLength(2);

@@ -47,8 +47,6 @@ export function advanceRunAfterLoss(run: RunState): RunState {
   return {
     ...run,
     lives: Math.max(0, run.lives - 1),
-    levelNumber: run.levelNumber + 1,
-    difficulty: run.difficulty + 1,
   };
 }
 

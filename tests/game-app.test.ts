@@ -120,7 +120,7 @@ describe('MagusMatchGameApp', () => {
       defeatedMonsterIds: [],
     });
 
-    expect(app.getHudState().trialEnemyCount).toEqual({ remaining: 5 });
+    expect(app.getHudState().trialEnemyCount).toEqual({ defeated: 1, remaining: 5 });
 
     setTrialRuntimeForDebug(app, {
       ...runtime,
@@ -129,7 +129,7 @@ describe('MagusMatchGameApp', () => {
       monsters: [{ ...runtime.monsters[0], monsterId: 'dead', hp: 0, maxHp: 3 }],
       defeatedMonsterIds: [],
     });
-    expect(app.getHudState().trialEnemyCount).toEqual({ remaining: 0 });
+    expect(app.getHudState().trialEnemyCount).toEqual({ defeated: 2, remaining: 0 });
 
     const journeyApp = new MagusMatchGameApp(555, { debugLevelType: 'JOURNEY' });
     expect(journeyApp.getHudState().trialEnemyCount).toBeNull();

@@ -18,9 +18,13 @@ import {
   HUD_HEART_DISPLAY_WIDTH,
   HUD_HEART_GAP,
   HUD_HEART_GROUP_LEFT,
+  HUD_TRIAL_ENEMY_COUNT_COLON_WIDTH,
+  HUD_TRIAL_ENEMY_COUNT_COLON_X,
   HUD_TRIAL_ENEMY_COUNT_FONT_SIZE,
-  HUD_TRIAL_ENEMY_COUNT_LABEL_WIDTH,
-  HUD_TRIAL_ENEMY_COUNT_LABEL_X,
+  HUD_TRIAL_ENEMY_COUNT_ICON_HEIGHT,
+  HUD_TRIAL_ENEMY_COUNT_ICON_WIDTH,
+  HUD_TRIAL_ENEMY_COUNT_ICON_X,
+  HUD_TRIAL_ENEMY_COUNT_ICON_Y,
   HUD_TRIAL_ENEMY_COUNT_MIN_FONT_SIZE,
   HUD_TRIAL_ENEMY_COUNT_VALUE_WIDTH,
   HUD_TRIAL_ENEMY_COUNT_VALUE_X,
@@ -281,24 +285,35 @@ function drawHudHearts(
 
 function drawTrialEnemyCount(
   renderer: GameRenderer,
-  trialEnemyCount: { remaining: number },
+  trialEnemyCount: { defeated: number; remaining: number },
 ): void {
+  const iconRef = { id: AssetIds.ui.trialFillBarKoboldIcon };
+  if (renderer.hasImage(iconRef)) {
+    renderer.drawImage(
+      iconRef,
+      HUD_TRIAL_ENEMY_COUNT_ICON_X,
+      HUD_TRIAL_ENEMY_COUNT_ICON_Y,
+      HUD_TRIAL_ENEMY_COUNT_ICON_WIDTH,
+      HUD_TRIAL_ENEMY_COUNT_ICON_HEIGHT,
+    );
+  }
+
   renderer.drawText(
-    'Enemies:',
-    HUD_TRIAL_ENEMY_COUNT_LABEL_X,
+    ':',
+    HUD_TRIAL_ENEMY_COUNT_COLON_X,
     HUD_BAND_TOP_Y,
-    HUD_TRIAL_ENEMY_COUNT_LABEL_WIDTH,
+    HUD_TRIAL_ENEMY_COUNT_COLON_WIDTH,
     HUD_HEIGHT,
     {
       fontSize: HUD_TRIAL_ENEMY_COUNT_FONT_SIZE,
       minFontSize: HUD_TRIAL_ENEMY_COUNT_MIN_FONT_SIZE,
       fontWeight: 'bold',
       color: HUD_SCORE_LABEL_COLOR,
-      align: 'right',
+      align: 'center',
     },
   );
   renderer.drawText(
-    `${Math.max(0, trialEnemyCount.remaining)}`,
+    `${Math.max(0, trialEnemyCount.defeated)}/${Math.max(0, trialEnemyCount.remaining)}`,
     HUD_TRIAL_ENEMY_COUNT_VALUE_X,
     HUD_BAND_TOP_Y,
     HUD_TRIAL_ENEMY_COUNT_VALUE_WIDTH,

@@ -7,8 +7,8 @@ export interface HudRenderState {
   lives: number;
   scoreText: string;
   objectiveText: string;
-  /** Trial levels: enemies still left to kill, including not-yet-spawned enemies. */
-  trialEnemyCount: { remaining: number } | null;
+  /** Trial levels: defeated enemies and enemies still left to kill, including not-yet-spawned enemies. */
+  trialEnemyCount: { defeated: number; remaining: number } | null;
   muted: boolean;
   /** When true, background music is off (SFX still follow master mute). */
   bgmMuted: boolean;

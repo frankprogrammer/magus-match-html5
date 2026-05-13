@@ -11,8 +11,14 @@ import {
   HUD_SCORE_LABEL_COLOR,
   HUD_SCORE_LABEL_ROW_HEIGHT,
   HUD_SCORE_LABEL_VALUE_GAP_PX,
-  HUD_TRIAL_ENEMY_COUNT_LABEL_WIDTH,
-  HUD_TRIAL_ENEMY_COUNT_LABEL_X,
+  HUD_SCORE_VALUE_FONT_SIZE,
+  HUD_SCORE_VALUE_MIN_FONT_SIZE,
+  HUD_TRIAL_ENEMY_COUNT_COLON_WIDTH,
+  HUD_TRIAL_ENEMY_COUNT_COLON_X,
+  HUD_TRIAL_ENEMY_COUNT_ICON_HEIGHT,
+  HUD_TRIAL_ENEMY_COUNT_ICON_WIDTH,
+  HUD_TRIAL_ENEMY_COUNT_ICON_X,
+  HUD_TRIAL_ENEMY_COUNT_ICON_Y,
   HUD_TRIAL_ENEMY_COUNT_VALUE_WIDTH,
   HUD_TRIAL_ENEMY_COUNT_VALUE_X,
   LOGICAL_WIDTH,
@@ -561,7 +567,8 @@ describe('buildBoardCellVisuals', () => {
           text: '999999999999',
           style: expect.objectContaining({
             color: '#ffffff',
-            minFontSize: 20,
+            fontSize: HUD_SCORE_VALUE_FONT_SIZE,
+            minFontSize: HUD_SCORE_VALUE_MIN_FONT_SIZE,
             align: 'center',
             fontWeight: 'normal',
           }),
@@ -602,7 +609,7 @@ describe('buildBoardCellVisuals', () => {
     expect(renderer.calls.some((c) => c.includes('pushRotate'))).toBe(false);
   });
 
-  it('draws Trial enemy count text instead of the monster fill bar', () => {
+  it('draws Trial enemy icon and defeated/remaining text instead of the monster fill bar', () => {
     const renderer = new FakeRenderer(
       new Set([
         AssetIds.ui.heartFill,
@@ -618,19 +625,21 @@ describe('buildBoardCellVisuals', () => {
       oneTileState('tile.fire'),
       hudState({
         objectiveText: '',
-        trialEnemyCount: { remaining: 6 },
+        trialEnemyCount: { defeated: 2, remaining: 4 },
       }),
       0,
     );
 
     expect(renderer.calls).not.toContain(`image:${AssetIds.ui.trialFillBarBg}`);
     expect(renderer.calls).not.toContain(`image:${AssetIds.ui.trialFillBarFill}`);
-    expect(renderer.calls).not.toContain(`image:${AssetIds.ui.trialFillBarKoboldIcon}`);
     expect(renderer.calls).toContain(
-      `text:Enemies::${HUD_TRIAL_ENEMY_COUNT_LABEL_X},${HUD_BAND_TOP_Y},${HUD_TRIAL_ENEMY_COUNT_LABEL_WIDTH},${HUD_HEIGHT}`,
+      `image:${AssetIds.ui.trialFillBarKoboldIcon}:${HUD_TRIAL_ENEMY_COUNT_ICON_X},${HUD_TRIAL_ENEMY_COUNT_ICON_Y},${HUD_TRIAL_ENEMY_COUNT_ICON_WIDTH},${HUD_TRIAL_ENEMY_COUNT_ICON_HEIGHT}`,
     );
     expect(renderer.calls).toContain(
-      `text:6:${HUD_TRIAL_ENEMY_COUNT_VALUE_X},${HUD_BAND_TOP_Y},${HUD_TRIAL_ENEMY_COUNT_VALUE_WIDTH},${HUD_HEIGHT}`,
+      `text:::${HUD_TRIAL_ENEMY_COUNT_COLON_X},${HUD_BAND_TOP_Y},${HUD_TRIAL_ENEMY_COUNT_COLON_WIDTH},${HUD_HEIGHT}`,
+    );
+    expect(renderer.calls).toContain(
+      `text:2/4:${HUD_TRIAL_ENEMY_COUNT_VALUE_X},${HUD_BAND_TOP_Y},${HUD_TRIAL_ENEMY_COUNT_VALUE_WIDTH},${HUD_HEIGHT}`,
     );
     expect(renderer.calls).toContain(
       `text:Score:0,${HUD_BAND_TOP_Y},${LOGICAL_WIDTH},${HUD_SCORE_LABEL_ROW_HEIGHT}`,
@@ -641,11 +650,11 @@ describe('buildBoardCellVisuals', () => {
     expect(renderer.textCalls).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          text: 'Enemies:',
+          text: ':',
           style: expect.objectContaining({ color: HUD_SCORE_LABEL_COLOR }),
         }),
         expect.objectContaining({
-          text: '6',
+          text: '2/4',
           style: expect.objectContaining({ color: '#ffffff' }),
         }),
       ]),

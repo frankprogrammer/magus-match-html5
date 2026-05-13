@@ -2009,14 +2009,18 @@ export class MagusMatchGameApp implements GameApp {
     };
   }
 
-  private getTrialEnemyCount(): { remaining: number } | null {
+  private getTrialEnemyCount(): { defeated: number; remaining: number } | null {
     if (this.currentLevel?.type !== "TRIAL" || this.trialRuntime == null) {
       return null;
     }
 
     const unspawned = Math.max(0, this.trialRuntime.totalMonsters - this.trialRuntime.nextSpawnIndex);
     const aliveSpawned = this.trialRuntime.monsters.filter((monster) => monster.hp > 0).length;
-    return { remaining: unspawned + aliveSpawned };
+    const remaining = unspawned + aliveSpawned;
+    return {
+      defeated: Math.max(0, this.trialRuntime.totalMonsters - remaining),
+      remaining,
+    };
   }
 
   private getObjectiveText(): string {

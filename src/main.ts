@@ -69,8 +69,8 @@ root.innerHTML = `
     <section class="logical-stage">
       <canvas class="game-canvas" width="${LOGICAL_WIDTH}" height="${LOGICAL_HEIGHT}" aria-label="Magus Match board and HUD"></canvas>
       <div class="hero-stage" data-hero-stage aria-label="Magus Match hero stage"></div>
-      <div class="debug-panel" data-debug></div>
     </section>
+    <div class="debug-panel" data-debug></div>
   </main>
 `;
 
@@ -106,7 +106,8 @@ const input = new BrowserInputAdapter(gameShell);
 let fullscreenRequestAttempted = false;
 let activeHeroHeight = HERO_STAGE_HEIGHT;
 let activeHeroRenderHeight = HERO_STAGE_HEIGHT;
-let activeHeroSceneScale = 1;
+let activeHeroBackgroundSceneScale = 1;
+let activeHeroForegroundSceneScale = 1;
 let activeHeroSceneOffsetX = 0;
 
 void loadBrowserImages().then((images) => {
@@ -157,19 +158,22 @@ gameShell.addEventListener('pointercancel', (e) => updateOverlayPrimaryButtonPre
 
 function resizeLogicalStage(
   nextHeroHeight = activeHeroHeight,
-  nextHeroSceneScale = activeHeroSceneScale,
+  nextHeroBackgroundSceneScale = activeHeroBackgroundSceneScale,
+  nextHeroForegroundSceneScale = activeHeroForegroundSceneScale,
   nextHeroRenderHeight = activeHeroRenderHeight,
   nextHeroSceneOffsetX = activeHeroSceneOffsetX,
 ): void {
   activeHeroHeight = nextHeroHeight;
-  activeHeroSceneScale = nextHeroSceneScale;
+  activeHeroBackgroundSceneScale = nextHeroBackgroundSceneScale;
+  activeHeroForegroundSceneScale = nextHeroForegroundSceneScale;
   activeHeroRenderHeight = nextHeroRenderHeight;
   activeHeroSceneOffsetX = nextHeroSceneOffsetX;
   const rect = gameShell.getBoundingClientRect();
   const scale = Math.min(rect.width / LOGICAL_WIDTH, rect.height / LOGICAL_HEIGHT);
   stageElement.style.transform = `scale(${scale})`;
   heroStageElement.style.height = `${activeHeroHeight}px`;
-  heroStageElement.style.setProperty('--hero-scene-scale', `${activeHeroSceneScale}`);
+  heroStageElement.style.setProperty('--hero-background-scene-scale', `${activeHeroBackgroundSceneScale}`);
+  heroStageElement.style.setProperty('--hero-foreground-scene-scale', `${activeHeroForegroundSceneScale}`);
   heroStageElement.style.setProperty('--hero-scene-offset-x', `${activeHeroSceneOffsetX}px`);
   heroStage.resize(LOGICAL_WIDTH, activeHeroRenderHeight);
 }
@@ -185,8 +189,8 @@ function getMatchEnergyTarget(): { x: number; y: number } | undefined {
   }
 
   return {
-    x: activeHeroSceneOffsetX + projected.x * activeHeroSceneScale,
-    y: projected.y * activeHeroSceneScale,
+    x: activeHeroSceneOffsetX + projected.x * activeHeroForegroundSceneScale,
+    y: projected.y * activeHeroForegroundSceneScale,
   };
 }
 
@@ -256,7 +260,8 @@ function tick(timeMs: number): void {
   const tutorialPresentation = boardState.tutorialPresentation;
   resizeLogicalStage(
     tutorialPresentation?.heroHeight ?? HERO_STAGE_HEIGHT,
-    tutorialPresentation?.sceneScale ?? 1,
+    tutorialPresentation?.backgroundSceneScale ?? tutorialPresentation?.sceneScale ?? 1,
+    tutorialPresentation?.foregroundSceneScale ?? tutorialPresentation?.sceneScale ?? 1,
     heroRenderHeightForTutorialMode(tutorialPresentation?.mode),
     tutorialPresentation?.sceneOffsetX ?? 0,
   );
@@ -278,7 +283,8 @@ const initialBoardState = app.getBoardRenderState();
 const initialTutorialPresentation = initialBoardState.tutorialPresentation;
 resizeLogicalStage(
   initialTutorialPresentation?.heroHeight ?? HERO_STAGE_HEIGHT,
-  initialTutorialPresentation?.sceneScale ?? 1,
+  initialTutorialPresentation?.backgroundSceneScale ?? initialTutorialPresentation?.sceneScale ?? 1,
+  initialTutorialPresentation?.foregroundSceneScale ?? initialTutorialPresentation?.sceneScale ?? 1,
   heroRenderHeightForTutorialMode(initialTutorialPresentation?.mode),
   initialTutorialPresentation?.sceneOffsetX ?? 0,
 );

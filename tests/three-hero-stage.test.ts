@@ -8,6 +8,7 @@ import {
   createMageAnimationController,
   earthImpactSpriteFrameIndex,
   fireBurnSpriteFrameIndex,
+  isBackgroundLayerObject,
   isProjectileChargeVisible,
   isProjectileCastReady,
   isProjectileVisible,
@@ -33,7 +34,17 @@ import {
   triggerMageCastAnimation,
   updateMageAnimationController,
 } from '../src/render-three/ThreeHeroStage';
+import { HeroStageTemplateIds } from '../src/world-3d/HeroStageTemplates';
 import type { ProjectileState } from '../src/world-3d/HeroWorldState';
+
+describe('ThreeHeroStage render layers', () => {
+  it('renders only the backdrop object on the background layer', () => {
+    expect(isBackgroundLayerObject({ templateId: HeroStageTemplateIds.backdropForest })).toBe(true);
+    expect(isBackgroundLayerObject({ templateId: HeroStageTemplateIds.mage })).toBe(false);
+    expect(isBackgroundLayerObject({ templateId: HeroStageTemplateIds.healthBarTrack })).toBe(false);
+    expect(isBackgroundLayerObject({ templateId: HeroStageTemplateIds.projectilePlaceholder })).toBe(false);
+  });
+});
 
 describe('ThreeHeroStage projectile VFX', () => {
   it('maps spell schools to the requested tile colors', () => {
@@ -271,7 +282,7 @@ describe('ThreeHeroStage projectile VFX', () => {
     expect(updated?.y).toBeCloseTo(390);
   });
 
-  it('keeps tutorial match-energy targeting based on the standard hero camera before CSS scaling', () => {
+  it('keeps tutorial match-energy targeting based on the foreground scale and scene offset', () => {
     const bounds = orthographicBoundsForAspect(LOGICAL_WIDTH / HERO_STAGE_HEIGHT);
     const camera = new THREE.OrthographicCamera(bounds.left, bounds.right, bounds.top, bounds.bottom, 0.1, 100);
     camera.position.set(0, 0, 10);
@@ -287,11 +298,11 @@ describe('ThreeHeroStage projectile VFX', () => {
     const projected = resolveMageParticleSourceLogicalPosition(mage, camera, LOGICAL_WIDTH, HERO_STAGE_HEIGHT);
     const scaledTutorialTarget = projected == null
       ? null
-      : { x: projected.x * 1.5, y: projected.y * 1.5 };
+      : { x: -50 + projected.x * 1.5, y: projected.y * 1.5 };
 
     expect(projected?.x).toBeCloseTo(512);
     expect(projected?.y).toBeCloseTo(270);
-    expect(scaledTutorialTarget?.x).toBeCloseTo(768);
+    expect(scaledTutorialTarget?.x).toBeCloseTo(718);
     expect(scaledTutorialTarget?.y).toBeCloseTo(405);
   });
 

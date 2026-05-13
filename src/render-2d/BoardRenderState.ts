@@ -173,6 +173,8 @@ export interface TutorialPresentationState {
   mode: TutorialPresentationMode;
   heroHeight: number;
   sceneScale: number;
+  backgroundSceneScale: number;
+  foregroundSceneScale: number;
   sceneOffsetX?: number;
   hideHud: boolean;
   hideBoard: boolean;

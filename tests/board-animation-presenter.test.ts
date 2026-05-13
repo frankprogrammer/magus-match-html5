@@ -167,6 +167,8 @@ describe('BoardAnimationPresenter', () => {
       mode: 'tutorialFullHero',
       heroHeight: LOGICAL_HEIGHT,
       sceneScale: 1.5,
+      backgroundSceneScale: 1.75,
+      foregroundSceneScale: 1.5,
       hideHud: true,
       hideBoard: true,
       floatingMatch: floatingTutorialMatchState('resolving'),
@@ -178,10 +180,10 @@ describe('BoardAnimationPresenter', () => {
     const swappingTiles = swapping.tutorialPresentation?.floatingMatch?.tiles ?? [];
     const lowerLightning = swappingTiles.find((tile) => tile.role === 'lowerLightning');
     const earth = swappingTiles.find((tile) => tile.role === 'earth');
-    expect(lowerLightning?.rect.y).toBeGreaterThan(1228);
-    expect(lowerLightning?.rect.y).toBeLessThan(1438);
-    expect(earth?.rect.y).toBeGreaterThan(1228);
-    expect(earth?.rect.y).toBeLessThan(1438);
+    expect(lowerLightning?.rect.y).toBeGreaterThan(1328);
+    expect(lowerLightning?.rect.y).toBeLessThan(1538);
+    expect(earth?.rect.y).toBeGreaterThan(1328);
+    expect(earth?.rect.y).toBeLessThan(1538);
     expect(lowerLightning?.rect.width).toBe(192);
     expect(earth?.rect.width).toBe(192);
 
@@ -191,7 +193,7 @@ describe('BoardAnimationPresenter', () => {
     const topLeftStream = streams.find((stream) => stream.streamId === 'top-left-lightning-energy-0');
     expect(streams).toHaveLength(15);
     expect(topLeftStream?.color).toBe('#fff000');
-    expect(distance(topLeftStream ?? target, { x: 222, y: 1324 })).toBeLessThan(90);
+    expect(distance(topLeftStream ?? target, { x: 222, y: 1424 })).toBeLessThan(90);
     expect(hiddenTiles).toHaveLength(4);
     expect(hiddenTiles.every((tile) => tile.alpha === 0)).toBe(true);
 
@@ -1033,10 +1035,10 @@ function floatingTutorialMatchState(phase: 'idle' | 'resolving'): NonNullable<
   return {
     phase,
     tiles: [
-      floatingTutorialTile('topLeftLightning', 'LIGHTNING', { col: 2, row: 2 }, 126, 1228, 20),
-      floatingTutorialTile('earth', 'EARTH', { col: 3, row: 2 }, 336, 1228, 21),
-      floatingTutorialTile('topRightLightning', 'LIGHTNING', { col: 4, row: 2 }, 546, 1228, 22),
-      floatingTutorialTile('lowerLightning', 'LIGHTNING', { col: 3, row: 3 }, 336, 1438, 24),
+      floatingTutorialTile('topLeftLightning', 'LIGHTNING', { col: 2, row: 2 }, 126, 1328, 20),
+      floatingTutorialTile('earth', 'EARTH', { col: 3, row: 2 }, 336, 1328, 21),
+      floatingTutorialTile('topRightLightning', 'LIGHTNING', { col: 4, row: 2 }, 546, 1328, 22),
+      floatingTutorialTile('lowerLightning', 'LIGHTNING', { col: 3, row: 3 }, 336, 1538, 24),
     ],
     allowedDrag: {
       fromRole: 'lowerLightning',

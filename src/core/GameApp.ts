@@ -106,7 +106,7 @@ import {
   TILE_SWAP_RETARGET_MS,
 } from "../data/tuning";
 import { HeroStageTemplateIds } from "../world-3d/HeroStageTemplates";
-import type { HeroWorldState } from "../world-3d/HeroWorldState";
+import type { HeroWorldState, ProjectileState } from "../world-3d/HeroWorldState";
 import type { TransformState } from "../world-3d/TransformState";
 import type { WorldObjectState } from "../world-3d/WorldObjectState";
 
@@ -174,12 +174,14 @@ const TRIAL_TUTORIAL_MONSTER_X_POSITIONS = [-1.25, 0.1, 1.45] as const;
 const TRIAL_TUTORIAL_MAGE_X_OFFSET = -0.35;
 const TUTORIAL_FULL_HERO_HEIGHT = LOGICAL_HEIGHT;
 const TUTORIAL_FULL_HERO_SCENE_SCALE = 1.5;
+const TUTORIAL_FULL_HERO_BACKGROUND_SCENE_SCALE = 1.75;
 const TUTORIAL_FULL_HERO_SCENE_OFFSET_X = -50;
+const TUTORIAL_FOREGROUND_DOWN_OFFSET_PX = 100;
 const TUTORIAL_ZOOM_OUT_DURATION_SEC = 0.65;
 const TUTORIAL_FLOATING_TILE_SIZE = 192;
 const TUTORIAL_FLOATING_TILE_GAP = 18;
 const TUTORIAL_FLOATING_SIDE_PADDING = 24;
-const TUTORIAL_FLOATING_RAISE_PX = 266;
+const TUTORIAL_FLOATING_RAISE_PX = 166;
 const TUTORIAL_FLOATING_MATCH_Z_INDEX = 20;
 const TUTORIAL_FINGER_HINT_LOOP_SEC = 1;
 const TUTORIAL_FINGER_HINT_SIZE = 288;
@@ -367,7 +369,7 @@ export class MagusMatchGameApp implements GameApp {
       backdropId: this.getHeroStageBackdropAssetId(),
       cinematicState: phaseToCinematicState(this.phase),
       objects,
-      activeProjectiles: this.trialRuntime?.projectiles ?? [],
+      activeProjectiles: this.getHeroWorldProjectiles(),
       camera: {
         mode: "fixed",
         position: { x: 0, y: 0, z: 12 },
@@ -375,6 +377,19 @@ export class MagusMatchGameApp implements GameApp {
         fovDeg: 35,
       },
     };
+  }
+
+  private getHeroWorldProjectiles(): readonly ProjectileState[] {
+    if (this.trialRuntime == null) {
+      return [];
+    }
+
+    const yOffset = this.getTutorialForegroundYOffsetWorld();
+    if (yOffset === 0) {
+      return this.trialRuntime.projectiles;
+    }
+
+    return this.trialRuntime.projectiles.map((projectile) => translateProjectileY(projectile, yOffset));
   }
 
   getHudState(): HudRenderState {
@@ -1678,16 +1693,15 @@ export class MagusMatchGameApp implements GameApp {
   }
 
   private getTutorialPresentationState(): NonNullable<BoardRenderState["tutorialPresentation"]> {
-    const mode =
-      this.tutorialPresentationMode === "tutorialFullHero" && !this.isFullHeroTutorialPresentationActive()
-        ? "standard"
-        : this.tutorialPresentationMode;
+    const mode = this.getEffectiveTutorialPresentationMode();
     const hideHud = mode !== "standard";
     const hideBoard = mode !== "standard";
     return {
       mode,
       heroHeight: this.getActiveHeroHeight(mode),
       sceneScale: this.getTutorialSceneScale(mode),
+      backgroundSceneScale: this.getTutorialBackgroundSceneScale(mode),
+      foregroundSceneScale: this.getTutorialSceneScale(mode),
       sceneOffsetX: this.getTutorialSceneOffsetX(mode),
       hideHud,
       hideBoard,
@@ -1727,6 +1741,23 @@ export class MagusMatchGameApp implements GameApp {
     );
     const eased = 1 - Math.pow(1 - progress, 3);
     return TUTORIAL_FULL_HERO_SCENE_SCALE + (1 - TUTORIAL_FULL_HERO_SCENE_SCALE) * eased;
+  }
+
+  private getTutorialBackgroundSceneScale(mode = this.tutorialPresentationMode): number {
+    if (mode === "tutorialFullHero") {
+      return TUTORIAL_FULL_HERO_BACKGROUND_SCENE_SCALE;
+    }
+
+    if (mode !== "tutorialZoomOut") {
+      return 1;
+    }
+
+    const progress = Math.max(
+      0,
+      Math.min(1, this.tutorialZoomOutElapsedSec / TUTORIAL_ZOOM_OUT_DURATION_SEC),
+    );
+    const eased = 1 - Math.pow(1 - progress, 3);
+    return TUTORIAL_FULL_HERO_BACKGROUND_SCENE_SCALE + (1 - TUTORIAL_FULL_HERO_BACKGROUND_SCENE_SCALE) * eased;
   }
 
   private getTutorialSceneOffsetX(mode = this.tutorialPresentationMode): number {
@@ -2030,6 +2061,7 @@ export class MagusMatchGameApp implements GameApp {
       return [];
     }
 
+    const tutorialForegroundYOffset = this.getTutorialForegroundYOffsetWorld();
     const objects: WorldObjectState[] = [
       createWorldObject("actor-mage", HeroStageTemplateIds.mage, {
         position: this.getTrialMageRenderPosition(),
@@ -2063,7 +2095,7 @@ export class MagusMatchGameApp implements GameApp {
       const monsterPosition = translate(
         baseMonsterPosition,
         hitShakeOffset.x + this.getTrialMonsterEntranceXOffset(),
-        hitShakeOffset.y,
+        hitShakeOffset.y + tutorialForegroundYOffset,
       );
       monsterPositions.set(monster.monsterId, monsterPosition);
       objects.push(
@@ -2113,9 +2145,41 @@ export class MagusMatchGameApp implements GameApp {
     return translate(
       tutorialPosition,
       this.getTrialMageEntranceXOffset() + this.getTrialMageExitXOffset(),
-      0,
+      this.getTutorialForegroundYOffsetWorld(),
     );
   }
+
+  private getTutorialForegroundYOffsetWorld(mode = this.tutorialPresentationMode): number {
+    mode = this.getEffectiveTutorialPresentationMode(mode);
+    if (mode !== "tutorialFullHero" && mode !== "tutorialZoomOut") {
+      return 0;
+    }
+
+    const progress =
+      mode === "tutorialZoomOut"
+        ? Math.max(0, Math.min(1, this.tutorialZoomOutElapsedSec / TUTORIAL_ZOOM_OUT_DURATION_SEC))
+        : 0;
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const offsetPx = TUTORIAL_FOREGROUND_DOWN_OFFSET_PX * (1 - eased);
+    const foregroundScale = this.getTutorialSceneScale(mode);
+    return -(offsetPx / Math.max(0.001, foregroundScale)) * HERO_WORLD_UNITS_PER_LOGICAL_PIXEL;
+  }
+
+  private getEffectiveTutorialPresentationMode(
+    mode = this.tutorialPresentationMode,
+  ): TutorialPresentationMode {
+    return mode === "tutorialFullHero" && !this.isFullHeroTutorialPresentationActive()
+      ? "standard"
+      : mode;
+  }
+}
+
+function translateProjectileY(projectile: ProjectileState, yOffset: number): ProjectileState {
+  return {
+    ...projectile,
+    from: translateY(projectile.from, yOffset),
+    to: translateY(projectile.to, yOffset),
+  };
 }
 
 function floatingTutorialFingerHint(

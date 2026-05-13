@@ -105,7 +105,7 @@ describe('HeroWorldState', () => {
   });
 
   it('uses the boss template without kobold variation overrides for mini-boss monsters', () => {
-    const app = new MagusMatchGameApp(789);
+    const app = new MagusMatchGameApp(789, { debugLevelType: 'TRIAL' });
     const runtime = app.getTrialRuntimeForDebug();
     if (runtime == null || runtime.monsters[0] == null) {
       throw new Error('Expected Trial runtime.');
@@ -264,6 +264,14 @@ describe('HeroWorldState', () => {
     );
     expect(finalTrack.transform.position.x).toBeCloseTo(finalMonster.transform.position.x);
     expect(finalTrack.transform.position.y).toBeGreaterThan(finalMonster.transform.position.y);
+    const finalLevel = finalApp.getCurrentLevelForDebug();
+    if (finalLevel?.type !== 'TRIAL') {
+      throw new Error('Expected Trial level.');
+    }
+    const tutorialForegroundDownWorld = (100 / 1.5) * (10.8 / 864);
+    expect(finalMage.transform.position.y).toBeCloseTo(
+      getTrialMageWorldPosition(finalLevel).y + MAGE_WORLD_Y_OFFSET - tutorialForegroundDownWorld,
+    );
   });
 
   it('tweens the Trial mage off-screen right on wins without moving enemies', () => {

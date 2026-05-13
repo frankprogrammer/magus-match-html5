@@ -106,6 +106,8 @@ describe('MagusMatchGameApp', () => {
       mode: 'tutorialFullHero',
       heroHeight: LOGICAL_HEIGHT,
       sceneScale: 1.5,
+      backgroundSceneScale: 1.75,
+      foregroundSceneScale: 1.5,
       sceneOffsetX: -50,
       hideHud: true,
       hideBoard: true,
@@ -117,10 +119,10 @@ describe('MagusMatchGameApp', () => {
       336,
     ]);
     expect(boardState.tutorialPresentation?.floatingMatch?.tiles.map((tile) => tile.rect.y)).toEqual([
-      1228,
-      1228,
-      1228,
-      1438,
+      1328,
+      1328,
+      1328,
+      1538,
     ]);
     expect(boardState.tutorialPresentation?.floatingMatch?.tiles.map((tile) => tile.rect.width)).toEqual([
       192,
@@ -267,6 +269,8 @@ describe('MagusMatchGameApp', () => {
       mode: 'standard',
       heroHeight: HERO_STAGE_HEIGHT,
       sceneScale: 1,
+      backgroundSceneScale: 1,
+      foregroundSceneScale: 1,
       sceneOffsetX: 0,
       hideHud: false,
       hideBoard: false,
@@ -441,6 +445,8 @@ describe('MagusMatchGameApp', () => {
       mode: 'tutorialFullHero',
       heroHeight: LOGICAL_HEIGHT,
       sceneScale: 1.5,
+      backgroundSceneScale: 1.75,
+      foregroundSceneScale: 1.5,
       sceneOffsetX: -50,
       hideHud: true,
       hideBoard: true,
@@ -453,6 +459,8 @@ describe('MagusMatchGameApp', () => {
       mode: 'tutorialFullHero',
       heroHeight: LOGICAL_HEIGHT,
       sceneScale: 1.5,
+      backgroundSceneScale: 1.75,
+      foregroundSceneScale: 1.5,
       sceneOffsetX: -50,
       hideHud: true,
       hideBoard: true,
@@ -471,6 +479,8 @@ describe('MagusMatchGameApp', () => {
       mode: 'tutorialFullHero',
       heroHeight: LOGICAL_HEIGHT,
       sceneScale: 1.5,
+      backgroundSceneScale: 1.75,
+      foregroundSceneScale: 1.5,
       sceneOffsetX: -50,
       floatingMatch: {
         phase: 'resolving',
@@ -481,6 +491,8 @@ describe('MagusMatchGameApp', () => {
       mode: 'tutorialFullHero',
       heroHeight: LOGICAL_HEIGHT,
       sceneScale: 1.5,
+      backgroundSceneScale: 1.75,
+      foregroundSceneScale: 1.5,
       sceneOffsetX: -50,
       floatingMatch: null,
     });
@@ -491,12 +503,15 @@ describe('MagusMatchGameApp', () => {
 
     app.update(0.325, []);
     const halfwayHeight = app.getBoardRenderState().tutorialPresentation?.heroHeight ?? 0;
-    const halfwayScale = app.getBoardRenderState().tutorialPresentation?.sceneScale ?? 0;
+    const halfwayBackgroundScale = app.getBoardRenderState().tutorialPresentation?.backgroundSceneScale ?? 0;
+    const halfwayForegroundScale = app.getBoardRenderState().tutorialPresentation?.foregroundSceneScale ?? 0;
     const halfwayOffsetX = app.getBoardRenderState().tutorialPresentation?.sceneOffsetX ?? 0;
     expect(halfwayHeight).toBeLessThan(LOGICAL_HEIGHT);
     expect(halfwayHeight).toBeGreaterThan(HERO_STAGE_HEIGHT);
-    expect(halfwayScale).toBeLessThan(1.5);
-    expect(halfwayScale).toBeGreaterThan(1);
+    expect(halfwayBackgroundScale).toBeLessThan(1.75);
+    expect(halfwayBackgroundScale).toBeGreaterThan(1);
+    expect(halfwayForegroundScale).toBeLessThan(1.5);
+    expect(halfwayForegroundScale).toBeGreaterThan(1);
     expect(halfwayOffsetX).toBeGreaterThan(-50);
     expect(halfwayOffsetX).toBeLessThan(0);
 
@@ -505,6 +520,8 @@ describe('MagusMatchGameApp', () => {
       mode: 'standard',
       heroHeight: HERO_STAGE_HEIGHT,
       sceneScale: 1,
+      backgroundSceneScale: 1,
+      foregroundSceneScale: 1,
       sceneOffsetX: 0,
       hideHud: false,
       hideBoard: false,

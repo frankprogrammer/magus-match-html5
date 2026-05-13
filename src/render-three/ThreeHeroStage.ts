@@ -38,10 +38,14 @@ const originalMaterialState = new WeakMap<OverrideableMaterial, {
 }>();
 
 export class ThreeHeroStage {
-  private readonly scene = new THREE.Scene();
+  private readonly backgroundScene = new THREE.Scene();
+  private readonly foregroundScene = new THREE.Scene();
+  private readonly backgroundCamera = createHeroStageCamera(LOGICAL_WIDTH / HERO_STAGE_HEIGHT);
   private readonly camera = createHeroStageCamera(LOGICAL_WIDTH / HERO_STAGE_HEIGHT);
+  private readonly backgroundRenderer: THREE.WebGLRenderer;
   private readonly renderer: THREE.WebGLRenderer;
   private readonly factory = new ThreeObjectFactory();
+  private readonly backgroundObjectCache = new ThreeObjectCache();
   private readonly objectCache = new ThreeObjectCache();
   private readonly projectileCache = new Map<string, ProjectileParticleSystem>();
   private readonly mageChargeCache = new Map<string, MageChargeParticleSystem>();
@@ -52,17 +56,23 @@ export class ThreeHeroStage {
   private cameraBoundsOptions: OrthographicBoundsOptions = {};
 
   constructor(private readonly container: HTMLElement) {
+    this.backgroundRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    this.backgroundRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.backgroundRenderer.setSize(LOGICAL_WIDTH, HERO_STAGE_HEIGHT, false);
+    this.backgroundRenderer.domElement.className = 'hero-stage-canvas hero-stage-canvas--background';
+    this.container.appendChild(this.backgroundRenderer.domElement);
+
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(LOGICAL_WIDTH, HERO_STAGE_HEIGHT, false);
-    this.renderer.domElement.className = 'hero-stage-canvas';
+    this.renderer.domElement.className = 'hero-stage-canvas hero-stage-canvas--foreground';
     this.container.appendChild(this.renderer.domElement);
 
-    this.scene.background = new THREE.Color('#20172f');
-    this.scene.add(new THREE.AmbientLight('#ffffff', 1.5));
+    this.backgroundScene.background = new THREE.Color('#20172f');
+    this.foregroundScene.add(new THREE.AmbientLight('#ffffff', 1.5));
     const keyLight = new THREE.DirectionalLight('#fff4d6', 1.2);
     keyLight.position.set(3, 4, 5);
-    this.scene.add(keyLight);
+    this.foregroundScene.add(keyLight);
   }
 
   render(state: HeroWorldState, dtSec: number): void {
@@ -73,14 +83,19 @@ export class ThreeHeroStage {
     this.updateAnimationMixers(dtSec);
     this.syncMageCharges(state.activeProjectiles);
     this.syncProjectiles(state.activeProjectiles);
-    this.renderer.render(this.scene, this.camera);
+    this.backgroundRenderer.render(this.backgroundScene, this.backgroundCamera);
+    this.renderer.render(this.foregroundScene, this.camera);
   }
 
   resize(width: number, height: number, viewScale = 1, anchor: OrthographicAnchor = 'center'): void {
+    this.backgroundRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.backgroundRenderer.setSize(width, height, false);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(width, height, false);
     this.cameraBoundsOptions = { viewScale, anchor };
+    applyOrthographicAspect(this.backgroundCamera, width / height, this.cameraBoundsOptions);
     applyOrthographicAspect(this.camera, width / height, this.cameraBoundsOptions);
+    this.backgroundCamera.updateProjectionMatrix();
     this.camera.updateProjectionMatrix();
   }
 
@@ -97,32 +112,45 @@ export class ThreeHeroStage {
   }
 
   dispose(): void {
+    for (const [, object] of this.backgroundObjectCache.entries()) {
+      this.backgroundScene.remove(object);
+      this.factory.dispose(object);
+    }
     for (const [, object] of this.objectCache.entries()) {
-      this.scene.remove(object);
+      this.foregroundScene.remove(object);
       this.factory.dispose(object);
     }
     for (const [, projectile] of this.projectileCache.entries()) {
-      this.scene.remove(projectile.mesh);
+      this.foregroundScene.remove(projectile.mesh);
       if (projectile.lightningRay != null) {
-        this.scene.remove(projectile.lightningRay);
+        this.foregroundScene.remove(projectile.lightningRay);
       }
       disposeProjectileSystem(projectile);
     }
     for (const [, charge] of this.mageChargeCache.entries()) {
-      this.scene.remove(charge.mesh);
+      this.foregroundScene.remove(charge.mesh);
       disposeMageChargeSystem(charge);
     }
     this.animationControllers.clear();
     this.castTriggeredProjectileIds.clear();
+    this.backgroundObjectCache.clear();
     this.objectCache.clear();
     this.projectileCache.clear();
     this.mageChargeCache.clear();
     this.factory.disposeCachedResources();
+    this.backgroundRenderer.dispose();
     this.renderer.dispose();
+    this.backgroundRenderer.domElement.remove();
     this.renderer.domElement.remove();
   }
 
   private syncCamera(state: HeroWorldState): void {
+    this.cameraController.apply(
+      this.backgroundCamera,
+      state.camera,
+      orthographicAspect(this.backgroundCamera),
+      this.cameraBoundsOptions,
+    );
     this.cameraController.apply(
       this.camera,
       state.camera,
@@ -173,9 +201,9 @@ export class ThreeHeroStage {
 
     for (const [objectId, projectile] of [...this.projectileCache.entries()]) {
       if (!seen.has(objectId)) {
-        this.scene.remove(projectile.mesh);
+        this.foregroundScene.remove(projectile.mesh);
         if (projectile.lightningRay != null) {
-          this.scene.remove(projectile.lightningRay);
+          this.foregroundScene.remove(projectile.lightningRay);
         }
         disposeProjectileSystem(projectile);
         this.projectileCache.delete(objectId);
@@ -201,7 +229,7 @@ export class ThreeHeroStage {
 
     for (const [objectId, charge] of [...this.mageChargeCache.entries()]) {
       if (!seen.has(objectId)) {
-        this.scene.remove(charge.mesh);
+        this.foregroundScene.remove(charge.mesh);
         disposeMageChargeSystem(charge);
         this.mageChargeCache.delete(objectId);
       }
@@ -219,7 +247,7 @@ export class ThreeHeroStage {
 
     const charge = createMageChargeParticleSystem(projectileState);
     this.mageChargeCache.set(objectId, charge);
-    this.scene.add(charge.mesh);
+    this.foregroundScene.add(charge.mesh);
     return charge;
   }
 
@@ -234,63 +262,88 @@ export class ThreeHeroStage {
 
     const projectile = createProjectileParticleSystem(projectileState);
     this.projectileCache.set(objectId, projectile);
-    this.scene.add(projectile.mesh);
+    this.foregroundScene.add(projectile.mesh);
     if (projectile.lightningRay != null) {
-      this.scene.add(projectile.lightningRay);
+      this.foregroundScene.add(projectile.lightningRay);
     }
     return projectile;
   }
 
   private syncObjects(objects: readonly WorldObjectState[]): void {
+    const backgroundObjects = objects.filter((object) => isBackgroundLayerObject(object));
+    const foregroundObjects = objects.filter((object) => !isBackgroundLayerObject(object));
+    this.syncObjectLayer(backgroundObjects, this.backgroundScene, this.backgroundObjectCache, false);
+    this.syncObjectLayer(foregroundObjects, this.foregroundScene, this.objectCache, true);
+  }
+
+  private syncObjectLayer(
+    objects: readonly WorldObjectState[],
+    scene: THREE.Scene,
+    cache: ThreeObjectCache,
+    syncAnimations: boolean,
+  ): void {
     const seen = new Set<string>();
 
     for (const objectState of objects) {
       seen.add(objectState.objectId);
-      const object = this.getOrCreateObject(objectState);
+      const object = this.getOrCreateObject(objectState, scene, cache, syncAnimations);
       applyWorldObjectState(object, objectState, this.elapsedSec);
-      this.syncObjectAnimation(
-        objectState.objectId,
-        objectState.animationId,
-        objectState.animationPaused,
-        objectState.animationTimeSec,
-      );
+      if (syncAnimations) {
+        this.syncObjectAnimation(
+          objectState.objectId,
+          objectState.animationId,
+          objectState.animationPaused,
+          objectState.animationTimeSec,
+        );
+      }
     }
 
-    for (const [objectId, object] of [...this.objectCache.entries()]) {
+    for (const [objectId, object] of [...cache.entries()]) {
       if (!seen.has(objectId)) {
-        this.scene.remove(object);
-        this.animationControllers.delete(objectId);
+        scene.remove(object);
+        if (syncAnimations) {
+          this.animationControllers.delete(objectId);
+        }
         this.factory.dispose(object);
-        this.objectCache.delete(objectId);
+        cache.delete(objectId);
       }
     }
   }
 
-  private getOrCreateObject(objectState: WorldObjectState): THREE.Object3D {
-    const existing = this.objectCache.get(objectState.objectId);
+  private getOrCreateObject(
+    objectState: WorldObjectState,
+    scene: THREE.Scene,
+    cache: ThreeObjectCache,
+    attachAnimations: boolean,
+  ): THREE.Object3D {
+    const existing = cache.get(objectState.objectId);
     const templateVersion = this.factory.getTemplateVersion(
       objectState.templateId,
       objectState.backdropTextureId,
     );
     if (
       existing != null &&
-      this.objectCache.getTemplateId(objectState.objectId) === objectState.templateId &&
-      this.objectCache.getTemplateVersion(objectState.objectId) === templateVersion
+      cache.getTemplateId(objectState.objectId) === objectState.templateId &&
+      cache.getTemplateVersion(objectState.objectId) === templateVersion
     ) {
       return existing;
     }
 
     if (existing != null) {
-      this.scene.remove(existing);
-      this.animationControllers.delete(objectState.objectId);
+      scene.remove(existing);
+      if (attachAnimations) {
+        this.animationControllers.delete(objectState.objectId);
+      }
       this.factory.dispose(existing);
-      this.objectCache.delete(objectState.objectId);
+      cache.delete(objectState.objectId);
     }
 
     const object = this.factory.create(objectState.templateId, objectState.backdropTextureId);
-    this.objectCache.set(objectState.objectId, objectState.templateId, templateVersion, object);
-    this.attachAnimationController(objectState.objectId, object);
-    this.scene.add(object);
+    cache.set(objectState.objectId, objectState.templateId, templateVersion, object);
+    if (attachAnimations) {
+      this.attachAnimationController(objectState.objectId, object);
+    }
+    scene.add(object);
     return object;
   }
 
@@ -578,6 +631,10 @@ function orthographicAspect(camera: THREE.OrthographicCamera): number {
   const width = camera.right - camera.left;
   const height = camera.top - camera.bottom;
   return height > 0 ? width / height : 1;
+}
+
+export function isBackgroundLayerObject(objectState: Pick<WorldObjectState, 'templateId'>): boolean {
+  return objectState.templateId === HeroStageTemplateIds.backdropForest;
 }
 
 function applyWorldObjectState(object: THREE.Object3D, objectState: WorldObjectState, elapsedSec: number): void {

@@ -99,19 +99,28 @@ body {
   display: block;
   width: 864px;
   height: 700px;
-  transform: scale(var(--hero-scene-scale, 1));
   transform-origin: top left;
+}
+
+.hero-stage-canvas--background {
+  transform: scale(var(--hero-background-scene-scale, 1));
+  z-index: 0;
+}
+
+.hero-stage-canvas--foreground {
+  transform: scale(var(--hero-foreground-scene-scale, 1));
+  z-index: 1;
 }
 
 .debug-panel {
   position: absolute;
-  left: 32px;
-  bottom: 32px;
+  left: 0;
+  bottom: 0;
   max-width: 760px;
-  padding: 18px 22px;
+  padding: 10px 14px;
   color: #f5e9c9;
   background: rgba(0, 0, 0, 0.36);
-  font-size: 28px;
+  font-size: 14px;
   line-height: 1.35;
-  z-index: 3;
+  z-index: 10;
 }

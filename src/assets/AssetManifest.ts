@@ -529,6 +529,13 @@ export const AssetManifest: Record<string, AssetManifestEntry> = {
     UI_ACTIVATION_OVERLAY_NOTES,
     "800x450 display",
   ),
+  [AssetIds.ui.gameOver]: ui(
+    AssetIds.ui.gameOver,
+    "/assets/ui/game-over.png",
+    "Assets/Textures/UI/game-over.png",
+    UI_ACTIVATION_OVERLAY_NOTES,
+    "800x450 display",
+  ),
   ...Object.fromEntries(
     Object.values(SoundManifest).map((entry) => [entry.id, audio(entry)]),
   ),

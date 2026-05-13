@@ -62,6 +62,7 @@ export const AssetIds = {
     levelCleared: 'ui.levelCleared',
     floorCleared: 'ui.floorCleared',
     lifeLost: 'ui.lifeLost',
+    gameOver: 'ui.gameOver',
   },
   materials: {
     mageTexture: 'material.mageTexture',

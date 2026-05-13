@@ -112,6 +112,9 @@ describe("AssetManifest", () => {
     expect(AssetManifest[AssetIds.ui.lifeLost].browserUrl).toBe(
       "/assets/ui/life-lost.png",
     );
+    expect(AssetManifest[AssetIds.ui.gameOver].browserUrl).toBe(
+      "/assets/ui/game-over.png",
+    );
     expect(AssetManifest[AssetIds.ui.activateEarth].runtimeSize).toBe(
       "800x450 display",
     );
@@ -122,6 +125,9 @@ describe("AssetManifest", () => {
       "800x450 display",
     );
     expect(AssetManifest[AssetIds.ui.lifeLost].runtimeSize).toBe(
+      "800x450 display",
+    );
+    expect(AssetManifest[AssetIds.ui.gameOver].runtimeSize).toBe(
       "800x450 display",
     );
     expect(AssetManifest[AssetIds.materials.mageTexture].browserUrl).toBe(

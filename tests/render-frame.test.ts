@@ -561,6 +561,49 @@ describe('buildBoardCellVisuals', () => {
     );
   });
 
+  it('draws the game-over transition image before the interactive Game Over screen', () => {
+    const renderer = new FakeRenderer(new Set([AssetIds.tiles.fire, AssetIds.ui.gameOver]));
+
+    renderFrame(
+      renderer,
+      oneTileState(AssetIds.tiles.fire),
+      hudState(),
+      0,
+      {
+        screen: 'play',
+        phase: 'LOSE',
+        finalScore: 0,
+        highScore: 0,
+        leaderboardRows: [],
+        highlightedRank: null,
+        buttonRects: {
+          tryAgain: { x: 0, y: 0, width: 0, height: 0 },
+          mute: { x: 0, y: 0, width: 0, height: 0 },
+          bgm: { x: 0, y: 0, width: 0, height: 0 },
+        },
+        muted: false,
+        transitionText: null,
+        transitionImageOverlay: {
+          assetId: AssetIds.ui.gameOver,
+          x: 32,
+          y: (HERO_STAGE_HEIGHT - 450) / 2,
+          width: 800,
+          height: 450,
+          alpha: 1,
+          zIndex: 80,
+        },
+      },
+    );
+
+    expect(renderer.calls).toContain(
+      `image:${AssetIds.ui.gameOver}:32,${(HERO_STAGE_HEIGHT - 450) / 2},800,450`,
+    );
+    expect(renderer.calls).not.toContain('text:Life Lost');
+    expect(renderer.calls.indexOf(`image:${AssetIds.ui.gameOver}`)).toBeGreaterThan(
+      renderer.calls.indexOf('rect:rgba(20, 14, 32, 0.55)'),
+    );
+  });
+
   it('falls back to the flat board fill when the board background image is unavailable', () => {
     const renderer = new FakeRenderer(new Set(['tile.fire']));
 

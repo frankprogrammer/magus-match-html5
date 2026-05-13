@@ -441,9 +441,10 @@ describe('MagusMatchGameApp', () => {
     expect(levelClearOverlayAssetIdForWinLevel(18)).toBe(AssetIds.ui.floorCleared);
     expect(levelClearOverlayAssetIdForWinLevel(21)).toBe(AssetIds.ui.levelCleared);
     expect(levelClearOverlayAssetIdForWinLevel(24)).toBe(AssetIds.ui.floorCleared);
-    expect(transitionImageOverlayAssetIdForPhase('WIN', 3)).toBe(AssetIds.ui.floorCleared);
-    expect(transitionImageOverlayAssetIdForPhase('LOSE', 3)).toBe(AssetIds.ui.lifeLost);
-    expect(transitionImageOverlayAssetIdForPhase('IDLE', 3)).toBeNull();
+    expect(transitionImageOverlayAssetIdForPhase('WIN', 3, 3)).toBe(AssetIds.ui.floorCleared);
+    expect(transitionImageOverlayAssetIdForPhase('LOSE', 3, 2)).toBe(AssetIds.ui.lifeLost);
+    expect(transitionImageOverlayAssetIdForPhase('LOSE', 3, 1)).toBe(AssetIds.ui.gameOver);
+    expect(transitionImageOverlayAssetIdForPhase('IDLE', 3, 3)).toBeNull();
 
     const app = new MagusMatchGameApp(778, { debugLevelType: 'TRIAL', debugStartLevel: 3 });
     finishTrialEntrance(app);
@@ -488,6 +489,37 @@ describe('MagusMatchGameApp', () => {
     app.update(0.01, []);
     expect(app.getHudState().phase).toBe('IDLE');
     expect(app.getRunStateForDebug().lives).toBe(2);
+  });
+
+  it('shows a game-over transition image on the final loss before entering Game Over', () => {
+    const app = new MagusMatchGameApp(778, { debugLevelType: 'TRIAL' });
+    finishTrialEntrance(app);
+    beginLevelResultForDebug(app, 'loss');
+    app.update(LEVEL_CLEAR_OVERLAY_TOTAL_SEC, []);
+    finishTrialEntrance(app);
+    beginLevelResultForDebug(app, 'loss');
+    app.update(LEVEL_CLEAR_OVERLAY_TOTAL_SEC, []);
+    finishTrialEntrance(app);
+
+    beginLevelResultForDebug(app, 'loss');
+
+    expect(app.getRunStateForDebug().lives).toBe(1);
+    expect(app.getScreenState()).toMatchObject({
+      phase: 'LOSE',
+      screen: 'play',
+      transitionImageOverlay: {
+        assetId: AssetIds.ui.gameOver,
+        x: -800,
+        y: (HERO_STAGE_HEIGHT - 450) / 2,
+        width: 800,
+        height: 450,
+        alpha: 1,
+      },
+    });
+
+    app.update(LEVEL_CLEAR_OVERLAY_TOTAL_SEC, []);
+    expect(app.getHudState().phase).toBe('GAME_OVER');
+    expect(app.getScreenState().screen).toBe('gameOver');
   });
 
   it('shows the selected target overlay for tapped Journey Lightballs', () => {

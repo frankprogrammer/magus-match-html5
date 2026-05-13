@@ -234,13 +234,14 @@ export function levelClearOverlayAssetIdForWinLevel(levelNumber: number): string
 export function transitionImageOverlayAssetIdForPhase(
   phase: GamePhase,
   levelNumber: number,
+  lives: number,
 ): string | null {
   if (phase === "WIN") {
     return levelClearOverlayAssetIdForWinLevel(levelNumber);
   }
 
   if (phase === "LOSE") {
-    return AssetIds.ui.lifeLost;
+    return lives <= 1 ? AssetIds.ui.gameOver : AssetIds.ui.lifeLost;
   }
 
   return null;
@@ -1725,7 +1726,11 @@ export class MagusMatchGameApp implements GameApp {
   }
 
   private getTransitionImageOverlayVisualState(): ScreenRenderState["transitionImageOverlay"] {
-    const assetId = transitionImageOverlayAssetIdForPhase(this.phase, this.run.levelNumber);
+    const assetId = transitionImageOverlayAssetIdForPhase(
+      this.phase,
+      this.run.levelNumber,
+      this.run.lives,
+    );
     if (assetId == null) {
       return null;
     }

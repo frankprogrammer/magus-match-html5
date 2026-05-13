@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { HERO_STAGE_HEIGHT, LOGICAL_WIDTH } from '../src/core/Layout';
+import { HERO_STAGE_HEIGHT, LOGICAL_HEIGHT, LOGICAL_WIDTH } from '../src/core/Layout';
+import { orthographicBoundsForAspect } from '../src/render-three/ThreeCameraController';
 import {
   applyNodeVisibilityOverrides,
   applyMaterialOverrides,
@@ -268,6 +269,30 @@ describe('ThreeHeroStage projectile VFX', () => {
     const updated = resolveMageParticleSourceLogicalPosition(mage, camera, LOGICAL_WIDTH, HERO_STAGE_HEIGHT);
     expect(updated?.x).toBeCloseTo(592);
     expect(updated?.y).toBeCloseTo(390);
+  });
+
+  it('projects the mage particleSource within the top-screen anchored full tutorial camera', () => {
+    const bounds = orthographicBoundsForAspect(LOGICAL_WIDTH / LOGICAL_HEIGHT, {
+      viewScale: 1.5,
+      anchor: 'bottomLeft',
+    });
+    const camera = new THREE.OrthographicCamera(bounds.left, bounds.right, bounds.top, bounds.bottom, 0.1, 100);
+    camera.position.set(0, 0, 10);
+    camera.lookAt(0, 0, 0);
+    camera.updateProjectionMatrix();
+    camera.updateMatrixWorld(true);
+    const mage = new THREE.Group();
+    const particleSource = new THREE.Object3D();
+    particleSource.name = 'particleSource';
+    particleSource.position.set(0, 0, 0);
+    mage.add(particleSource);
+
+    const projected = resolveMageParticleSourceLogicalPosition(mage, camera, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+
+    expect(projected?.x).toBeGreaterThan(0);
+    expect(projected?.x).toBeLessThan(LOGICAL_WIDTH);
+    expect(projected?.y).toBeGreaterThan(0);
+    expect(projected?.y).toBeLessThan(LOGICAL_HEIGHT);
   });
 
   it('returns null for logical particleSource projection when the source is missing', () => {

@@ -3,7 +3,13 @@ import { HERO_STAGE_HEIGHT, LOGICAL_WIDTH } from '../core/Layout';
 import type { HeroWorldState, ProjectileState } from '../world-3d/HeroWorldState';
 import { HeroStageTemplateIds } from '../world-3d/HeroStageTemplates';
 import type { WorldObjectNodeVisibility, WorldObjectState } from '../world-3d/WorldObjectState';
-import { HERO_STAGE_ORTHO_VIEW_WIDTH, orthographicBoundsForAspect, ThreeCameraController } from './ThreeCameraController';
+import {
+  HERO_STAGE_ORTHO_VIEW_WIDTH,
+  type OrthographicAnchor,
+  type OrthographicBoundsOptions,
+  orthographicBoundsForAspect,
+  ThreeCameraController,
+} from './ThreeCameraController';
 import { ThreeObjectFactory } from './ThreeObjectFactory';
 import { ThreeObjectCache } from './ThreePools';
 
@@ -43,6 +49,7 @@ export class ThreeHeroStage {
   private readonly animationControllers = new Map<string, MageAnimationController>();
   private readonly castTriggeredProjectileIds = new Set<string>();
   private elapsedSec = 0;
+  private cameraBoundsOptions: OrthographicBoundsOptions = {};
 
   constructor(private readonly container: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -69,10 +76,11 @@ export class ThreeHeroStage {
     this.renderer.render(this.scene, this.camera);
   }
 
-  resize(width: number, height: number): void {
+  resize(width: number, height: number, viewScale = 1, anchor: OrthographicAnchor = 'center'): void {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(width, height, false);
-    applyOrthographicAspect(this.camera, width / height);
+    this.cameraBoundsOptions = { viewScale, anchor };
+    applyOrthographicAspect(this.camera, width / height, this.cameraBoundsOptions);
     this.camera.updateProjectionMatrix();
   }
 
@@ -115,7 +123,12 @@ export class ThreeHeroStage {
   }
 
   private syncCamera(state: HeroWorldState): void {
-    this.cameraController.apply(this.camera, state.camera, orthographicAspect(this.camera));
+    this.cameraController.apply(
+      this.camera,
+      state.camera,
+      orthographicAspect(this.camera),
+      this.cameraBoundsOptions,
+    );
   }
 
   private syncProjectileCastTriggers(projectiles: readonly ProjectileState[]): void {
@@ -549,8 +562,12 @@ function createHeroStageCamera(aspect: number): THREE.OrthographicCamera {
   return new THREE.OrthographicCamera(bounds.left, bounds.right, bounds.top, bounds.bottom, 0.1, 100);
 }
 
-function applyOrthographicAspect(camera: THREE.OrthographicCamera, aspect: number): void {
-  const bounds = orthographicBoundsForAspect(aspect);
+function applyOrthographicAspect(
+  camera: THREE.OrthographicCamera,
+  aspect: number,
+  options: OrthographicBoundsOptions = {},
+): void {
+  const bounds = orthographicBoundsForAspect(aspect, options);
   camera.left = bounds.left;
   camera.right = bounds.right;
   camera.top = bounds.top;

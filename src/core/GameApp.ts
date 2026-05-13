@@ -140,8 +140,16 @@ export interface TrialTutorialState extends TrialTutorialBoardSetup {
   phase: "active" | "resolving";
 }
 
-const HERO_WORLD_UNITS_PER_LOGICAL_PIXEL = 10.8 / LOGICAL_WIDTH;
+const HERO_STAGE_WORLD_WIDTH = 10.8;
+const HERO_WORLD_UNITS_PER_LOGICAL_PIXEL = HERO_STAGE_WORLD_WIDTH / LOGICAL_WIDTH;
 export const MAGE_WORLD_Y_OFFSET = -1.47 - 50 * HERO_WORLD_UNITS_PER_LOGICAL_PIXEL;
+export const TRIAL_ACTOR_ENTRANCE_ENEMY_DURATION_SEC = 0.45;
+export const TRIAL_ACTOR_ENTRANCE_MAGE_DURATION_SEC = 0.35;
+export const TRIAL_ACTOR_ENTRANCE_TOTAL_DURATION_SEC =
+  TRIAL_ACTOR_ENTRANCE_ENEMY_DURATION_SEC + TRIAL_ACTOR_ENTRANCE_MAGE_DURATION_SEC;
+export const TRIAL_ACTOR_ENTRANCE_OFFSCREEN_X_OFFSET = HERO_STAGE_WORLD_WIDTH + 2;
+export const TRIAL_MAGE_EXIT_DURATION_SEC = 0.45;
+export const TRIAL_MAGE_EXIT_OFFSCREEN_X_OFFSET = TRIAL_ACTOR_ENTRANCE_OFFSCREEN_X_OFFSET;
 const TRIAL_HEALTH_BAR_WIDTH = 0.92;
 const TRIAL_HEALTH_BAR_HEIGHT = 0.18;
 const TRIAL_HEALTH_BAR_FILL_HEIGHT = 0.11;
@@ -166,10 +174,10 @@ const TRIAL_TUTORIAL_MAGE_X_OFFSET = -0.35;
 const TUTORIAL_FULL_HERO_HEIGHT = LOGICAL_HEIGHT;
 const TUTORIAL_FULL_HERO_SCENE_SCALE = 1.5;
 const TUTORIAL_ZOOM_OUT_DURATION_SEC = 0.65;
-const TUTORIAL_FLOATING_TILE_SIZE = 128;
-const TUTORIAL_FLOATING_TILE_GAP = 12;
+const TUTORIAL_FLOATING_TILE_SIZE = 192;
+const TUTORIAL_FLOATING_TILE_GAP = 18;
 const TUTORIAL_FLOATING_SIDE_PADDING = 24;
-const TUTORIAL_FLOATING_RAISE_PX = 200;
+const TUTORIAL_FLOATING_RAISE_PX = 266;
 const TUTORIAL_FLOATING_MATCH_Z_INDEX = 20;
 const TRIAL_MONSTER_RENDER_ORDER_BASE = 4;
 const TRIAL_MONSTER_RENDER_ORDER_STEP = 0.01;
@@ -209,6 +217,8 @@ export class MagusMatchGameApp implements GameApp {
   private tutorialZoomOutElapsedSec = 0;
   private floatingTutorialResolveElapsedSec = 0;
   private floatingTutorialDragStart: { x: number; y: number } | null = null;
+  private trialActorEntranceElapsedSec = TRIAL_ACTOR_ENTRANCE_TOTAL_DURATION_SEC;
+  private trialMageExitElapsedSec = TRIAL_MAGE_EXIT_DURATION_SEC;
 
   constructor(
     seed?: number,
@@ -260,15 +270,18 @@ export class MagusMatchGameApp implements GameApp {
     if (this.phase === "IDLE") {
       this.elapsedSec += clampedDtSec;
       this.updateMatchHintTimer(clampedDtSec);
-      this.updateTrialStage(clampedDtSec);
+      const trialStageDtSec = this.updateTrialActorEntrance(clampedDtSec);
+      this.updateTrialStage(trialStageDtSec);
     }
 
     if (this.phase === "WIN" || this.phase === "LOSE") {
       this.updateTrialVisualTimers(clampedDtSec);
+      this.updateTrialMageExit(clampedDtSec);
       this.transitionTimerSec += clampedDtSec;
       if (
         this.transitionTimerSec >= LEVEL_TRANSITION_HOLD_SEC &&
-        this.hasLatestBoardAnimationFinished()
+        this.hasLatestBoardAnimationFinished() &&
+        this.isLevelResultExitAnimationComplete()
       ) {
         this.advanceAfterLevelResult();
       }
@@ -422,6 +435,8 @@ export class MagusMatchGameApp implements GameApp {
     this.tutorialZoomOutElapsedSec = 0;
     this.floatingTutorialResolveElapsedSec = 0;
     this.floatingTutorialDragStart = null;
+    this.trialActorEntranceElapsedSec = TRIAL_ACTOR_ENTRANCE_TOTAL_DURATION_SEC;
+    this.trialMageExitElapsedSec = TRIAL_MAGE_EXIT_DURATION_SEC;
     this.startPreparedLevel();
   }
 
@@ -492,6 +507,20 @@ export class MagusMatchGameApp implements GameApp {
         };
   }
 
+  getTrialEntranceStateForDebug(): {
+    active: boolean;
+    elapsedSec: number;
+    enemyProgress: number;
+    mageProgress: number;
+  } {
+    return {
+      active: this.isTrialActorEntranceActive(),
+      elapsedSec: this.trialActorEntranceElapsedSec,
+      enemyProgress: this.getTrialActorEntranceEnemyProgress(),
+      mageProgress: this.getTrialActorEntranceMageProgress(),
+    };
+  }
+
   getLatestBoardAnimationEndsAtSecForDebug(): number {
     return this.latestBoardAnimationEndsAtSec;
   }
@@ -501,6 +530,9 @@ export class MagusMatchGameApp implements GameApp {
       return [];
     }
     if (this.currentLevel?.type !== "TRIAL" || this.trialRuntime == null) {
+      return [];
+    }
+    if (this.isTrialActorEntranceActive()) {
       return [];
     }
     if (this.trialRuntime.result !== "playing") {
@@ -568,6 +600,8 @@ export class MagusMatchGameApp implements GameApp {
     this.tutorialZoomOutElapsedSec = 0;
     this.floatingTutorialResolveElapsedSec = 0;
     this.floatingTutorialDragStart = null;
+    this.trialActorEntranceElapsedSec = TRIAL_ACTOR_ENTRANCE_TOTAL_DURATION_SEC;
+    this.trialMageExitElapsedSec = TRIAL_MAGE_EXIT_DURATION_SEC;
   }
 
   private startPreparedLevel(): void {
@@ -580,6 +614,7 @@ export class MagusMatchGameApp implements GameApp {
     this.transitionTimerSec = 0;
     this.resetMatchHintTimer();
     this.startTrialTutorialIfNeeded();
+    this.startTrialActorEntranceIfNeeded();
     this.captureBoardAnimationTrace(
       createLevelIntroBoardAnimationTrace(this.board, 0),
     );
@@ -621,6 +656,108 @@ export class MagusMatchGameApp implements GameApp {
       this.run.levelNumber === 1 &&
       this.currentLevel?.type === "TRIAL"
     );
+  }
+
+  private startTrialActorEntranceIfNeeded(): void {
+    this.trialActorEntranceElapsedSec =
+      this.currentLevel?.type === "TRIAL"
+        ? 0
+        : TRIAL_ACTOR_ENTRANCE_TOTAL_DURATION_SEC;
+  }
+
+  private updateTrialActorEntrance(dtSec: number): number {
+    const elapsed = Math.max(0, dtSec);
+    if (!this.isTrialActorEntranceActive()) {
+      return elapsed;
+    }
+
+    const remainingSec = Math.max(
+      0,
+      TRIAL_ACTOR_ENTRANCE_TOTAL_DURATION_SEC - this.trialActorEntranceElapsedSec,
+    );
+    const consumedSec = Math.min(remainingSec, elapsed);
+    this.trialActorEntranceElapsedSec = Math.min(
+      TRIAL_ACTOR_ENTRANCE_TOTAL_DURATION_SEC,
+      this.trialActorEntranceElapsedSec + consumedSec,
+    );
+    return Math.max(0, elapsed - consumedSec);
+  }
+
+  private isTrialActorEntranceActive(): boolean {
+    return (
+      this.currentLevel?.type === "TRIAL" &&
+      this.trialActorEntranceElapsedSec < TRIAL_ACTOR_ENTRANCE_TOTAL_DURATION_SEC
+    );
+  }
+
+  private getTrialActorEntranceEnemyProgress(): number {
+    return easeOutCubic(
+      clamp01(this.trialActorEntranceElapsedSec / TRIAL_ACTOR_ENTRANCE_ENEMY_DURATION_SEC),
+    );
+  }
+
+  private getTrialActorEntranceMageProgress(): number {
+    return easeOutCubic(
+      clamp01(
+        (this.trialActorEntranceElapsedSec - TRIAL_ACTOR_ENTRANCE_ENEMY_DURATION_SEC) /
+          TRIAL_ACTOR_ENTRANCE_MAGE_DURATION_SEC,
+      ),
+    );
+  }
+
+  private getTrialMonsterEntranceXOffset(): number {
+    if (this.currentLevel?.type !== "TRIAL") {
+      return 0;
+    }
+
+    return TRIAL_ACTOR_ENTRANCE_OFFSCREEN_X_OFFSET * (1 - this.getTrialActorEntranceEnemyProgress());
+  }
+
+  private getTrialMageEntranceXOffset(): number {
+    if (this.currentLevel?.type !== "TRIAL") {
+      return 0;
+    }
+
+    return -TRIAL_ACTOR_ENTRANCE_OFFSCREEN_X_OFFSET * (1 - this.getTrialActorEntranceMageProgress());
+  }
+
+  private updateTrialMageExit(dtSec: number): void {
+    if (!this.isTrialMageExitActive()) {
+      return;
+    }
+
+    this.trialMageExitElapsedSec = Math.min(
+      TRIAL_MAGE_EXIT_DURATION_SEC,
+      this.trialMageExitElapsedSec + Math.max(0, dtSec),
+    );
+  }
+
+  private isTrialMageExitActive(): boolean {
+    return (
+      this.currentLevel?.type === "TRIAL" &&
+      this.pendingLevelResult === "win" &&
+      this.trialMageExitElapsedSec < TRIAL_MAGE_EXIT_DURATION_SEC
+    );
+  }
+
+  private isLevelResultExitAnimationComplete(): boolean {
+    return (
+      this.currentLevel?.type !== "TRIAL" ||
+      this.pendingLevelResult !== "win" ||
+      this.trialMageExitElapsedSec >= TRIAL_MAGE_EXIT_DURATION_SEC
+    );
+  }
+
+  private getTrialMageExitXOffset(): number {
+    if (this.currentLevel?.type !== "TRIAL" || this.pendingLevelResult !== "win") {
+      return 0;
+    }
+
+    return TRIAL_MAGE_EXIT_OFFSCREEN_X_OFFSET * this.getTrialMageExitProgress();
+  }
+
+  private getTrialMageExitProgress(): number {
+    return easeOutCubic(clamp01(this.trialMageExitElapsedSec / TRIAL_MAGE_EXIT_DURATION_SEC));
   }
 
   private updateTrialStage(dtSec: number): void {
@@ -680,11 +817,12 @@ export class MagusMatchGameApp implements GameApp {
     this.elapsedSec = 0;
     this.resetMatchHintTimer();
     this.trialPlayerDefeatSfxEmitted = false;
+    this.startTrialActorEntranceIfNeeded();
     this.startTutorialZoomOut();
   }
 
   private isTrialTutorialInputLocked(): boolean {
-    return this.trialTutorial != null;
+    return this.trialTutorial != null || this.isTrialActorEntranceActive();
   }
 
   private handleTap(x: number, y: number): void {
@@ -812,6 +950,10 @@ export class MagusMatchGameApp implements GameApp {
     this.transitionTimerSec = 0;
     this.phase = result === "win" ? "WIN" : "LOSE";
     this.pendingClearScore = result === "win" ? this.getLevelClearScore() : 0;
+    this.trialMageExitElapsedSec =
+      result === "win" && this.currentLevel.type === "TRIAL"
+        ? 0
+        : TRIAL_MAGE_EXIT_DURATION_SEC;
     this.events.push({
       type: "levelEnded",
       levelNumber: this.run.levelNumber,
@@ -866,6 +1008,10 @@ export class MagusMatchGameApp implements GameApp {
     to: { col: number; row: number },
   ): void {
     if (this.phase !== "IDLE") {
+      return;
+    }
+
+    if (this.currentLevel?.type === "TRIAL" && this.isTrialActorEntranceActive()) {
       return;
     }
 
@@ -1484,7 +1630,11 @@ export class MagusMatchGameApp implements GameApp {
   }
 
   private isFloatingTutorialInputEnabled(): boolean {
-    return this.tutorialPresentationMode === "tutorialFullHero" && this.trialTutorial?.phase === "active";
+    return (
+      this.tutorialPresentationMode === "tutorialFullHero" &&
+      this.trialTutorial?.phase === "active" &&
+      !this.isTrialActorEntranceActive()
+    );
   }
 
   private isFloatingTutorialOverlayVisible(): boolean {
@@ -1787,7 +1937,7 @@ export class MagusMatchGameApp implements GameApp {
       const hitShakeOffset = trialMonsterHitShakeOffset(monster);
       const monsterPosition = translate(
         baseMonsterPosition,
-        hitShakeOffset.x,
+        hitShakeOffset.x + this.getTrialMonsterEntranceXOffset(),
         hitShakeOffset.y,
       );
       monsterPositions.set(monster.monsterId, monsterPosition);
@@ -1832,9 +1982,14 @@ export class MagusMatchGameApp implements GameApp {
       getTrialMageWorldPosition(this.currentLevel),
       MAGE_WORLD_Y_OFFSET,
     );
-    return this.isFullHeroTutorialPresentationActive()
+    const tutorialPosition = this.isFullHeroTutorialPresentationActive()
       ? translate(basePosition, TRIAL_TUTORIAL_MAGE_X_OFFSET, 0)
       : basePosition;
+    return translate(
+      tutorialPosition,
+      this.getTrialMageEntranceXOffset() + this.getTrialMageExitXOffset(),
+      0,
+    );
   }
 }
 
@@ -2346,6 +2501,15 @@ function translateY(
   offsetY: number,
 ): TransformState["position"] {
   return translate(position, 0, offsetY);
+}
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+function easeOutCubic(value: number): number {
+  const clamped = clamp01(value);
+  return 1 - Math.pow(1 - clamped, 3);
 }
 
 function heroPositionForCell(

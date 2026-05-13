@@ -21,6 +21,7 @@ import { BoardAnimationPresenter } from './render-2d/BoardAnimationPresenter';
 import { Canvas2DRenderer } from './render-2d/Canvas2DRenderer';
 import { renderFrame, type HeartLossWobbleState } from './render-2d/RenderFrame';
 import { ThreeHeroStage } from './render-three/ThreeHeroStage';
+import type { OrthographicAnchor } from './render-three/ThreeCameraController';
 import type { GameEvent } from './core/GameEvents';
 import type { HudRenderState } from './render-2d/HudRenderState';
 import type { ScreenRenderState } from './render-2d/ScreenRenderState';
@@ -106,6 +107,7 @@ const input = new BrowserInputAdapter(gameShell);
 let fullscreenRequestAttempted = false;
 let activeHeroHeight = HERO_STAGE_HEIGHT;
 let activeHeroSceneScale = 1;
+let activeHeroCameraAnchor: OrthographicAnchor = 'center';
 
 void loadBrowserImages().then((images) => {
   renderer.setImages(images);
@@ -153,15 +155,23 @@ gameShell.addEventListener('pointerdown', (e) => updateOverlayPrimaryButtonPress
 gameShell.addEventListener('pointerup', (e) => updateOverlayPrimaryButtonPressed(e, false), { passive: true });
 gameShell.addEventListener('pointercancel', (e) => updateOverlayPrimaryButtonPressed(e, false), { passive: true });
 
-function resizeLogicalStage(nextHeroHeight = activeHeroHeight, nextHeroSceneScale = activeHeroSceneScale): void {
+function resizeLogicalStage(
+  nextHeroHeight = activeHeroHeight,
+  nextHeroSceneScale = activeHeroSceneScale,
+  nextHeroCameraAnchor = activeHeroCameraAnchor,
+): void {
   activeHeroHeight = nextHeroHeight;
   activeHeroSceneScale = nextHeroSceneScale;
+  activeHeroCameraAnchor = nextHeroCameraAnchor;
   const rect = gameShell.getBoundingClientRect();
   const scale = Math.min(rect.width / LOGICAL_WIDTH, rect.height / LOGICAL_HEIGHT);
   stageElement.style.transform = `scale(${scale})`;
   heroStageElement.style.height = `${activeHeroHeight}px`;
-  heroStageElement.style.setProperty('--hero-scene-scale', `${activeHeroSceneScale}`);
-  heroStage.resize(LOGICAL_WIDTH, activeHeroHeight);
+  heroStage.resize(LOGICAL_WIDTH, activeHeroHeight, activeHeroSceneScale, activeHeroCameraAnchor);
+}
+
+function heroCameraAnchorForTutorialMode(mode: string | undefined): OrthographicAnchor {
+  return mode === 'tutorialFullHero' || mode === 'tutorialZoomOut' ? 'bottomLeft' : 'center';
 }
 
 function requestGameFullscreen(): void {
@@ -227,9 +237,11 @@ function tick(timeMs: number): void {
   audio?.syncTrialWalkLoops(app.getTrialWalkingMonsterIds());
   renderHud(hudState);
   const boardState = app.getBoardRenderState();
+  const tutorialPresentation = boardState.tutorialPresentation;
   resizeLogicalStage(
-    boardState.tutorialPresentation?.heroHeight ?? HERO_STAGE_HEIGHT,
-    boardState.tutorialPresentation?.sceneScale ?? 1,
+    tutorialPresentation?.heroHeight ?? HERO_STAGE_HEIGHT,
+    tutorialPresentation?.sceneScale ?? 1,
+    heroCameraAnchorForTutorialMode(tutorialPresentation?.mode),
   );
   heroStage.render(app.getHeroWorldState(), dtSec);
   const matchEnergyTarget = heroStage.getMageParticleSourceLogicalPosition(LOGICAL_WIDTH, activeHeroHeight) ?? undefined;
@@ -247,9 +259,11 @@ function tick(timeMs: number): void {
 resizeLogicalStage();
 renderHud();
 const initialBoardState = app.getBoardRenderState();
+const initialTutorialPresentation = initialBoardState.tutorialPresentation;
 resizeLogicalStage(
-  initialBoardState.tutorialPresentation?.heroHeight ?? HERO_STAGE_HEIGHT,
-  initialBoardState.tutorialPresentation?.sceneScale ?? 1,
+  initialTutorialPresentation?.heroHeight ?? HERO_STAGE_HEIGHT,
+  initialTutorialPresentation?.sceneScale ?? 1,
+  heroCameraAnchorForTutorialMode(initialTutorialPresentation?.mode),
 );
 heroStage.render(app.getHeroWorldState(), 0);
 renderFrame(

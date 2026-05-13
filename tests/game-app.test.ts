@@ -13,7 +13,13 @@ import {
   LOGICAL_HEIGHT,
   type CellCoord,
 } from '../src/core/Layout';
-import { MagusMatchGameApp } from '../src/core/GameApp';
+import {
+  MagusMatchGameApp,
+  TRIAL_ACTOR_ENTRANCE_ENEMY_DURATION_SEC,
+  TRIAL_ACTOR_ENTRANCE_MAGE_DURATION_SEC,
+  TRIAL_ACTOR_ENTRANCE_TOTAL_DURATION_SEC,
+  TRIAL_MAGE_EXIT_DURATION_SEC,
+} from '../src/core/GameApp';
 import type { GameEvent } from '../src/core/GameEvents';
 import {
   CAMERA_SHAKE_MAX,
@@ -102,16 +108,22 @@ describe('MagusMatchGameApp', () => {
       hideBoard: true,
     });
     expect(boardState.tutorialPresentation?.floatingMatch?.tiles.map((tile) => tile.rect.x)).toEqual([
-      228,
-      368,
-      508,
-      368,
+      126,
+      336,
+      546,
+      336,
     ]);
     expect(boardState.tutorialPresentation?.floatingMatch?.tiles.map((tile) => tile.rect.y)).toEqual([
-      1428,
-      1428,
-      1428,
-      1568,
+      1228,
+      1228,
+      1228,
+      1438,
+    ]);
+    expect(boardState.tutorialPresentation?.floatingMatch?.tiles.map((tile) => tile.rect.width)).toEqual([
+      192,
+      192,
+      192,
+      192,
     ]);
     expect(boardState.tutorialPresentation?.floatingMatch?.tiles.map((tile) => tile.tileType)).toEqual([
       'LIGHTNING',
@@ -154,6 +166,45 @@ describe('MagusMatchGameApp', () => {
     expect(tutorialKoboldObjects.map((object) => object.animationTimeSec)).toEqual([0, 0, 0]);
   });
 
+  it('locks Trial movement and floating tutorial input until the actor entrance finishes', () => {
+    const app = new MagusMatchGameApp(777);
+    const startRuntime = app.getTrialRuntimeForDebug();
+    if (startRuntime == null) {
+      throw new Error('Expected Trial runtime.');
+    }
+    const startMonsterX = startRuntime.monsters.map((monster) => monster.x);
+
+    expect(app.getTrialEntranceStateForDebug()).toMatchObject({
+      active: true,
+      elapsedSec: 0,
+      enemyProgress: 0,
+      mageProgress: 0,
+    });
+
+    dragFloatingTutorialTile(app, 'lowerLightning', 'earth');
+    expect(app.getTrialTutorialStateForDebug()?.phase).toBe('active');
+    expect(app.getHeroWorldState().activeProjectiles).toHaveLength(0);
+
+    app.update(TRIAL_ACTOR_ENTRANCE_ENEMY_DURATION_SEC, []);
+    expect(app.getTrialEntranceStateForDebug()).toMatchObject({
+      active: true,
+      enemyProgress: 1,
+      mageProgress: 0,
+    });
+    expect(app.getTrialRuntimeForDebug()?.monsters.map((monster) => monster.x)).toEqual(startMonsterX);
+
+    app.update(TRIAL_ACTOR_ENTRANCE_MAGE_DURATION_SEC, []);
+    expect(app.getTrialEntranceStateForDebug()).toMatchObject({
+      active: false,
+      enemyProgress: 1,
+      mageProgress: 1,
+    });
+    expect(app.getTrialRuntimeForDebug()?.monsters.map((monster) => monster.x)).toEqual(startMonsterX);
+
+    dragFloatingTutorialTile(app, 'lowerLightning', 'earth');
+    expect(app.getTrialTutorialStateForDebug()?.phase).toBe('resolving');
+  });
+
   it('skips the session tutorial for explicit debug options', () => {
     const forcedTrial = new MagusMatchGameApp(555, { debugLevelType: 'TRIAL' });
     const debugSeedSession = new MagusMatchGameApp(555, { skipTutorial: true });
@@ -190,6 +241,7 @@ describe('MagusMatchGameApp', () => {
     expect(app.getCurrentLevelForDebug()?.type).toBe('TRIAL');
     expect(app.getTrialRuntimeForDebug()?.monsters.length).toBeGreaterThan(0);
 
+    finishTrialEntrance(app);
     app.update(0, [{ type: 'swap', from: firstMove.from, to: firstMove.to }]);
 
     expect(app.getHeroWorldState().levelType).toBe('TRIAL');
@@ -259,6 +311,14 @@ describe('MagusMatchGameApp', () => {
     expect(app.getLevelStatsForDebug()).toEqual(beforeStats);
 
     dragFloatingTutorialTile(app, 'lowerLightning', 'earth');
+    expect(app.getTrialTutorialStateForDebug()?.phase).toBe('active');
+    expect(app.getHeroWorldState().activeProjectiles).toHaveLength(0);
+
+    finishTrialEntrance(app);
+    dragFloatingTutorialTile(app, 'topLeftLightning', 'earth');
+    expect(app.getTrialTutorialStateForDebug()?.phase).toBe('active');
+
+    dragFloatingTutorialTile(app, 'lowerLightning', 'earth');
 
     expect(app.getTrialTutorialStateForDebug()?.phase).toBe('resolving');
     expect(app.getBoardRenderState().animationTrace?.kind).toBe('resolution');
@@ -289,6 +349,7 @@ describe('MagusMatchGameApp', () => {
   it('returns to the standard layout after the floating tutorial zoom-out', () => {
     const app = new MagusMatchGameApp(779);
 
+    finishTrialEntrance(app);
     dragFloatingTutorialTile(app, 'earth', 'lowerLightning');
     expect(app.getBoardRenderState().tutorialPresentation).toMatchObject({
       mode: 'tutorialFullHero',
@@ -336,6 +397,7 @@ describe('MagusMatchGameApp', () => {
       throw new Error('Expected active tutorial.');
     }
 
+    finishTrialEntrance(app);
     dragFloatingTutorialTile(app, 'earth', 'lowerLightning');
     for (let tick = 0; tick < 80 && app.getTrialTutorialStateForDebug() != null; tick += 1) {
       app.update(0.1, []);
@@ -401,6 +463,7 @@ describe('MagusMatchGameApp', () => {
       throw new Error('Expected generated Trial level.');
     }
 
+    finishTrialEntrance(app);
     const activeMonster = runtime.monsters[0];
     setTrialRuntimeForDebug(app, {
       ...runtime,
@@ -449,6 +512,7 @@ describe('MagusMatchGameApp', () => {
       throw new Error('Expected generated Trial level.');
     }
 
+    finishTrialEntrance(app);
     const activeMonster = runtime.monsters[0];
     setTrialRuntimeForDebug(app, {
       ...runtime,
@@ -524,6 +588,7 @@ describe('MagusMatchGameApp', () => {
     const app = new MagusMatchGameApp(666, { debugLevelType: 'TRIAL' });
     const firstMove = findValidMoves(app.getBoardForDebug())[0];
 
+    finishTrialEntrance(app);
     app.drainEvents();
     app.update(0, [{ type: 'swap', from: firstMove.from, to: firstMove.to }]);
 
@@ -587,6 +652,7 @@ describe('MagusMatchGameApp', () => {
   it('animates no-match Trial swaps without changing gameplay state', () => {
     const app = new MagusMatchGameApp(4088670725, { debugLevelType: 'TRIAL', debugStartLevel: 4 });
 
+    finishTrialEntrance(app);
     app.drainEvents();
     const noMatch = findNoMatchSwap(app.getBoardForDebug());
     const initialScore = app.getRunStateForDebug().score;
@@ -610,6 +676,7 @@ describe('MagusMatchGameApp', () => {
   it('animates the exact level 4 top-row invalid swap regression without gameplay changes', () => {
     const app = new MagusMatchGameApp(4088670725, { debugLevelType: 'TRIAL', debugStartLevel: 4 });
 
+    finishTrialEntrance(app);
     app.drainEvents();
     const initialScore = app.getRunStateForDebug().score;
     const initialStats = app.getLevelStatsForDebug();
@@ -630,6 +697,7 @@ describe('MagusMatchGameApp', () => {
   it('accepts a valid Trial swap during an active invalid-swap bounce-back', () => {
     const app = new MagusMatchGameApp(4088670725, { debugLevelType: 'TRIAL', debugStartLevel: 4 });
 
+    finishTrialEntrance(app);
     app.drainEvents();
     const noMatch = findNoMatchSwap(app.getBoardForDebug());
     app.update(0, [{ type: 'swap', from: noMatch.from, to: noMatch.to }]);
@@ -648,6 +716,7 @@ describe('MagusMatchGameApp', () => {
 
   it('keeps Trial tile IDs unique across the reported two-swap cascade regression', () => {
     const app = new MagusMatchGameApp(1643426079, { debugLevelType: 'TRIAL' });
+    finishTrialEntrance(app);
     app.drainEvents();
 
     app.update(0, [{ type: 'swap', from: { col: 3, row: 3 }, to: { col: 4, row: 3 } }]);
@@ -695,6 +764,7 @@ describe('MagusMatchGameApp', () => {
 
   it('waits for active board collapse before progressing after a win', () => {
     const app = new MagusMatchGameApp(778, { debugLevelType: 'TRIAL' });
+    finishTrialEntrance(app);
     app.drainEvents();
 
     const longTrace = longCollapseTrace(50);
@@ -710,6 +780,52 @@ describe('MagusMatchGameApp', () => {
     expect(app.getHudState().phase).toBe('IDLE');
     expect(app.drainEvents().filter((event) => event.type === 'levelStarted')).toHaveLength(1);
     expect(app.getBoardRenderState().animationTrace?.kind).toBe('levelIntro');
+  });
+
+  it('waits for the Trial mage exit tween before loading the next level after a win', () => {
+    const app = new MagusMatchGameApp(778, { debugLevelType: 'TRIAL' });
+    finishTrialEntrance(app);
+    app.drainEvents();
+    const startingLevel = app.getRunStateForDebug().levelNumber;
+
+    beginLevelResultForDebug(app, 'win');
+    app.drainEvents();
+
+    app.update(TRIAL_MAGE_EXIT_DURATION_SEC - 0.001, []);
+    expect(app.getHudState().phase).toBe('WIN');
+    expect(app.getRunStateForDebug().levelNumber).toBe(startingLevel);
+    expect(app.drainEvents().filter((event) => event.type === 'levelStarted')).toHaveLength(0);
+
+    app.update(0.001, []);
+    expect(app.getHudState().phase).toBe('WIN');
+    expect(app.getRunStateForDebug().levelNumber).toBe(startingLevel);
+
+    app.update(LEVEL_TRANSITION_HOLD_SEC - TRIAL_MAGE_EXIT_DURATION_SEC, []);
+    expect(app.getHudState().phase).toBe('IDLE');
+    expect(app.getRunStateForDebug().levelNumber).toBe(startingLevel + 1);
+    expect(app.drainEvents().filter((event) => event.type === 'levelStarted')).toHaveLength(1);
+  });
+
+  it('does not require the Trial mage exit tween for Journey wins or Trial losses', () => {
+    const journeyApp = new MagusMatchGameApp(778, { debugLevelType: 'JOURNEY' });
+    const journeyStartLevel = journeyApp.getRunStateForDebug().levelNumber;
+    journeyApp.drainEvents();
+    beginLevelResultForDebug(journeyApp, 'win');
+    journeyApp.update(LEVEL_TRANSITION_HOLD_SEC, []);
+    expect(journeyApp.getHudState().phase).toBe('IDLE');
+    expect(journeyApp.getRunStateForDebug().levelNumber).toBe(journeyStartLevel + 1);
+
+    const trialApp = new MagusMatchGameApp(778, { debugLevelType: 'TRIAL' });
+    finishTrialEntrance(trialApp);
+    const trialStartLevel = trialApp.getRunStateForDebug().levelNumber;
+    trialApp.drainEvents();
+    beginLevelResultForDebug(trialApp, 'loss');
+    trialApp.update(LEVEL_TRANSITION_HOLD_SEC, []);
+    expect(trialApp.getHudState().phase).toBe('IDLE');
+    expect(trialApp.getRunStateForDebug()).toMatchObject({
+      lives: 2,
+      levelNumber: trialStartLevel,
+    });
   });
 
   it('continues after one or two losses and enters Game Over after the third failed level', () => {
@@ -831,6 +947,10 @@ function dragFloatingTutorialTile(
 
 function tap(app: MagusMatchGameApp, rect: { x: number; y: number; width: number; height: number }): void {
   app.update(0, [{ type: 'tap', x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }]);
+}
+
+function finishTrialEntrance(app: MagusMatchGameApp): void {
+  app.update(TRIAL_ACTOR_ENTRANCE_TOTAL_DURATION_SEC, []);
 }
 
 function soundEvents(events: readonly GameEvent[]): Extract<GameEvent, { type: 'soundRequested' }>[] {

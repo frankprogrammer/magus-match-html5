@@ -37,6 +37,30 @@ describe('ThreeCameraController', () => {
     expect(bounds.bottom).toBeCloseTo(-12);
   });
 
+  it('supports scaled top-left anchored full tutorial framing', () => {
+    const bounds = orthographicBoundsForAspect(LOGICAL_WIDTH / LOGICAL_HEIGHT, {
+      viewScale: 1.5,
+      anchor: 'topLeft',
+    });
+
+    expect(bounds.left).toBeCloseTo(-5.4);
+    expect(bounds.right).toBeCloseTo(1.8);
+    expect(bounds.top).toBeCloseTo(12);
+    expect(bounds.bottom).toBeCloseTo(-4);
+  });
+
+  it('supports scaled bottom-left framing that pins the tutorial composition to the screen top', () => {
+    const bounds = orthographicBoundsForAspect(LOGICAL_WIDTH / LOGICAL_HEIGHT, {
+      viewScale: 1.5,
+      anchor: 'bottomLeft',
+    });
+
+    expect(bounds.left).toBeCloseTo(-5.4);
+    expect(bounds.right).toBeCloseTo(1.8);
+    expect(bounds.top).toBeCloseTo(4);
+    expect(bounds.bottom).toBeCloseTo(-12);
+  });
+
   it('applies plain camera state to an orthographic camera', () => {
     const camera = new THREE.OrthographicCamera();
     const state: CameraState = {

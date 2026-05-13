@@ -10,6 +10,12 @@ import {
   MAGE_WORLD_Y_OFFSET,
   MINI_BOSS_WORLD_SCALE,
   phaseToCinematicState,
+  TRIAL_ACTOR_ENTRANCE_ENEMY_DURATION_SEC,
+  TRIAL_ACTOR_ENTRANCE_MAGE_DURATION_SEC,
+  TRIAL_ACTOR_ENTRANCE_OFFSCREEN_X_OFFSET,
+  TRIAL_ACTOR_ENTRANCE_TOTAL_DURATION_SEC,
+  TRIAL_MAGE_EXIT_DURATION_SEC,
+  TRIAL_MAGE_EXIT_OFFSCREEN_X_OFFSET,
   trialMonsterHitShakeOffset,
 } from '../src/core/GameApp';
 import {
@@ -179,6 +185,111 @@ describe('HeroWorldState', () => {
     expect(track?.transform.scale.y).toBeCloseTo(0.18);
     expect(fill?.transform.scale.y).toBeCloseTo(0.11);
     expect(fill?.tintHex).toBe('#27ae60');
+  });
+
+  it('renders Trial actor entrance with enemies tweening in before the mage', () => {
+    const startApp = new MagusMatchGameApp(789, { debugLevelType: 'TRIAL' });
+    const finalApp = new MagusMatchGameApp(789, { debugLevelType: 'TRIAL' });
+    finishTrialEntrance(finalApp);
+
+    const runtime = startApp.getTrialRuntimeForDebug();
+    if (runtime == null || runtime.monsters[0] == null) {
+      throw new Error('Expected Trial runtime.');
+    }
+    const monsterId = `trial-monster-${runtime.monsters[0].monsterId}`;
+
+    const startMonster = getHeroObject(startApp, monsterId);
+    const startMage = getHeroObject(startApp, 'actor-mage');
+    const finalMonster = getHeroObject(finalApp, monsterId);
+    const finalMage = getHeroObject(finalApp, 'actor-mage');
+
+    expect(startMonster.transform.position.x).toBeCloseTo(
+      finalMonster.transform.position.x + TRIAL_ACTOR_ENTRANCE_OFFSCREEN_X_OFFSET,
+    );
+    expect(startMage.transform.position.x).toBeCloseTo(
+      finalMage.transform.position.x - TRIAL_ACTOR_ENTRANCE_OFFSCREEN_X_OFFSET,
+    );
+
+    const midApp = new MagusMatchGameApp(789, { debugLevelType: 'TRIAL' });
+    midApp.update(TRIAL_ACTOR_ENTRANCE_ENEMY_DURATION_SEC / 2, []);
+    const midMonster = getHeroObject(midApp, monsterId);
+    const midMage = getHeroObject(midApp, 'actor-mage');
+    expect(midMonster.transform.position.x).toBeGreaterThan(finalMonster.transform.position.x);
+    expect(midMonster.transform.position.x).toBeLessThan(startMonster.transform.position.x);
+    expect(midMage.transform.position.x).toBeCloseTo(startMage.transform.position.x);
+
+    const enemyDoneApp = new MagusMatchGameApp(789, { debugLevelType: 'TRIAL' });
+    enemyDoneApp.update(TRIAL_ACTOR_ENTRANCE_ENEMY_DURATION_SEC, []);
+    expect(getHeroObject(enemyDoneApp, monsterId).transform.position.x).toBeCloseTo(
+      finalMonster.transform.position.x,
+    );
+    expect(getHeroObject(enemyDoneApp, 'actor-mage').transform.position.x).toBeCloseTo(
+      startMage.transform.position.x,
+    );
+
+    enemyDoneApp.update(TRIAL_ACTOR_ENTRANCE_MAGE_DURATION_SEC / 2, []);
+    const mageMidTween = getHeroObject(enemyDoneApp, 'actor-mage');
+    expect(mageMidTween.transform.position.x).toBeGreaterThan(startMage.transform.position.x);
+    expect(mageMidTween.transform.position.x).toBeLessThan(finalMage.transform.position.x);
+  });
+
+  it('uses the same entrance sequence for tutorial kobolds and keeps health bars aligned', () => {
+    const startApp = new MagusMatchGameApp(555);
+    const finalApp = new MagusMatchGameApp(555);
+    finishTrialEntrance(finalApp);
+
+    const monsterId = 'trial-monster-tutorial-kobold-0';
+    const startMonster = getHeroObject(startApp, monsterId);
+    const startTrack = getHeroObject(startApp, `${monsterId}-health-track`);
+    const startMage = getHeroObject(startApp, 'actor-mage');
+    const finalMonster = getHeroObject(finalApp, monsterId);
+    const finalMage = getHeroObject(finalApp, 'actor-mage');
+
+    expect(startMonster.transform.position.x).toBeCloseTo(
+      finalMonster.transform.position.x + TRIAL_ACTOR_ENTRANCE_OFFSCREEN_X_OFFSET,
+    );
+    expect(startMage.transform.position.x).toBeCloseTo(
+      finalMage.transform.position.x - TRIAL_ACTOR_ENTRANCE_OFFSCREEN_X_OFFSET,
+    );
+    expect(startTrack.transform.position.x).toBeCloseTo(startMonster.transform.position.x);
+    expect(startTrack.transform.position.y).toBeGreaterThan(startMonster.transform.position.y);
+  });
+
+  it('tweens the Trial mage off-screen right on wins without moving enemies', () => {
+    const app = new MagusMatchGameApp(789, { debugLevelType: 'TRIAL' });
+    finishTrialEntrance(app);
+
+    const runtime = app.getTrialRuntimeForDebug();
+    if (runtime == null || runtime.monsters[0] == null) {
+      throw new Error('Expected Trial runtime.');
+    }
+    const monsterId = `trial-monster-${runtime.monsters[0].monsterId}`;
+    const normalMage = getHeroObject(app, 'actor-mage');
+    const normalMonster = getHeroObject(app, monsterId);
+
+    beginLevelResultForDebug(app, 'win');
+    const exitStartMage = getHeroObject(app, 'actor-mage');
+    const exitStartMonster = getHeroObject(app, monsterId);
+    expect(exitStartMage.transform.position.x).toBeCloseTo(normalMage.transform.position.x);
+    expect(exitStartMage.transform.position.y).toBeCloseTo(normalMage.transform.position.y);
+    expect(exitStartMonster.transform.position.x).toBeCloseTo(normalMonster.transform.position.x);
+
+    app.update(TRIAL_MAGE_EXIT_DURATION_SEC / 2, []);
+    const midExitMage = getHeroObject(app, 'actor-mage');
+    expect(midExitMage.transform.position.x).toBeGreaterThan(normalMage.transform.position.x);
+    expect(midExitMage.transform.position.x).toBeLessThan(
+      normalMage.transform.position.x + TRIAL_MAGE_EXIT_OFFSCREEN_X_OFFSET,
+    );
+    expect(midExitMage.transform.position.y).toBeCloseTo(normalMage.transform.position.y);
+
+    app.update(TRIAL_MAGE_EXIT_DURATION_SEC / 2, []);
+    const exitEndMage = getHeroObject(app, 'actor-mage');
+    const exitEndMonster = getHeroObject(app, monsterId);
+    expect(exitEndMage.transform.position.x).toBeCloseTo(
+      normalMage.transform.position.x + TRIAL_MAGE_EXIT_OFFSCREEN_X_OFFSET,
+    );
+    expect(exitEndMage.transform.position.y).toBeCloseTo(normalMage.transform.position.y);
+    expect(exitEndMonster.transform.position.x).toBeCloseTo(normalMonster.transform.position.x);
   });
 
   it('scales and colors health bar fill from monster health ratio', () => {
@@ -359,6 +470,7 @@ describe('HeroWorldState', () => {
       .getHeroWorldState()
       .objects.find((object) => object.templateId === HeroStageTemplateIds.mage);
     const trialApp = new MagusMatchGameApp(123, { debugLevelType: 'TRIAL' });
+    finishTrialEntrance(trialApp);
     const trialMage = trialApp
       .getHeroWorldState()
       .objects.find((object) => object.templateId === HeroStageTemplateIds.mage);
@@ -778,4 +890,20 @@ describe('HeroWorldState', () => {
 
 function setTrialRuntimeForDebug(app: MagusMatchGameApp, runtime: NonNullable<ReturnType<MagusMatchGameApp['getTrialRuntimeForDebug']>>): void {
   (app as unknown as { trialRuntime: typeof runtime }).trialRuntime = runtime;
+}
+
+function beginLevelResultForDebug(app: MagusMatchGameApp, result: 'win' | 'loss'): void {
+  (app as unknown as { beginLevelResult: (result: 'win' | 'loss') => void }).beginLevelResult(result);
+}
+
+function finishTrialEntrance(app: MagusMatchGameApp): void {
+  app.update(TRIAL_ACTOR_ENTRANCE_TOTAL_DURATION_SEC, []);
+}
+
+function getHeroObject(app: MagusMatchGameApp, objectId: string) {
+  const object = app.getHeroWorldState().objects.find((candidate) => candidate.objectId === objectId);
+  if (object == null) {
+    throw new Error(`Expected hero object ${objectId}.`);
+  }
+  return object;
 }

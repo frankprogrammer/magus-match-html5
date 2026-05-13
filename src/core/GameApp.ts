@@ -244,6 +244,7 @@ export class MagusMatchGameApp implements GameApp {
   private tutorialZoomOutElapsedSec = 0;
   private floatingTutorialResolveElapsedSec = 0;
   private floatingTutorialDragStart: { x: number; y: number } | null = null;
+  private suppressTrialTutorialForNextLevelStart = false;
   private trialActorEntranceElapsedSec = TRIAL_ACTOR_ENTRANCE_TOTAL_DURATION_SEC;
   private trialMageExitElapsedSec = TRIAL_MAGE_EXIT_DURATION_SEC;
   private heroActivationOverlay: HeroActivationOverlayRuntimeState | null = null;
@@ -478,6 +479,7 @@ export class MagusMatchGameApp implements GameApp {
     this.tutorialZoomOutElapsedSec = 0;
     this.floatingTutorialResolveElapsedSec = 0;
     this.floatingTutorialDragStart = null;
+    this.suppressTrialTutorialForNextLevelStart = false;
     this.trialActorEntranceElapsedSec = TRIAL_ACTOR_ENTRANCE_TOTAL_DURATION_SEC;
     this.trialMageExitElapsedSec = TRIAL_MAGE_EXIT_DURATION_SEC;
     this.heroActivationOverlay = null;
@@ -659,6 +661,7 @@ export class MagusMatchGameApp implements GameApp {
     this.resetMatchHintTimer();
     this.heroActivationOverlay = null;
     this.startTrialTutorialIfNeeded();
+    this.suppressTrialTutorialForNextLevelStart = false;
     this.startTrialActorEntranceIfNeeded();
     this.captureBoardAnimationTrace(
       createLevelIntroBoardAnimationTrace(this.board, 0),
@@ -696,6 +699,7 @@ export class MagusMatchGameApp implements GameApp {
   private shouldStartTrialTutorial(): boolean {
     return (
       this.options.skipTutorial !== true &&
+      !this.suppressTrialTutorialForNextLevelStart &&
       this.options.debugLevelType == null &&
       this.options.debugStartLevel == null &&
       this.run.levelNumber === 1 &&
@@ -1045,6 +1049,9 @@ export class MagusMatchGameApp implements GameApp {
     }
 
     this.prepareCurrentLevel();
+    if (this.run.levelNumber === 1) {
+      this.suppressTrialTutorialForNextLevelStart = true;
+    }
     this.startPreparedLevel();
   }
 

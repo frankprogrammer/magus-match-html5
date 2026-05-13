@@ -1025,6 +1025,64 @@ describe('MagusMatchGameApp', () => {
     });
   });
 
+  it('skips the startup tutorial when level 1 restarts after a life-loss retry', () => {
+    const app = new MagusMatchGameApp(778);
+    finishTrialEntrance(app);
+    app.drainEvents();
+
+    beginLevelResultForDebug(app, 'loss');
+    app.update(LEVEL_TRANSITION_HOLD_SEC, []);
+
+    expect(app.getRunStateForDebug()).toMatchObject({ lives: 2, levelNumber: 1 });
+    expect(app.getHudState().phase).toBe('IDLE');
+    expect(app.getTrialTutorialStateForDebug()).toBeNull();
+    expect(app.getBoardRenderState().tutorialPresentation).toMatchObject({
+      mode: 'standard',
+      hideHud: false,
+      hideBoard: false,
+      headline: null,
+      floatingMatch: null,
+    });
+
+    finishTrialEntrance(app);
+    beginLevelResultForDebug(app, 'loss');
+    app.update(LEVEL_TRANSITION_HOLD_SEC, []);
+
+    expect(app.getRunStateForDebug()).toMatchObject({ lives: 1, levelNumber: 1 });
+    expect(app.getTrialTutorialStateForDebug()).toBeNull();
+    expect(app.getBoardRenderState().tutorialPresentation?.mode).toBe('standard');
+  });
+
+  it('shows the startup tutorial again after Game Over Try Again resets level 1', () => {
+    const app = new MagusMatchGameApp(779);
+    app.drainEvents();
+
+    for (let loss = 0; loss < 3; loss += 1) {
+      finishTrialEntrance(app);
+      beginLevelResultForDebug(app, 'loss');
+      app.update(LEVEL_TRANSITION_HOLD_SEC, []);
+    }
+
+    expect(app.getHudState().phase).toBe('GAME_OVER');
+
+    tap(app, GAME_OVER_TRY_AGAIN_BUTTON_RECT);
+
+    expect(app.getRunStateForDebug()).toMatchObject({ lives: 3, levelNumber: 1 });
+    expect(app.getHudState().phase).toBe('IDLE');
+    expect(app.getTrialTutorialStateForDebug()).toMatchObject({ phase: 'active' });
+    expect(app.getBoardRenderState().tutorialPresentation).toMatchObject({
+      mode: 'tutorialFullHero',
+      hideHud: true,
+      hideBoard: true,
+      headline: {
+        text: 'Defeat the Kobolds!',
+      },
+      floatingMatch: {
+        phase: 'idle',
+      },
+    });
+  });
+
   it('continues after one or two losses and enters Game Over after the third failed level', () => {
     const app = new MagusMatchGameApp(888, { debugLevelType: 'TRIAL' });
     app.drainEvents();

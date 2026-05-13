@@ -99,6 +99,7 @@ export function renderFrame(
     drawBoard(renderer, boardState, elapsedSec);
   }
   drawFloatingTutorialMatch(renderer, boardState);
+  drawHeroActivationOverlay(renderer, boardState);
   if (screenState != null) {
     drawScreenOverlay(renderer, screenState);
   }
@@ -559,6 +560,22 @@ function drawFloatingTutorialMatch(renderer: GameRenderer, boardState: BoardRend
   }
 
   drawMatchEnergyStreamList(renderer, floatingMatch.matchEnergyStreams ?? []);
+}
+
+function drawHeroActivationOverlay(renderer: GameRenderer, boardState: BoardRenderState): void {
+  const overlay = boardState.heroActivationOverlay;
+  if (overlay == null || overlay.alpha <= 0 || overlay.width <= 0 || overlay.height <= 0) {
+    return;
+  }
+
+  const imageRef = { id: overlay.assetId };
+  if (!renderer.hasImage(imageRef)) {
+    return;
+  }
+
+  renderer.pushAlpha(overlay.alpha);
+  renderer.drawImage(imageRef, overlay.x, overlay.y, overlay.width, overlay.height);
+  renderer.pop();
 }
 
 function drawParticles(renderer: GameRenderer, boardState: BoardRenderState): void {

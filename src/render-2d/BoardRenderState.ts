@@ -178,10 +178,21 @@ export interface TutorialPresentationState {
   floatingMatch: FloatingTutorialMatchVisualState | null;
 }
 
+export interface HeroActivationOverlayVisualState {
+  assetId: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  alpha: number;
+  zIndex: number;
+}
+
 export interface BoardRenderState {
   logicalWidth: number;
   logicalHeight: number;
   tutorialPresentation?: TutorialPresentationState;
+  heroActivationOverlay?: HeroActivationOverlayVisualState | null;
   boardCells: readonly BoardCellVisualState[];
   particles?: readonly BoardParticleVisualState[];
   matchEnergyStreams?: readonly BoardMatchEnergyStreamVisualState[];

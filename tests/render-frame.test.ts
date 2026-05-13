@@ -433,6 +433,50 @@ describe('buildBoardCellVisuals', () => {
     );
   });
 
+  it('draws the hero activation overlay above gameplay and below screen overlays', () => {
+    const renderer = new FakeRenderer(new Set([AssetIds.tiles.fire, AssetIds.ui.activateLightning]));
+    const state = oneTileState(AssetIds.tiles.fire);
+    state.heroActivationOverlay = {
+      assetId: AssetIds.ui.activateLightning,
+      x: 32,
+      y: 125,
+      width: 800,
+      height: 450,
+      alpha: 1,
+      zIndex: 60,
+    };
+
+    renderFrame(
+      renderer,
+      state,
+      hudState(),
+      0,
+      {
+        screen: 'play',
+        phase: 'WIN',
+        finalScore: 0,
+        highScore: 0,
+        leaderboardRows: [],
+        highlightedRank: null,
+        buttonRects: {
+          tryAgain: { x: 0, y: 0, width: 0, height: 0 },
+          mute: { x: 0, y: 0, width: 0, height: 0 },
+          bgm: { x: 0, y: 0, width: 0, height: 0 },
+        },
+        muted: false,
+        transitionText: 'Level Clear',
+      },
+    );
+
+    expect(renderer.calls).toContain(`image:${AssetIds.ui.activateLightning}:32,125,800,450`);
+    expect(renderer.calls.indexOf(`image:${AssetIds.ui.activateLightning}`)).toBeGreaterThan(
+      renderer.calls.indexOf(`image:${AssetIds.tiles.fire}`),
+    );
+    expect(renderer.calls.indexOf(`image:${AssetIds.ui.activateLightning}`)).toBeLessThan(
+      renderer.calls.indexOf('text:Level Clear'),
+    );
+  });
+
   it('falls back to the flat board fill when the board background image is unavailable', () => {
     const renderer = new FakeRenderer(new Set(['tile.fire']));
 

@@ -55,6 +55,10 @@ export const AssetIds = {
     primaryButton: 'ui.primaryButton',
     primaryButtonPressed: 'ui.primaryButtonPressed',
     tutorialFinger: 'ui.tutorialFinger',
+    activateEarth: 'ui.activateEarth',
+    activateFire: 'ui.activateFire',
+    activateIce: 'ui.activateIce',
+    activateLightning: 'ui.activateLightning',
   },
   materials: {
     mageTexture: 'material.mageTexture',

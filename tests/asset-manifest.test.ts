@@ -91,6 +91,21 @@ describe("AssetManifest", () => {
     expect(AssetManifest[AssetIds.ui.tutorialFinger].runtimeSize).toBe(
       "256x256",
     );
+    expect(AssetManifest[AssetIds.ui.activateEarth].browserUrl).toBe(
+      "/assets/ui/activate-earth.png",
+    );
+    expect(AssetManifest[AssetIds.ui.activateFire].browserUrl).toBe(
+      "/assets/ui/activate-fire.png",
+    );
+    expect(AssetManifest[AssetIds.ui.activateIce].browserUrl).toBe(
+      "/assets/ui/activate-ice.png",
+    );
+    expect(AssetManifest[AssetIds.ui.activateLightning].browserUrl).toBe(
+      "/assets/ui/activate-lightning.png",
+    );
+    expect(AssetManifest[AssetIds.ui.activateEarth].runtimeSize).toBe(
+      "800x450 display",
+    );
     expect(AssetManifest[AssetIds.materials.mageTexture].browserUrl).toBe(
       "/assets/rigs/knight2.fbm/knight_texture_final.png",
     );

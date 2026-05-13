@@ -1,16 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { AssetIds } from '../src/assets/AssetIds';
-import type { Board } from '../src/board/Board';
+import { createBoardFromTileTypes, type Board } from '../src/board/Board';
 import type { BoardAnimationSnapshot, BoardAnimationTrace } from '../src/board/BoardAnimationTrace';
 import { getBoardAnimationTraceDurationMs } from '../src/board/BoardAnimationTiming';
 import { findStandardMatchHints } from '../src/board/BoardHints';
 import { findValidMoves, validateSwap } from '../src/board/BoardRules';
 import {
   GAME_OVER_TRY_AGAIN_BUTTON_RECT,
+  BOARD_RECT,
   HERO_STAGE_HEIGHT,
   HUD_BGM_TOGGLE_RECT,
   HUD_MUTE_TOGGLE_RECT,
   LOGICAL_HEIGHT,
+  LOGICAL_WIDTH,
   type CellCoord,
 } from '../src/core/Layout';
 import {
@@ -297,6 +299,69 @@ describe('MagusMatchGameApp', () => {
     const impactDelaySec = app.getTrialRuntimeForDebug()?.pendingAttacks[0]?.impactDelaySec ?? 0;
     app.update(impactDelaySec, []);
     expect(app.getRunStateForDebug().score).toBeGreaterThan(0);
+  });
+
+  it('shows the matching hero activation overlay for swapped Trial Lightballs', () => {
+    const app = new MagusMatchGameApp(666, { debugLevelType: 'TRIAL' });
+    finishTrialEntrance(app);
+    setBoardForDebug(app, createBoardFromTileTypes([['LIGHTBALL', 'FIRE']]));
+
+    app.update(0, [{ type: 'swap', from: { col: 0, row: 0 }, to: { col: 1, row: 0 } }]);
+
+    expect(app.getBoardRenderState().heroActivationOverlay).toMatchObject({
+      assetId: AssetIds.ui.activateFire,
+      x: -800,
+      y: 125,
+      width: 800,
+      height: 450,
+      alpha: 1,
+      zIndex: 60,
+    });
+
+    app.update(0.1, []);
+    expect(app.getBoardRenderState().heroActivationOverlay?.x).toBeCloseTo((LOGICAL_WIDTH - 800) / 2);
+
+    app.update(0.6, []);
+    expect(app.getBoardRenderState().heroActivationOverlay?.x).toBeCloseTo((LOGICAL_WIDTH - 800) / 2);
+
+    app.update(0.05, []);
+    const exitingX = app.getBoardRenderState().heroActivationOverlay?.x ?? 0;
+    expect(exitingX).toBeGreaterThan((LOGICAL_WIDTH - 800) / 2);
+    expect(exitingX).toBeLessThan(LOGICAL_WIDTH);
+
+    app.update(0.05, []);
+    expect(app.getBoardRenderState().heroActivationOverlay).toBeNull();
+  });
+
+  it('shows the selected target overlay for tapped Journey Lightballs', () => {
+    const app = new MagusMatchGameApp(777, { debugLevelType: 'JOURNEY' });
+    setBoardForDebug(
+      app,
+      createBoardFromTileTypes([
+        [null, 'EARTH', null],
+        ['FIRE', 'LIGHTBALL', 'EARTH'],
+        [null, 'ICE', null],
+        [null, 'EARTH', null],
+      ]),
+    );
+
+    tapBoardCell(app, { col: 1, row: 1 });
+
+    expect(app.getBoardRenderState().heroActivationOverlay).toMatchObject({
+      assetId: AssetIds.ui.activateEarth,
+      width: 800,
+      height: 450,
+    });
+  });
+
+  it('does not show a hero activation overlay for non-Lightball power-ups', () => {
+    const app = new MagusMatchGameApp(666, { debugLevelType: 'TRIAL' });
+    finishTrialEntrance(app);
+    setBoardForDebug(app, createBoardFromTileTypes([['TNT', 'EARTH']]));
+
+    app.update(0, [{ type: 'swap', from: { col: 0, row: 0 }, to: { col: 1, row: 0 } }]);
+
+    expect(app.getBoardRenderState().heroActivationOverlay).toBeNull();
   });
 
   it('shows a standard match hint after the idle delay', () => {
@@ -1010,6 +1075,16 @@ function tap(app: MagusMatchGameApp, rect: { x: number; y: number; width: number
   app.update(0, [{ type: 'tap', x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }]);
 }
 
+function tapBoardCell(app: MagusMatchGameApp, coord: CellCoord): void {
+  app.update(0, [
+    {
+      type: 'tap',
+      x: BOARD_RECT.x + coord.col * BOARD_RECT.cellSize + BOARD_RECT.cellSize / 2,
+      y: BOARD_RECT.y + coord.row * BOARD_RECT.cellSize + BOARD_RECT.cellSize / 2,
+    },
+  ]);
+}
+
 function finishTrialEntrance(app: MagusMatchGameApp): void {
   app.update(TRIAL_ACTOR_ENTRANCE_TOTAL_DURATION_SEC, []);
 }
@@ -1028,6 +1103,10 @@ function beginLevelResultForDebug(app: MagusMatchGameApp, result: 'win' | 'loss'
 
 function setTrialRuntimeForDebug(app: MagusMatchGameApp, runtime: TrialRuntimeState): void {
   (app as unknown as { trialRuntime: TrialRuntimeState }).trialRuntime = runtime;
+}
+
+function setBoardForDebug(app: MagusMatchGameApp, board: Board): void {
+  (app as unknown as { board: Board }).board = board;
 }
 
 function findNoMatchSwap(board: Board): { from: CellCoord; to: CellCoord } {

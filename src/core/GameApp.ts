@@ -30,9 +30,9 @@ import {
 } from "../board/BoardAnimationTrace";
 import { getBoardAnimationTraceDurationMs } from "../board/BoardAnimationTiming";
 import { findStandardMatchHints } from "../board/BoardHints";
-import type { TileType } from "../board/TileTypes";
-import { isPowerUpTileType } from "../board/TileTypes";
-import { isTapActivatablePowerUpTileType } from "../board/PowerUps";
+import type { StandardTileType, TileType } from "../board/TileTypes";
+import { isPowerUpTileType, isStandardTileType } from "../board/TileTypes";
+import { isTapActivatablePowerUpTileType, selectLightballTapTargetType } from "../board/PowerUps";
 import { AssetIds } from "../assets/AssetIds";
 import { heroStageBackdropAssetIdForLevel } from "./HeroStageBackdrop";
 import type { GeneratedLevel } from "../generator/LevelGenerator";
@@ -184,10 +184,20 @@ const TUTORIAL_FINGER_HINT_LOOP_SEC = 1;
 const TUTORIAL_FINGER_HINT_SIZE = 288;
 const TUTORIAL_FINGER_HINT_ROTATION_DEGREES = -15;
 const TUTORIAL_FINGER_HINT_Z_INDEX = 40;
+const HERO_ACTIVATION_OVERLAY_WIDTH = 800;
+const HERO_ACTIVATION_OVERLAY_HEIGHT = 450;
+const HERO_ACTIVATION_OVERLAY_TOTAL_SEC = 0.8;
+const HERO_ACTIVATION_OVERLAY_TWEEN_SEC = 0.1;
+const HERO_ACTIVATION_OVERLAY_Z_INDEX = 60;
 const TRIAL_MONSTER_RENDER_ORDER_BASE = 4;
 const TRIAL_MONSTER_RENDER_ORDER_STEP = 0.01;
 
 type TutorialPresentationMode = "standard" | "tutorialFullHero" | "tutorialZoomOut";
+
+interface HeroActivationOverlayRuntimeState {
+  assetId: string;
+  elapsedSec: number;
+}
 
 export class MagusMatchGameApp implements GameApp {
   private events: GameEvent[] = [];
@@ -224,6 +234,7 @@ export class MagusMatchGameApp implements GameApp {
   private floatingTutorialDragStart: { x: number; y: number } | null = null;
   private trialActorEntranceElapsedSec = TRIAL_ACTOR_ENTRANCE_TOTAL_DURATION_SEC;
   private trialMageExitElapsedSec = TRIAL_MAGE_EXIT_DURATION_SEC;
+  private heroActivationOverlay: HeroActivationOverlayRuntimeState | null = null;
 
   constructor(
     seed?: number,
@@ -237,6 +248,7 @@ export class MagusMatchGameApp implements GameApp {
     const clampedDtSec = Math.max(0, dtSec);
     this.animationClockSec += clampedDtSec;
     this.updateBoardJuice(clampedDtSec);
+    this.updateHeroActivationOverlay(clampedDtSec);
 
     for (const command of commands) {
       if (command.type === "restart") {
@@ -299,6 +311,7 @@ export class MagusMatchGameApp implements GameApp {
       logicalWidth: LOGICAL_WIDTH,
       logicalHeight: LOGICAL_HEIGHT,
       tutorialPresentation,
+      heroActivationOverlay: this.getHeroActivationOverlayVisualState(tutorialPresentation.heroHeight),
       boardCells: getAllPlayableCoords(this.board)
         .map((coord) => {
           const tile = this.board[coord.row][coord.col].tile;
@@ -442,6 +455,7 @@ export class MagusMatchGameApp implements GameApp {
     this.floatingTutorialDragStart = null;
     this.trialActorEntranceElapsedSec = TRIAL_ACTOR_ENTRANCE_TOTAL_DURATION_SEC;
     this.trialMageExitElapsedSec = TRIAL_MAGE_EXIT_DURATION_SEC;
+    this.heroActivationOverlay = null;
     this.startPreparedLevel();
   }
 
@@ -618,6 +632,7 @@ export class MagusMatchGameApp implements GameApp {
     this.elapsedSec = 0;
     this.transitionTimerSec = 0;
     this.resetMatchHintTimer();
+    this.heroActivationOverlay = null;
     this.startTrialTutorialIfNeeded();
     this.startTrialActorEntranceIfNeeded();
     this.captureBoardAnimationTrace(
@@ -1050,6 +1065,7 @@ export class MagusMatchGameApp implements GameApp {
     }
 
     const journeySwapPowerUpType = this.peekJourneySwapPowerUpType(from, to);
+    const journeySwapLightballTarget = this.peekLightballSwapTargetType(from, to);
     const result = processJourneySwap(
       this.board,
       this.journeyRuntime,
@@ -1081,6 +1097,7 @@ export class MagusMatchGameApp implements GameApp {
     this.levelValidSwapCount += result.scoringStats.validSwapCount;
     this.captureBoardAnimationTrace(result.animationTrace);
     this.emitPowerUpActivationSound(journeySwapPowerUpType);
+    this.triggerHeroActivationOverlay(journeySwapLightballTarget);
     this.emitMatchAudioAndJuice(result.scoringStats, to);
     this.emitJourneyAudioAndJuice(result, previousMageCell, to);
     const scoreDelta = result.scoreDelta + scoreSwapStats(result.scoringStats);
@@ -1105,6 +1122,9 @@ export class MagusMatchGameApp implements GameApp {
       return;
     }
 
+    const journeyTapPowerUpType = getCell(this.board, origin)?.tile?.type;
+    const journeyTapLightballTarget =
+      journeyTapPowerUpType === "LIGHTBALL" ? selectLightballTapTargetType(this.board, origin) : null;
     const result = processJourneyPowerUpActivation(
       this.board,
       this.journeyRuntime,
@@ -1117,7 +1137,6 @@ export class MagusMatchGameApp implements GameApp {
       return;
     }
 
-    const journeyTapPowerUpType = getCell(this.board, origin)?.tile?.type;
     const previousMageCell = this.journeyRuntime.mageCell;
     this.board = result.board;
     this.journeyRuntime = result.runtime;
@@ -1125,6 +1144,7 @@ export class MagusMatchGameApp implements GameApp {
     this.levelValidSwapCount += result.scoringStats.validSwapCount;
     this.captureBoardAnimationTrace(result.animationTrace);
     this.emitPowerUpActivationSound(journeyTapPowerUpType);
+    this.triggerHeroActivationOverlay(journeyTapLightballTarget);
     this.emitMatchAudioAndJuice(result.scoringStats, origin);
     this.emitJourneyAudioAndJuice(result, previousMageCell, origin);
     const scoreDelta = result.scoreDelta + scoreSwapStats(result.scoringStats);
@@ -1147,6 +1167,7 @@ export class MagusMatchGameApp implements GameApp {
 
     const previousTrialResult = this.trialRuntime.result;
     const trialSwapPowerUpType = this.peekTrialSwapPowerUpType(from, to);
+    const trialSwapLightballTarget = this.peekLightballSwapTargetType(from, to);
     const result = processTrialSwap(
       this.board,
       this.trialRuntime,
@@ -1177,6 +1198,7 @@ export class MagusMatchGameApp implements GameApp {
     this.levelValidSwapCount += result.scoringStats.validSwapCount;
     this.captureBoardAnimationTrace(result.animationTrace);
     this.emitPowerUpActivationSound(trialSwapPowerUpType);
+    this.triggerHeroActivationOverlay(trialSwapLightballTarget);
     this.emitMatchAudioAndJuice(result.scoringStats, to);
     this.emitTrialAudioAndJuice(result.queuedAttackEvents, to);
     const scoreDelta = result.scoreDelta + scoreSwapStats(result.scoringStats);
@@ -1244,6 +1266,9 @@ export class MagusMatchGameApp implements GameApp {
     }
 
     const previousTrialResult = this.trialRuntime.result;
+    const trialTapPowerUpType = getCell(this.board, origin)?.tile?.type;
+    const trialTapLightballTarget =
+      trialTapPowerUpType === "LIGHTBALL" ? selectLightballTapTargetType(this.board, origin) : null;
     const result = processTrialPowerUpActivation(
       this.board,
       this.trialRuntime,
@@ -1255,7 +1280,6 @@ export class MagusMatchGameApp implements GameApp {
       return;
     }
 
-    const trialTapPowerUpType = getCell(this.board, origin)?.tile?.type;
     this.board = result.board;
     this.trialRuntime = result.runtime;
     this.maybeEmitTrialPlayerDefeatSfx(previousTrialResult, result.runtime.result);
@@ -1263,6 +1287,7 @@ export class MagusMatchGameApp implements GameApp {
     this.levelValidSwapCount += result.scoringStats.validSwapCount;
     this.captureBoardAnimationTrace(result.animationTrace);
     this.emitPowerUpActivationSound(trialTapPowerUpType);
+    this.triggerHeroActivationOverlay(trialTapLightballTarget);
     this.emitMatchAudioAndJuice(result.scoringStats, origin);
     this.emitTrialAudioAndJuice(result.queuedAttackEvents, origin);
     const scoreDelta = result.scoreDelta + scoreSwapStats(result.scoringStats);
@@ -1345,6 +1370,20 @@ export class MagusMatchGameApp implements GameApp {
     }
     if (toTile != null && isPowerUpTileType(toTile.type)) {
       return toTile.type;
+    }
+
+    return null;
+  }
+
+  private peekLightballSwapTargetType(from: CellCoord, to: CellCoord): StandardTileType | null {
+    const fromType = getCell(this.board, from)?.tile?.type;
+    const toType = getCell(this.board, to)?.tile?.type;
+    if (fromType === "LIGHTBALL" && toType != null && isStandardTileType(toType)) {
+      return toType;
+    }
+
+    if (toType === "LIGHTBALL" && fromType != null && isStandardTileType(fromType)) {
+      return fromType;
     }
 
     return null;
@@ -1557,6 +1596,64 @@ export class MagusMatchGameApp implements GameApp {
     this.visualCues = this.visualCues
       .map((cue) => ({ ...cue, remainingSec: cue.remainingSec - dtSec }))
       .filter((cue) => cue.remainingSec > 0);
+  }
+
+  private triggerHeroActivationOverlay(targetType: StandardTileType | null | undefined): void {
+    const assetId = activationOverlayAssetIdForTileType(targetType);
+    if (assetId == null) {
+      return;
+    }
+
+    this.heroActivationOverlay = {
+      assetId,
+      elapsedSec: 0,
+    };
+  }
+
+  private updateHeroActivationOverlay(dtSec: number): void {
+    if (this.heroActivationOverlay == null || dtSec <= 0) {
+      return;
+    }
+
+    const elapsedSec = this.heroActivationOverlay.elapsedSec + dtSec;
+    this.heroActivationOverlay =
+      elapsedSec >= HERO_ACTIVATION_OVERLAY_TOTAL_SEC
+        ? null
+        : {
+            ...this.heroActivationOverlay,
+            elapsedSec,
+          };
+  }
+
+  private getHeroActivationOverlayVisualState(
+    heroHeight: number,
+  ): BoardRenderState["heroActivationOverlay"] {
+    if (this.heroActivationOverlay == null) {
+      return null;
+    }
+
+    const centeredX = (LOGICAL_WIDTH - HERO_ACTIVATION_OVERLAY_WIDTH) / 2;
+    const centeredY = (heroHeight - HERO_ACTIVATION_OVERLAY_HEIGHT) / 2;
+    const elapsedSec = this.heroActivationOverlay.elapsedSec;
+    let x = centeredX;
+    if (elapsedSec < HERO_ACTIVATION_OVERLAY_TWEEN_SEC) {
+      const progress = elapsedSec / HERO_ACTIVATION_OVERLAY_TWEEN_SEC;
+      x = -HERO_ACTIVATION_OVERLAY_WIDTH + (centeredX + HERO_ACTIVATION_OVERLAY_WIDTH) * easeOutCubic(progress);
+    } else if (elapsedSec > HERO_ACTIVATION_OVERLAY_TOTAL_SEC - HERO_ACTIVATION_OVERLAY_TWEEN_SEC) {
+      const exitStartSec = HERO_ACTIVATION_OVERLAY_TOTAL_SEC - HERO_ACTIVATION_OVERLAY_TWEEN_SEC;
+      const progress = (elapsedSec - exitStartSec) / HERO_ACTIVATION_OVERLAY_TWEEN_SEC;
+      x = centeredX + (LOGICAL_WIDTH - centeredX) * easeInCubic(progress);
+    }
+
+    return {
+      assetId: this.heroActivationOverlay.assetId,
+      x,
+      y: centeredY,
+      width: HERO_ACTIVATION_OVERLAY_WIDTH,
+      height: HERO_ACTIVATION_OVERLAY_HEIGHT,
+      alpha: 1,
+      zIndex: HERO_ACTIVATION_OVERLAY_Z_INDEX,
+    };
   }
 
   private getShakePixels(): number {
@@ -2071,6 +2168,21 @@ function assetIdForTileType(type: TileType): string {
   }
 }
 
+function activationOverlayAssetIdForTileType(type: StandardTileType | null | undefined): string | null {
+  switch (type) {
+    case "EARTH":
+      return AssetIds.ui.activateEarth;
+    case "FIRE":
+      return AssetIds.ui.activateFire;
+    case "ICE":
+      return AssetIds.ui.activateIce;
+    case "LIGHTNING":
+      return AssetIds.ui.activateLightning;
+    default:
+      return null;
+  }
+}
+
 function soundIdsForSpellSchool(schoolId: SpellSchoolId): { whoosh: string } {
   switch (schoolId) {
     case "fire":
@@ -2555,6 +2667,11 @@ function clamp01(value: number): number {
 function easeOutCubic(value: number): number {
   const clamped = clamp01(value);
   return 1 - Math.pow(1 - clamped, 3);
+}
+
+function easeInCubic(value: number): number {
+  const clamped = clamp01(value);
+  return clamped * clamped * clamped;
 }
 
 function heroPositionForCell(

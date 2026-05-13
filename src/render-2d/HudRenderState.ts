@@ -7,8 +7,8 @@ export interface HudRenderState {
   lives: number;
   scoreText: string;
   objectiveText: string;
-  /** Trial levels: remaining monsters vs wave total; rendered as right-edge fill bar (replaces objective text). */
-  trialMonsterFill: { remaining: number; total: number } | null;
+  /** Trial levels: enemies still left to kill, including not-yet-spawned enemies. */
+  trialEnemyCount: { remaining: number } | null;
   muted: boolean;
   /** When true, background music is off (SFX still follow master mute). */
   bgmMuted: boolean;

@@ -18,11 +18,12 @@ import {
   HUD_HEART_DISPLAY_WIDTH,
   HUD_HEART_GAP,
   HUD_HEART_GROUP_LEFT,
-  HUD_TRIAL_FILLBAR_FRAME_HEIGHT,
-  HUD_TRIAL_FILLBAR_FRAME_WIDTH,
-  HUD_TRIAL_FILLBAR_KOBOLD_HEIGHT_FRAC,
-  HUD_TRIAL_FILLBAR_KOBOLD_NATURAL_SIZE,
-  HUD_TRIAL_FILLBAR_LEFT_X,
+  HUD_TRIAL_ENEMY_COUNT_FONT_SIZE,
+  HUD_TRIAL_ENEMY_COUNT_LABEL_WIDTH,
+  HUD_TRIAL_ENEMY_COUNT_LABEL_X,
+  HUD_TRIAL_ENEMY_COUNT_MIN_FONT_SIZE,
+  HUD_TRIAL_ENEMY_COUNT_VALUE_WIDTH,
+  HUD_TRIAL_ENEMY_COUNT_VALUE_X,
   LEVEL_PANEL_HEIGHT,
   LEVEL_PANEL_TEXT_WIDTH,
   LEVEL_PANEL_TEXT_X,
@@ -31,11 +32,6 @@ import {
   LEVEL_PANEL_X,
   LOGICAL_HEIGHT,
   LOGICAL_WIDTH,
-  TRIAL_FILLBAR_FILL_HEIGHT_FRAC,
-  TRIAL_FILLBAR_FILL_OFFSET_X_PX,
-  TRIAL_FILLBAR_FILL_OFFSET_Y_PX,
-  TRIAL_FILLBAR_INNER_PAD_X_FRAC,
-  TRIAL_FILLBAR_INNER_WIDTH_FRAC,
   gameOverTitleBannerRect,
   hudObjectiveTextLayoutLegacy,
   type UiRect,
@@ -265,52 +261,38 @@ function drawHudHearts(
   }
 }
 
-function drawTrialMonsterFillBar(
+function drawTrialEnemyCount(
   renderer: GameRenderer,
-  trialMonsterFill: { remaining: number; total: number },
+  trialEnemyCount: { remaining: number },
 ): void {
-  const frameRef = { id: AssetIds.ui.trialFillBarBg };
-  const fillRef = { id: AssetIds.ui.trialFillBarFill };
-  const koboldRef = { id: AssetIds.ui.trialFillBarKoboldIcon };
-
-  const frameX = HUD_TRIAL_FILLBAR_LEFT_X;
-  const frameW = HUD_TRIAL_FILLBAR_FRAME_WIDTH;
-  const frameH = HUD_TRIAL_FILLBAR_FRAME_HEIGHT;
-  const frameY = HUD_BAND_TOP_Y + (HUD_HEIGHT - frameH) / 2;
-
-  if (renderer.hasImage(frameRef)) {
-    renderer.drawImage(frameRef, frameX, frameY, frameW, frameH);
-  }
-
-  const innerX = frameX + frameW * TRIAL_FILLBAR_INNER_PAD_X_FRAC;
-  const innerW = frameW * TRIAL_FILLBAR_INNER_WIDTH_FRAC;
-  const fillH = frameH * TRIAL_FILLBAR_FILL_HEIGHT_FRAC;
-  const fillY = frameY + (frameH - fillH) / 2;
-
-  const total = trialMonsterFill.total;
-  const remaining = Math.max(0, trialMonsterFill.remaining);
-  const ratio = total > 0 ? Math.min(1, remaining / total) : 0;
-
-  if (ratio > 0 && renderer.hasImage(fillRef)) {
-    const fillDrawX = innerX + TRIAL_FILLBAR_FILL_OFFSET_X_PX;
-    const fillDrawY = fillY + TRIAL_FILLBAR_FILL_OFFSET_Y_PX;
-    const clipW = innerW * ratio;
-    const clipX = innerX + innerW - clipW + TRIAL_FILLBAR_FILL_OFFSET_X_PX;
-
-    renderer.pushClipRect(clipX, fillDrawY, clipW, fillH);
-    renderer.drawImage(fillRef, fillDrawX, fillDrawY, innerW, fillH);
-    renderer.pop();
-  }
-
-  if (renderer.hasImage(koboldRef)) {
-    const iconH = frameH * HUD_TRIAL_FILLBAR_KOBOLD_HEIGHT_FRAC;
-    const iconW =
-      iconH *
-      (HUD_TRIAL_FILLBAR_KOBOLD_NATURAL_SIZE.width / HUD_TRIAL_FILLBAR_KOBOLD_NATURAL_SIZE.height);
-    const iconX = frameX + frameW - iconW;
-    const iconY = frameY + frameH - iconH;
-    renderer.drawImage(koboldRef, iconX, iconY, iconW, iconH);
-  }
+  renderer.drawText(
+    'Enemies:',
+    HUD_TRIAL_ENEMY_COUNT_LABEL_X,
+    HUD_BAND_TOP_Y,
+    HUD_TRIAL_ENEMY_COUNT_LABEL_WIDTH,
+    HUD_HEIGHT,
+    {
+      fontSize: HUD_TRIAL_ENEMY_COUNT_FONT_SIZE,
+      minFontSize: HUD_TRIAL_ENEMY_COUNT_MIN_FONT_SIZE,
+      fontWeight: 'bold',
+      color: HUD_SCORE_LABEL_COLOR,
+      align: 'right',
+    },
+  );
+  renderer.drawText(
+    `${Math.max(0, trialEnemyCount.remaining)}`,
+    HUD_TRIAL_ENEMY_COUNT_VALUE_X,
+    HUD_BAND_TOP_Y,
+    HUD_TRIAL_ENEMY_COUNT_VALUE_WIDTH,
+    HUD_HEIGHT,
+    {
+      fontSize: HUD_TRIAL_ENEMY_COUNT_FONT_SIZE,
+      minFontSize: HUD_TRIAL_ENEMY_COUNT_MIN_FONT_SIZE,
+      fontWeight: 'normal',
+      color: HUD_TEXT_COLOR,
+      align: 'left',
+    },
+  );
 }
 
 function drawHudScoreColumn(renderer: GameRenderer, bandTopY: number, scoreText: string): void {
@@ -343,9 +325,9 @@ function drawHud(
   const y = HUD_BAND_TOP_Y;
   drawHudHearts(renderer, hudState, heartLossWobble);
 
-  if (hudState.trialMonsterFill != null) {
+  if (hudState.trialEnemyCount != null) {
     drawHudScoreColumn(renderer, y, hudState.scoreText);
-    drawTrialMonsterFillBar(renderer, hudState.trialMonsterFill);
+    drawTrialEnemyCount(renderer, hudState.trialEnemyCount);
     return;
   }
 

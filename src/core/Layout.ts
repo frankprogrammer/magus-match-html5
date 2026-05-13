@@ -112,6 +112,18 @@ export const TRIAL_FILLBAR_FILL_HEIGHT_FRAC = 0.645;
 export const TRIAL_FILLBAR_FILL_OFFSET_X_PX = -5;
 /** Fine-tune painted fill vs frame (negative = up). Applied to fill draw and RTL clip together. */
 export const TRIAL_FILLBAR_FILL_OFFSET_Y_PX = -2;
+
+export const HUD_TRIAL_ENEMY_COUNT_LABEL_X = HUD_TRIAL_FILLBAR_LEFT_X;
+export const HUD_TRIAL_ENEMY_COUNT_LABEL_WIDTH = 185;
+export const HUD_TRIAL_ENEMY_COUNT_VALUE_GAP = 10;
+export const HUD_TRIAL_ENEMY_COUNT_VALUE_X =
+  HUD_TRIAL_ENEMY_COUNT_LABEL_X +
+  HUD_TRIAL_ENEMY_COUNT_LABEL_WIDTH +
+  HUD_TRIAL_ENEMY_COUNT_VALUE_GAP;
+export const HUD_TRIAL_ENEMY_COUNT_VALUE_WIDTH =
+  LOGICAL_WIDTH - HUD_TRIAL_FILLBAR_RIGHT_MARGIN - HUD_TRIAL_ENEMY_COUNT_VALUE_X;
+export const HUD_TRIAL_ENEMY_COUNT_FONT_SIZE = HUD_SCORE_VALUE_FONT_SIZE;
+export const HUD_TRIAL_ENEMY_COUNT_MIN_FONT_SIZE = HUD_SCORE_VALUE_MIN_FONT_SIZE;
 /** Journey / non-trial objective column (legacy layout). */
 export function hudObjectiveTextLayoutLegacy(): { x: number; width: number } {
   const width = Math.min(300, LOGICAL_WIDTH - 2 * HUD_CONTENT_PADDING_X);

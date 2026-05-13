@@ -11,24 +11,18 @@ import {
   HUD_SCORE_LABEL_COLOR,
   HUD_SCORE_LABEL_ROW_HEIGHT,
   HUD_SCORE_LABEL_VALUE_GAP_PX,
+  HUD_TRIAL_ENEMY_COUNT_LABEL_WIDTH,
+  HUD_TRIAL_ENEMY_COUNT_LABEL_X,
+  HUD_TRIAL_ENEMY_COUNT_VALUE_WIDTH,
+  HUD_TRIAL_ENEMY_COUNT_VALUE_X,
   LOGICAL_WIDTH,
   LOGICAL_HEIGHT,
-  HUD_TRIAL_FILLBAR_FRAME_HEIGHT,
-  HUD_TRIAL_FILLBAR_FRAME_WIDTH,
-  HUD_TRIAL_FILLBAR_KOBOLD_HEIGHT_FRAC,
-  HUD_TRIAL_FILLBAR_KOBOLD_NATURAL_SIZE,
-  HUD_TRIAL_FILLBAR_LEFT_X,
   LEVEL_PANEL_HEIGHT,
   LEVEL_PANEL_TEXT_WIDTH,
   LEVEL_PANEL_TEXT_X,
   LEVEL_PANEL_TOP,
   LEVEL_PANEL_WIDTH,
   LEVEL_PANEL_X,
-  TRIAL_FILLBAR_FILL_HEIGHT_FRAC,
-  TRIAL_FILLBAR_FILL_OFFSET_X_PX,
-  TRIAL_FILLBAR_FILL_OFFSET_Y_PX,
-  TRIAL_FILLBAR_INNER_PAD_X_FRAC,
-  TRIAL_FILLBAR_INNER_WIDTH_FRAC,
   HUD_SCORE_VALUE_ROW_HEIGHT,
   hudObjectiveTextLayoutLegacy,
 } from '../src/core/Layout';
@@ -42,21 +36,6 @@ const HUD_HEART_ROW_Y =
   HUD_BAND_TOP_Y + (HUD_HEIGHT - HUD_HEART_DISPLAY_HEIGHT) / 2;
 const HUD_SCORE_VALUE_ROW_Y =
   HUD_BAND_TOP_Y + HUD_SCORE_LABEL_ROW_HEIGHT + HUD_SCORE_LABEL_VALUE_GAP_PX;
-
-function trialFillClipBounds(ratio: number): { clipX: number; clipY: number; clipW: number; clipH: number } {
-  const frameX = HUD_TRIAL_FILLBAR_LEFT_X;
-  const frameW = HUD_TRIAL_FILLBAR_FRAME_WIDTH;
-  const frameH = HUD_TRIAL_FILLBAR_FRAME_HEIGHT;
-  const frameY = HUD_BAND_TOP_Y + (HUD_HEIGHT - frameH) / 2;
-  const innerX = frameX + frameW * TRIAL_FILLBAR_INNER_PAD_X_FRAC;
-  const innerW = frameW * TRIAL_FILLBAR_INNER_WIDTH_FRAC;
-  const fillH = frameH * TRIAL_FILLBAR_FILL_HEIGHT_FRAC;
-  const fillY = frameY + (frameH - fillH) / 2;
-  const clipW = innerW * ratio;
-  const clipX = innerX + innerW - clipW + TRIAL_FILLBAR_FILL_OFFSET_X_PX;
-  const clipY = fillY + TRIAL_FILLBAR_FILL_OFFSET_Y_PX;
-  return { clipX, clipY, clipW, clipH: fillH };
-}
 
 describe('buildBoardCellVisuals', () => {
   it('builds stable cell bounds and overlay flags from render state', () => {
@@ -497,7 +476,7 @@ describe('buildBoardCellVisuals', () => {
     renderFrame(
       renderer,
       oneTileState('tile.fire'),
-      hudState({ scoreText: '999999999999', objectiveText: 'Moves 20', trialMonsterFill: null }),
+      hudState({ scoreText: '999999999999', objectiveText: 'Moves 20', trialEnemyCount: null }),
       0,
     );
 
@@ -590,7 +569,7 @@ describe('buildBoardCellVisuals', () => {
     expect(renderer.calls.some((c) => c.includes('pushRotate'))).toBe(false);
   });
 
-  it('draws the trial monster fill bar right-aligned with RTL clip', () => {
+  it('draws Trial enemy count text instead of the monster fill bar', () => {
     const renderer = new FakeRenderer(
       new Set([
         AssetIds.ui.heartFill,
@@ -600,39 +579,43 @@ describe('buildBoardCellVisuals', () => {
         AssetIds.ui.trialFillBarKoboldIcon,
       ]),
     );
-    const bounds = trialFillClipBounds(0.5);
-    const trialFrameY = HUD_BAND_TOP_Y + (HUD_HEIGHT - HUD_TRIAL_FILLBAR_FRAME_HEIGHT) / 2;
-    const koboldIconH = HUD_TRIAL_FILLBAR_FRAME_HEIGHT * HUD_TRIAL_FILLBAR_KOBOLD_HEIGHT_FRAC;
-    const koboldIconW =
-      koboldIconH *
-      (HUD_TRIAL_FILLBAR_KOBOLD_NATURAL_SIZE.width / HUD_TRIAL_FILLBAR_KOBOLD_NATURAL_SIZE.height);
-    const koboldIconX = HUD_TRIAL_FILLBAR_LEFT_X + HUD_TRIAL_FILLBAR_FRAME_WIDTH - koboldIconW;
-    const koboldIconY = trialFrameY + HUD_TRIAL_FILLBAR_FRAME_HEIGHT - koboldIconH;
 
     renderFrame(
       renderer,
       oneTileState('tile.fire'),
       hudState({
         objectiveText: '',
-        trialMonsterFill: { remaining: 2, total: 4 },
+        trialEnemyCount: { remaining: 6 },
       }),
       0,
     );
 
+    expect(renderer.calls).not.toContain(`image:${AssetIds.ui.trialFillBarBg}`);
+    expect(renderer.calls).not.toContain(`image:${AssetIds.ui.trialFillBarFill}`);
+    expect(renderer.calls).not.toContain(`image:${AssetIds.ui.trialFillBarKoboldIcon}`);
     expect(renderer.calls).toContain(
-      `image:${AssetIds.ui.trialFillBarBg}:${HUD_TRIAL_FILLBAR_LEFT_X},${HUD_BAND_TOP_Y + (HUD_HEIGHT - HUD_TRIAL_FILLBAR_FRAME_HEIGHT) / 2},${HUD_TRIAL_FILLBAR_FRAME_WIDTH},${HUD_TRIAL_FILLBAR_FRAME_HEIGHT}`,
+      `text:Enemies::${HUD_TRIAL_ENEMY_COUNT_LABEL_X},${HUD_BAND_TOP_Y},${HUD_TRIAL_ENEMY_COUNT_LABEL_WIDTH},${HUD_HEIGHT}`,
     );
     expect(renderer.calls).toContain(
-      `clip:${bounds.clipX},${bounds.clipY},${bounds.clipW},${bounds.clipH}`,
-    );
-    expect(renderer.calls).toContain(
-      `image:${AssetIds.ui.trialFillBarKoboldIcon}:${koboldIconX},${koboldIconY},${koboldIconW},${koboldIconH}`,
+      `text:6:${HUD_TRIAL_ENEMY_COUNT_VALUE_X},${HUD_BAND_TOP_Y},${HUD_TRIAL_ENEMY_COUNT_VALUE_WIDTH},${HUD_HEIGHT}`,
     );
     expect(renderer.calls).toContain(
       `text:Score:0,${HUD_BAND_TOP_Y},${LOGICAL_WIDTH},${HUD_SCORE_LABEL_ROW_HEIGHT}`,
     );
     expect(renderer.calls).toContain(
       `text:0:0,${HUD_SCORE_VALUE_ROW_Y},${LOGICAL_WIDTH},${HUD_SCORE_VALUE_ROW_HEIGHT}`,
+    );
+    expect(renderer.textCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          text: 'Enemies:',
+          style: expect.objectContaining({ color: HUD_SCORE_LABEL_COLOR }),
+        }),
+        expect.objectContaining({
+          text: '6',
+          style: expect.objectContaining({ color: '#ffffff' }),
+        }),
+      ]),
     );
   });
 
@@ -1127,7 +1110,7 @@ function hudState(overrides: Partial<HudRenderState> = {}): HudRenderState {
     lives: 3,
     scoreText: '0',
     objectiveText: 'Moves 20',
-    trialMonsterFill: null,
+    trialEnemyCount: null,
     muted: false,
     bgmMuted: false,
     ...overrides,

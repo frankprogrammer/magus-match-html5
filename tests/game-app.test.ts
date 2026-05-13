@@ -95,6 +95,46 @@ describe('MagusMatchGameApp', () => {
     expect(app.getJourneyRuntimeForDebug()).toBeNull();
   });
 
+  it('reports Trial enemies left including unspawned monsters and excluding dead monsters', () => {
+    const app = new MagusMatchGameApp(555, { debugLevelType: 'TRIAL' });
+    const runtime = app.getTrialRuntimeForDebug();
+    if (runtime == null || runtime.monsters[0] == null) {
+      throw new Error('Expected Trial runtime.');
+    }
+
+    setTrialRuntimeForDebug(app, {
+      ...runtime,
+      totalMonsters: 6,
+      nextSpawnIndex: 2,
+      monsters: [
+        { ...runtime.monsters[0], monsterId: 'alive', hp: 3, maxHp: 3 },
+        {
+          ...runtime.monsters[0],
+          monsterId: 'dead',
+          hp: 0,
+          maxHp: 3,
+          defeatAnimationRemainingSec: 0.5,
+          defeatFadeRemainingSec: 0.15,
+        },
+      ],
+      defeatedMonsterIds: [],
+    });
+
+    expect(app.getHudState().trialEnemyCount).toEqual({ remaining: 5 });
+
+    setTrialRuntimeForDebug(app, {
+      ...runtime,
+      totalMonsters: 2,
+      nextSpawnIndex: 2,
+      monsters: [{ ...runtime.monsters[0], monsterId: 'dead', hp: 0, maxHp: 3 }],
+      defeatedMonsterIds: [],
+    });
+    expect(app.getHudState().trialEnemyCount).toEqual({ remaining: 0 });
+
+    const journeyApp = new MagusMatchGameApp(555, { debugLevelType: 'JOURNEY' });
+    expect(journeyApp.getHudState().trialEnemyCount).toBeNull();
+  });
+
   it('starts a normal level 1 Trial session with the forced lightning tutorial immediately', () => {
     const app = new MagusMatchGameApp(555);
 

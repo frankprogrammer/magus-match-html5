@@ -10,7 +10,7 @@ export interface OrthographicBounds {
   bottom: number;
 }
 
-export type OrthographicAnchor = 'center' | 'topLeft' | 'bottomLeft';
+export type OrthographicAnchor = 'center' | 'topLeft';
 
 export interface OrthographicBoundsOptions {
   viewScale?: number;
@@ -36,15 +36,6 @@ export function orthographicBoundsForAspect(
       right: -halfWidth + viewWidth,
       top: halfHeight,
       bottom: halfHeight - viewHeight,
-    };
-  }
-
-  if (options.anchor === 'bottomLeft') {
-    return {
-      left: -halfWidth,
-      right: -halfWidth + viewWidth,
-      top: -halfHeight + viewHeight,
-      bottom: -halfHeight,
     };
   }
 

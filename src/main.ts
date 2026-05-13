@@ -21,7 +21,6 @@ import { BoardAnimationPresenter } from './render-2d/BoardAnimationPresenter';
 import { Canvas2DRenderer } from './render-2d/Canvas2DRenderer';
 import { renderFrame, type HeartLossWobbleState } from './render-2d/RenderFrame';
 import { ThreeHeroStage } from './render-three/ThreeHeroStage';
-import type { OrthographicAnchor } from './render-three/ThreeCameraController';
 import type { GameEvent } from './core/GameEvents';
 import type { HudRenderState } from './render-2d/HudRenderState';
 import type { ScreenRenderState } from './render-2d/ScreenRenderState';
@@ -106,8 +105,8 @@ let audioPreloadStarted = false;
 const input = new BrowserInputAdapter(gameShell);
 let fullscreenRequestAttempted = false;
 let activeHeroHeight = HERO_STAGE_HEIGHT;
+let activeHeroRenderHeight = HERO_STAGE_HEIGHT;
 let activeHeroSceneScale = 1;
-let activeHeroCameraAnchor: OrthographicAnchor = 'center';
 
 void loadBrowserImages().then((images) => {
   renderer.setImages(images);
@@ -158,20 +157,33 @@ gameShell.addEventListener('pointercancel', (e) => updateOverlayPrimaryButtonPre
 function resizeLogicalStage(
   nextHeroHeight = activeHeroHeight,
   nextHeroSceneScale = activeHeroSceneScale,
-  nextHeroCameraAnchor = activeHeroCameraAnchor,
+  nextHeroRenderHeight = activeHeroRenderHeight,
 ): void {
   activeHeroHeight = nextHeroHeight;
   activeHeroSceneScale = nextHeroSceneScale;
-  activeHeroCameraAnchor = nextHeroCameraAnchor;
+  activeHeroRenderHeight = nextHeroRenderHeight;
   const rect = gameShell.getBoundingClientRect();
   const scale = Math.min(rect.width / LOGICAL_WIDTH, rect.height / LOGICAL_HEIGHT);
   stageElement.style.transform = `scale(${scale})`;
   heroStageElement.style.height = `${activeHeroHeight}px`;
-  heroStage.resize(LOGICAL_WIDTH, activeHeroHeight, activeHeroSceneScale, activeHeroCameraAnchor);
+  heroStageElement.style.setProperty('--hero-scene-scale', `${activeHeroSceneScale}`);
+  heroStage.resize(LOGICAL_WIDTH, activeHeroRenderHeight);
 }
 
-function heroCameraAnchorForTutorialMode(mode: string | undefined): OrthographicAnchor {
-  return mode === 'tutorialFullHero' || mode === 'tutorialZoomOut' ? 'bottomLeft' : 'center';
+function heroRenderHeightForTutorialMode(_mode: string | undefined): number {
+  return HERO_STAGE_HEIGHT;
+}
+
+function getMatchEnergyTarget(): { x: number; y: number } | undefined {
+  const projected = heroStage.getMageParticleSourceLogicalPosition(LOGICAL_WIDTH, activeHeroRenderHeight);
+  if (projected == null) {
+    return undefined;
+  }
+
+  return {
+    x: projected.x * activeHeroSceneScale,
+    y: projected.y * activeHeroSceneScale,
+  };
 }
 
 function requestGameFullscreen(): void {
@@ -241,13 +253,12 @@ function tick(timeMs: number): void {
   resizeLogicalStage(
     tutorialPresentation?.heroHeight ?? HERO_STAGE_HEIGHT,
     tutorialPresentation?.sceneScale ?? 1,
-    heroCameraAnchorForTutorialMode(tutorialPresentation?.mode),
+    heroRenderHeightForTutorialMode(tutorialPresentation?.mode),
   );
   heroStage.render(app.getHeroWorldState(), dtSec);
-  const matchEnergyTarget = heroStage.getMageParticleSourceLogicalPosition(LOGICAL_WIDTH, activeHeroHeight) ?? undefined;
   renderFrame(
     renderer,
-    boardAnimationPresenter.present(boardState, timeMs / 1000, { matchEnergyTarget }),
+    boardAnimationPresenter.present(boardState, timeMs / 1000, { matchEnergyTarget: getMatchEnergyTarget() }),
     hudState,
     timeMs / 1000,
     screenState,
@@ -263,13 +274,13 @@ const initialTutorialPresentation = initialBoardState.tutorialPresentation;
 resizeLogicalStage(
   initialTutorialPresentation?.heroHeight ?? HERO_STAGE_HEIGHT,
   initialTutorialPresentation?.sceneScale ?? 1,
-  heroCameraAnchorForTutorialMode(initialTutorialPresentation?.mode),
+  heroRenderHeightForTutorialMode(initialTutorialPresentation?.mode),
 );
 heroStage.render(app.getHeroWorldState(), 0);
 renderFrame(
   renderer,
   boardAnimationPresenter.present(initialBoardState, 0, {
-    matchEnergyTarget: heroStage.getMageParticleSourceLogicalPosition(LOGICAL_WIDTH, activeHeroHeight) ?? undefined,
+    matchEnergyTarget: getMatchEnergyTarget(),
   }),
   getBrowserHudState(),
   0,

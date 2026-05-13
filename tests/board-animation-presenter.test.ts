@@ -185,16 +185,19 @@ describe('BoardAnimationPresenter', () => {
 
     const popping = presenter.present(state, 0.13, { matchEnergyTarget: target });
     const streams = popping.tutorialPresentation?.floatingMatch?.matchEnergyStreams ?? [];
+    const hiddenTiles = popping.tutorialPresentation?.floatingMatch?.tiles ?? [];
     const topLeftStream = streams.find((stream) => stream.streamId === 'top-left-lightning-energy-0');
     expect(streams).toHaveLength(15);
     expect(topLeftStream?.color).toBe('#fff000');
     expect(distance(topLeftStream ?? target, { x: 292, y: 1492 })).toBeLessThan(90);
+    expect(hiddenTiles).toHaveLength(4);
+    expect(hiddenTiles.every((tile) => tile.alpha === 0)).toBe(true);
 
-    const clearedTopCenter = popping.tutorialPresentation?.floatingMatch?.tiles.find(
-      (tile) => tile.role === 'lowerLightning',
-    );
-    expect(clearedTopCenter?.rect.y).toBe(1428);
-    expect(clearedTopCenter?.scale).toBeLessThan(1);
+    const later = presenter.present(state, 0.35, { matchEnergyTarget: target });
+    const laterStreams = later.tutorialPresentation?.floatingMatch?.matchEnergyStreams ?? [];
+    const laterTiles = later.tutorialPresentation?.floatingMatch?.tiles ?? [];
+    expect(laterStreams.length).toBeGreaterThan(0);
+    expect(laterTiles.every((tile) => tile.alpha === 0)).toBe(true);
   });
 
   it('expands and fades the shockwave ring as it moves outward', () => {

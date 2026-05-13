@@ -266,11 +266,12 @@ function sampleFloatingTutorialMatch(
 
   const preSwapCellsByCoord = new Map(trace.preSwapSnapshot.cells.map((cell) => [coordKey(cell.coord), cell]));
   const sampledCellsByTileId = new Map(sampledBoardCells.map((cell) => [cell.tileId, cell]));
+  const hideTiles = shouldHideFloatingTutorialTiles(floatingMatch, stepTimings, elapsedMs);
   const tiles = floatingMatch.tiles.map((tile) => {
     const preSwapCell = preSwapCellsByCoord.get(coordKey(tile.sourceCoord));
     const sampledCell = preSwapCell == null ? null : sampledCellsByTileId.get(preSwapCell.tileId);
     if (sampledCell == null) {
-      return tile;
+      return hideTiles ? { ...tile, alpha: 0 } : tile;
     }
 
     const defaultPosition = coordToRender(sampledCell.coord);
@@ -286,7 +287,7 @@ function sampleFloatingTutorialMatch(
         x: mapped.x,
         y: mapped.y,
       },
-      alpha: tile.alpha * sampledCell.alpha,
+      alpha: hideTiles ? 0 : tile.alpha * sampledCell.alpha,
       scale: tile.scale * (sampledCell.scale ?? 1),
     };
   });
@@ -303,6 +304,21 @@ function sampleFloatingTutorialMatch(
       target,
     ),
   };
+}
+
+function shouldHideFloatingTutorialTiles(
+  floatingMatch: FloatingTutorialMatchVisualState,
+  stepTimings: readonly BoardAnimationStepTiming[],
+  elapsedMs: number,
+): boolean {
+  const floatingCoords = new Set(floatingMatch.tiles.map((tile) => coordKey(tile.sourceCoord)));
+  return stepTimings.some((timing) =>
+    timing.step.clearedTiles.some(
+      (tile) =>
+        floatingCoords.has(coordKey(tile.coord)) &&
+        elapsedMs >= timing.popStartMs + (tile.clearDelayMs ?? 0),
+    ),
+  );
 }
 
 interface FloatingTutorialGeometry {

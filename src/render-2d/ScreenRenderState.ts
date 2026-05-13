@@ -10,6 +10,16 @@ export interface ScreenButtonRects {
   bgm: UiRect;
 }
 
+export interface ScreenImageOverlayState {
+  assetId: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  alpha: number;
+  zIndex: number;
+}
+
 export interface ScreenRenderState {
   screen: ScreenKind;
   phase: GamePhase;
@@ -20,6 +30,7 @@ export interface ScreenRenderState {
   buttonRects: ScreenButtonRects;
   muted: boolean;
   transitionText: string | null;
+  levelClearOverlay?: ScreenImageOverlayState | null;
   /** Browser shell: true while pointer is down on game-over Try Again. */
   overlayPrimaryButtonPressed?: boolean;
 }

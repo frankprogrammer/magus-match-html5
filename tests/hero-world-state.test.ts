@@ -189,8 +189,9 @@ describe('HeroWorldState', () => {
     expect(track?.transform.position.y).toBeGreaterThan(monster?.transform.position.y ?? 0);
     expect((track?.transform.position.y ?? 0) - (monster?.transform.position.y ?? 0)).toBeCloseTo(3.72);
     expect(fill?.transform.scale.x).toBeCloseTo((track?.transform.scale.x ?? 0) * TRIAL_FILLBAR_INNER_WIDTH_FRAC);
-    expect(track?.transform.scale.y).toBeCloseTo(0.18);
-    expect(fill?.transform.scale.y).toBeCloseTo(0.18 * TRIAL_FILLBAR_FILL_HEIGHT_FRAC);
+    expect(track?.transform.scale.x).toBeCloseTo(0.92 * 1.25);
+    expect(track?.transform.scale.y).toBeCloseTo(0.18 * 1.25);
+    expect(fill?.transform.scale.y).toBeCloseTo(0.18 * 1.25 * TRIAL_FILLBAR_FILL_HEIGHT_FRAC);
     expect(fill?.textureCrop).toEqual({ repeatX: 1, repeatY: 1, offsetX: 0, offsetY: 0 });
     expect(fill?.tintHex).toBeUndefined();
   });
@@ -376,7 +377,7 @@ describe('HeroWorldState', () => {
     expect(fill?.tintHex).toBeUndefined();
   });
 
-  it('keeps mini-boss health bars at the existing doubled scale', () => {
+  it('keeps mini-boss health bars at the existing doubled scale while kobold bars are larger', () => {
     const baseBars = createTrialMonsterHealthBarObjects(
       {
         monsterId: 'kobold',
@@ -407,14 +408,15 @@ describe('HeroWorldState', () => {
     );
 
     const baseTrack = baseBars.find((object) => object.templateId === HeroStageTemplateIds.healthBarTrack);
-    const baseFill = baseBars.find((object) => object.templateId === HeroStageTemplateIds.healthBarFill);
     const bossTrack = bossBars.find((object) => object.templateId === HeroStageTemplateIds.healthBarTrack);
     const bossFill = bossBars.find((object) => object.templateId === HeroStageTemplateIds.healthBarFill);
 
-    expect(bossTrack?.transform.scale.x).toBeCloseTo((baseTrack?.transform.scale.x ?? 0) * 2);
-    expect(bossTrack?.transform.scale.y).toBeCloseTo((baseTrack?.transform.scale.y ?? 0) * 2);
-    expect(bossFill?.transform.scale.x).toBeCloseTo((baseFill?.transform.scale.x ?? 0) * 2);
-    expect(bossFill?.transform.scale.y).toBeCloseTo((baseFill?.transform.scale.y ?? 0) * 2);
+    expect(baseTrack?.transform.scale.x).toBeCloseTo(0.92 * 1.25);
+    expect(baseTrack?.transform.scale.y).toBeCloseTo(0.18 * 1.25);
+    expect(bossTrack?.transform.scale.x).toBeCloseTo(0.92 * 2);
+    expect(bossTrack?.transform.scale.y).toBeCloseTo(0.18 * 2);
+    expect(bossFill?.transform.scale.x).toBeCloseTo((0.92 * 2) * TRIAL_FILLBAR_INNER_WIDTH_FRAC * 0.5);
+    expect(bossFill?.transform.scale.y).toBeCloseTo((0.18 * 2) * TRIAL_FILLBAR_FILL_HEIGHT_FRAC);
     expect(bossFill?.textureCrop).toEqual({ repeatX: 0.5, repeatY: 1, offsetX: 0, offsetY: 0 });
   });
 
@@ -945,8 +947,8 @@ describe('HeroWorldState', () => {
     expect(fireBurn?.transform.scale.x).toBeCloseTo(4.95);
     expect(fireBurn?.transform.scale.y).toBeCloseTo(4.95);
     expect(fireBurn?.transform.scale.z).toBe(1);
-    expect(fireBurn?.transform.position.x).toBeCloseTo(position.x + 0.25);
-    expect(fireBurn?.transform.position.y).toBeCloseTo(position.y + 1.2425);
+    expect(fireBurn?.transform.position.x).toBeCloseTo(position.x + 0.5);
+    expect(fireBurn?.transform.position.y).toBeCloseTo(position.y + 1.6175);
   });
 
   it('adds an earth impact sprite centered on the monster x and attack hit y', () => {

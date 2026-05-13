@@ -508,6 +508,13 @@ export const AssetManifest: Record<string, AssetManifestEntry> = {
     UI_ACTIVATION_OVERLAY_NOTES,
     "800x450 display",
   ),
+  [AssetIds.ui.levelCleared]: ui(
+    AssetIds.ui.levelCleared,
+    "/assets/ui/level-cleared.png",
+    "Assets/Textures/UI/level-cleared.png",
+    UI_ACTIVATION_OVERLAY_NOTES,
+    "800x450 display",
+  ),
   ...Object.fromEntries(
     Object.values(SoundManifest).map((entry) => [entry.id, audio(entry)]),
   ),

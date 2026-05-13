@@ -21,6 +21,7 @@ import {
   HUD_TRIAL_ENEMY_COUNT_ICON_Y,
   HUD_TRIAL_ENEMY_COUNT_VALUE_WIDTH,
   HUD_TRIAL_ENEMY_COUNT_VALUE_X,
+  HERO_STAGE_HEIGHT,
   LOGICAL_WIDTH,
   LOGICAL_HEIGHT,
   LEVEL_PANEL_HEIGHT,
@@ -453,8 +454,12 @@ describe('buildBoardCellVisuals', () => {
     );
   });
 
-  it('draws the hero activation overlay above gameplay and below screen overlays', () => {
-    const renderer = new FakeRenderer(new Set([AssetIds.tiles.fire, AssetIds.ui.activateLightning]));
+  it('draws the hero activation overlay below the level-cleared screen overlay', () => {
+    const renderer = new FakeRenderer(new Set([
+      AssetIds.tiles.fire,
+      AssetIds.ui.activateLightning,
+      AssetIds.ui.levelCleared,
+    ]));
     const state = oneTileState(AssetIds.tiles.fire);
     state.heroActivationOverlay = {
       assetId: AssetIds.ui.activateLightning,
@@ -484,16 +489,32 @@ describe('buildBoardCellVisuals', () => {
           bgm: { x: 0, y: 0, width: 0, height: 0 },
         },
         muted: false,
-        transitionText: 'Level Clear',
+        transitionText: null,
+        levelClearOverlay: {
+          assetId: AssetIds.ui.levelCleared,
+          x: 32,
+          y: (HERO_STAGE_HEIGHT - 450) / 2,
+          width: 800,
+          height: 450,
+          alpha: 1,
+          zIndex: 80,
+        },
       },
     );
 
     expect(renderer.calls).toContain(`image:${AssetIds.ui.activateLightning}:32,125,800,450`);
+    expect(renderer.calls).toContain(
+      `image:${AssetIds.ui.levelCleared}:32,${(HERO_STAGE_HEIGHT - 450) / 2},800,450`,
+    );
+    expect(renderer.calls).not.toContain('text:Level Clear');
     expect(renderer.calls.indexOf(`image:${AssetIds.ui.activateLightning}`)).toBeGreaterThan(
       renderer.calls.indexOf(`image:${AssetIds.tiles.fire}`),
     );
     expect(renderer.calls.indexOf(`image:${AssetIds.ui.activateLightning}`)).toBeLessThan(
-      renderer.calls.indexOf('text:Level Clear'),
+      renderer.calls.indexOf(`image:${AssetIds.ui.levelCleared}`),
+    );
+    expect(renderer.calls.indexOf(`image:${AssetIds.ui.levelCleared}`)).toBeGreaterThan(
+      renderer.calls.indexOf('rect:rgba(20, 14, 32, 0.55)'),
     );
   });
 
@@ -609,7 +630,7 @@ describe('buildBoardCellVisuals', () => {
     expect(renderer.calls.some((c) => c.includes('pushRotate'))).toBe(false);
   });
 
-  it('draws Trial enemy icon and defeated/remaining text instead of the monster fill bar', () => {
+  it('draws Trial enemy icon and defeated/total text instead of the monster fill bar', () => {
     const renderer = new FakeRenderer(
       new Set([
         AssetIds.ui.heartFill,
@@ -625,7 +646,7 @@ describe('buildBoardCellVisuals', () => {
       oneTileState('tile.fire'),
       hudState({
         objectiveText: '',
-        trialEnemyCount: { defeated: 2, remaining: 4 },
+        trialEnemyCount: { defeated: 2, total: 6 },
       }),
       0,
     );
@@ -639,7 +660,7 @@ describe('buildBoardCellVisuals', () => {
       `text:::${HUD_TRIAL_ENEMY_COUNT_COLON_X},${HUD_BAND_TOP_Y},${HUD_TRIAL_ENEMY_COUNT_COLON_WIDTH},${HUD_HEIGHT}`,
     );
     expect(renderer.calls).toContain(
-      `text:2/4:${HUD_TRIAL_ENEMY_COUNT_VALUE_X},${HUD_BAND_TOP_Y},${HUD_TRIAL_ENEMY_COUNT_VALUE_WIDTH},${HUD_HEIGHT}`,
+      `text:2/6:${HUD_TRIAL_ENEMY_COUNT_VALUE_X},${HUD_BAND_TOP_Y},${HUD_TRIAL_ENEMY_COUNT_VALUE_WIDTH},${HUD_HEIGHT}`,
     );
     expect(renderer.calls).toContain(
       `text:Score:0,${HUD_BAND_TOP_Y},${LOGICAL_WIDTH},${HUD_SCORE_LABEL_ROW_HEIGHT}`,
@@ -654,7 +675,7 @@ describe('buildBoardCellVisuals', () => {
           style: expect.objectContaining({ color: HUD_SCORE_LABEL_COLOR }),
         }),
         expect.objectContaining({
-          text: '2/4',
+          text: '2/6',
           style: expect.objectContaining({ color: '#ffffff' }),
         }),
       ]),

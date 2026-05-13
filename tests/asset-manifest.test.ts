@@ -103,7 +103,13 @@ describe("AssetManifest", () => {
     expect(AssetManifest[AssetIds.ui.activateLightning].browserUrl).toBe(
       "/assets/ui/activate-lightning.png",
     );
+    expect(AssetManifest[AssetIds.ui.levelCleared].browserUrl).toBe(
+      "/assets/ui/level-cleared.png",
+    );
     expect(AssetManifest[AssetIds.ui.activateEarth].runtimeSize).toBe(
+      "800x450 display",
+    );
+    expect(AssetManifest[AssetIds.ui.levelCleared].runtimeSize).toBe(
       "800x450 display",
     );
     expect(AssetManifest[AssetIds.materials.mageTexture].browserUrl).toBe(

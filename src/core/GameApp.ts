@@ -158,11 +158,13 @@ const TRIAL_HEALTH_BAR_WIDTH = 0.92;
 const TRIAL_HEALTH_BAR_HEIGHT = 0.18;
 const TRIAL_HEALTH_BAR_Z_OFFSET = 0.08;
 const TRIAL_KOBOLD_HEALTH_BAR_Y_OFFSET = 3.72;
+const TRIAL_KOBOLD_HEALTH_BAR_SCALE = 1.25;
 const TRIAL_MINI_BOSS_HEALTH_BAR_SCALE = 2;
 const TRIAL_MINI_BOSS_HEALTH_BAR_Y_OFFSET = 5.8;
 const TRIAL_FIRE_BURN_SCALE = 3.3;
 const TRIAL_MINI_BOSS_FIRE_BURN_SCALE_MULTIPLIER = 1.5;
-const TRIAL_MINI_BOSS_FIRE_BURN_X_OFFSET = 20 * HERO_WORLD_UNITS_PER_LOGICAL_PIXEL;
+const TRIAL_MINI_BOSS_FIRE_BURN_X_OFFSET = 40 * HERO_WORLD_UNITS_PER_LOGICAL_PIXEL;
+const TRIAL_MINI_BOSS_FIRE_BURN_Y_OFFSET = 30 * HERO_WORLD_UNITS_PER_LOGICAL_PIXEL;
 const TRIAL_FIRE_BURN_Y_OFFSET = 1.2425;
 const TRIAL_FIRE_BURN_RENDER_ORDER = 12;
 const TRIAL_EARTH_IMPACT_SCALE = 3.5;
@@ -203,6 +205,14 @@ const HERO_ACTIVATION_OVERLAY_HEIGHT = 450;
 const HERO_ACTIVATION_OVERLAY_TOTAL_SEC = 0.8;
 const HERO_ACTIVATION_OVERLAY_TWEEN_SEC = 0.1;
 const HERO_ACTIVATION_OVERLAY_Z_INDEX = 60;
+const LEVEL_CLEAR_OVERLAY_HOLD_SEC = 1.8;
+const LEVEL_CLEAR_OVERLAY_TWEEN_IN_SEC = HERO_ACTIVATION_OVERLAY_TWEEN_SEC;
+const LEVEL_CLEAR_OVERLAY_TWEEN_OUT_SEC = HERO_ACTIVATION_OVERLAY_TWEEN_SEC;
+const LEVEL_CLEAR_OVERLAY_TOTAL_SEC =
+  LEVEL_CLEAR_OVERLAY_TWEEN_IN_SEC +
+  LEVEL_CLEAR_OVERLAY_HOLD_SEC +
+  LEVEL_CLEAR_OVERLAY_TWEEN_OUT_SEC;
+const LEVEL_CLEAR_OVERLAY_Z_INDEX = 80;
 const TRIAL_MONSTER_RENDER_ORDER_BASE = 4;
 const TRIAL_MONSTER_RENDER_ORDER_STEP = 0.01;
 
@@ -311,7 +321,7 @@ export class MagusMatchGameApp implements GameApp {
       this.updateTrialMageExit(clampedDtSec);
       this.transitionTimerSec += clampedDtSec;
       if (
-        this.transitionTimerSec >= LEVEL_TRANSITION_HOLD_SEC &&
+        this.isLevelResultHoldComplete() &&
         this.hasLatestBoardAnimationFinished() &&
         this.isLevelResultExitAnimationComplete()
       ) {
@@ -436,6 +446,7 @@ export class MagusMatchGameApp implements GameApp {
       },
       muted: this.muted,
       transitionText: transitionTextForPhase(this.phase),
+      levelClearOverlay: this.getLevelClearOverlayVisualState(),
     };
   }
 
@@ -1690,6 +1701,46 @@ export class MagusMatchGameApp implements GameApp {
     };
   }
 
+  private getLevelClearOverlayVisualState(): ScreenRenderState["levelClearOverlay"] {
+    if (this.phase !== "WIN") {
+      return null;
+    }
+
+    const centeredX = (LOGICAL_WIDTH - HERO_ACTIVATION_OVERLAY_WIDTH) / 2;
+    const centeredY = (HERO_STAGE_HEIGHT - HERO_ACTIVATION_OVERLAY_HEIGHT) / 2;
+    const elapsedSec = Math.max(0, this.transitionTimerSec);
+    const exitStartSec = LEVEL_CLEAR_OVERLAY_TWEEN_IN_SEC + LEVEL_CLEAR_OVERLAY_HOLD_SEC;
+    let x = centeredX;
+    if (elapsedSec < LEVEL_CLEAR_OVERLAY_TWEEN_IN_SEC) {
+      x =
+        -HERO_ACTIVATION_OVERLAY_WIDTH +
+        (centeredX + HERO_ACTIVATION_OVERLAY_WIDTH) *
+          easeOutCubic(elapsedSec / LEVEL_CLEAR_OVERLAY_TWEEN_IN_SEC);
+    } else if (elapsedSec > exitStartSec) {
+      const progress = Math.min(
+        1,
+        (elapsedSec - exitStartSec) / LEVEL_CLEAR_OVERLAY_TWEEN_OUT_SEC,
+      );
+      x = centeredX + (LOGICAL_WIDTH - centeredX) * easeInCubic(progress);
+    }
+
+    return {
+      assetId: AssetIds.ui.levelCleared,
+      x,
+      y: centeredY,
+      width: HERO_ACTIVATION_OVERLAY_WIDTH,
+      height: HERO_ACTIVATION_OVERLAY_HEIGHT,
+      alpha: 1,
+      zIndex: LEVEL_CLEAR_OVERLAY_Z_INDEX,
+    };
+  }
+
+  private isLevelResultHoldComplete(): boolean {
+    const requiredSec =
+      this.phase === "WIN" ? LEVEL_CLEAR_OVERLAY_TOTAL_SEC : LEVEL_TRANSITION_HOLD_SEC;
+    return this.transitionTimerSec >= requiredSec;
+  }
+
   private getShakePixels(): number {
     if (this.shakeTimerSec <= 0) {
       return 0;
@@ -2011,7 +2062,7 @@ export class MagusMatchGameApp implements GameApp {
     };
   }
 
-  private getTrialEnemyCount(): { defeated: number; remaining: number } | null {
+  private getTrialEnemyCount(): { defeated: number; total: number } | null {
     if (this.currentLevel?.type !== "TRIAL" || this.trialRuntime == null) {
       return null;
     }
@@ -2021,7 +2072,7 @@ export class MagusMatchGameApp implements GameApp {
     const remaining = unspawned + aliveSpawned;
     return {
       defeated: Math.max(0, this.trialRuntime.totalMonsters - remaining),
-      remaining,
+      total: this.trialRuntime.totalMonsters,
     };
   }
 
@@ -2545,6 +2596,7 @@ export function createTrialMonsterFireBurnObjects(
     ? TRIAL_FIRE_BURN_SCALE * TRIAL_MINI_BOSS_FIRE_BURN_SCALE_MULTIPLIER
     : TRIAL_FIRE_BURN_SCALE;
   const fireBurnXOffset = isMiniBoss ? TRIAL_MINI_BOSS_FIRE_BURN_X_OFFSET : 0;
+  const fireBurnYOffset = isMiniBoss ? TRIAL_MINI_BOSS_FIRE_BURN_Y_OFFSET : 0;
 
   return [
     createWorldObject(
@@ -2553,7 +2605,7 @@ export function createTrialMonsterFireBurnObjects(
       {
         position: {
           x: monsterPosition.x + fireBurnXOffset,
-          y: monsterPosition.y + TRIAL_FIRE_BURN_Y_OFFSET,
+          y: monsterPosition.y + TRIAL_FIRE_BURN_Y_OFFSET + fireBurnYOffset,
           z: monsterPosition.z + 0.12,
         },
         scale: { x: fireBurnScale, y: fireBurnScale, z: 1 },
@@ -2655,13 +2707,13 @@ function healthBarYOffsetForTrialMonster(kind: ActiveTrialMonster["kind"]): numb
 function healthBarWidthForTrialMonster(kind: ActiveTrialMonster["kind"]): number {
   return kind === "miniBoss"
     ? TRIAL_HEALTH_BAR_WIDTH * TRIAL_MINI_BOSS_HEALTH_BAR_SCALE
-    : TRIAL_HEALTH_BAR_WIDTH;
+    : TRIAL_HEALTH_BAR_WIDTH * TRIAL_KOBOLD_HEALTH_BAR_SCALE;
 }
 
 function healthBarHeightForTrialMonster(kind: ActiveTrialMonster["kind"]): number {
   return kind === "miniBoss"
     ? TRIAL_HEALTH_BAR_HEIGHT * TRIAL_MINI_BOSS_HEALTH_BAR_SCALE
-    : TRIAL_HEALTH_BAR_HEIGHT;
+    : TRIAL_HEALTH_BAR_HEIGHT * TRIAL_KOBOLD_HEALTH_BAR_SCALE;
 }
 
 function heroStageTemplateForTrialMonster(kind: ActiveTrialMonster["kind"]): string {
@@ -2721,10 +2773,6 @@ function screenForPhase(phase: GamePhase): ScreenRenderState["screen"] {
 }
 
 function transitionTextForPhase(phase: GamePhase): string | null {
-  if (phase === "WIN") {
-    return "Level Clear";
-  }
-
   if (phase === "LOSE") {
     return "Life Lost";
   }

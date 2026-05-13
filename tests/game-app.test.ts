@@ -41,6 +41,9 @@ import { LEVEL_TRANSITION_HOLD_SEC } from '../src/run/RunProgression';
 import { BoardAnimationPresenter } from '../src/render-2d/BoardAnimationPresenter';
 import { HeroStageTemplateIds } from '../src/world-3d/HeroStageTemplates';
 
+const LEVEL_CLEAR_OVERLAY_TOTAL_SEC = 2.0;
+const LEVEL_CLEAR_OVERLAY_EXIT_START_SEC = 1.9;
+
 describe('MagusMatchGameApp', () => {
   it('resets to the initial run values for a provided seed', () => {
     const app = new MagusMatchGameApp(111);
@@ -120,7 +123,7 @@ describe('MagusMatchGameApp', () => {
       defeatedMonsterIds: [],
     });
 
-    expect(app.getHudState().trialEnemyCount).toEqual({ defeated: 1, remaining: 5 });
+    expect(app.getHudState().trialEnemyCount).toEqual({ defeated: 1, total: 6 });
 
     setTrialRuntimeForDebug(app, {
       ...runtime,
@@ -129,7 +132,7 @@ describe('MagusMatchGameApp', () => {
       monsters: [{ ...runtime.monsters[0], monsterId: 'dead', hp: 0, maxHp: 3 }],
       defeatedMonsterIds: [],
     });
-    expect(app.getHudState().trialEnemyCount).toEqual({ defeated: 2, remaining: 0 });
+    expect(app.getHudState().trialEnemyCount).toEqual({ defeated: 2, total: 2 });
 
     const journeyApp = new MagusMatchGameApp(555, { debugLevelType: 'JOURNEY' });
     expect(journeyApp.getHudState().trialEnemyCount).toBeNull();
@@ -394,6 +397,40 @@ describe('MagusMatchGameApp', () => {
 
     app.update(0.05, []);
     expect(app.getBoardRenderState().heroActivationOverlay).toBeNull();
+  });
+
+  it('shows a tweened level-cleared image overlay during win transitions', () => {
+    const app = new MagusMatchGameApp(778, { debugLevelType: 'TRIAL' });
+    finishTrialEntrance(app);
+    beginLevelResultForDebug(app, 'win');
+
+    expect(app.getScreenState()).toMatchObject({
+      phase: 'WIN',
+      transitionText: null,
+      levelClearOverlay: {
+        assetId: AssetIds.ui.levelCleared,
+        x: -800,
+        y: (HERO_STAGE_HEIGHT - 450) / 2,
+        width: 800,
+        height: 450,
+        alpha: 1,
+      },
+    });
+
+    app.update(0.1, []);
+
+    expect(app.getScreenState().levelClearOverlay).toMatchObject({
+      x: (LOGICAL_WIDTH - 800) / 2,
+      y: (HERO_STAGE_HEIGHT - 450) / 2,
+    });
+
+    app.update(LEVEL_CLEAR_OVERLAY_EXIT_START_SEC - 0.1, []);
+    expect(app.getScreenState().levelClearOverlay?.x).toBeCloseTo((LOGICAL_WIDTH - 800) / 2);
+
+    app.update(0.05, []);
+    const exitingX = app.getScreenState().levelClearOverlay?.x ?? 0;
+    expect(exitingX).toBeGreaterThan((LOGICAL_WIDTH - 800) / 2);
+    expect(exitingX).toBeLessThan(LOGICAL_WIDTH);
   });
 
   it('shows the selected target overlay for tapped Journey Lightballs', () => {
@@ -997,10 +1034,29 @@ describe('MagusMatchGameApp', () => {
     expect(app.getHudState().phase).toBe('WIN');
     expect(app.getRunStateForDebug().levelNumber).toBe(startingLevel);
 
-    app.update(LEVEL_TRANSITION_HOLD_SEC - TRIAL_MAGE_EXIT_DURATION_SEC, []);
+    app.update(LEVEL_CLEAR_OVERLAY_TOTAL_SEC - TRIAL_MAGE_EXIT_DURATION_SEC, []);
     expect(app.getHudState().phase).toBe('IDLE');
     expect(app.getRunStateForDebug().levelNumber).toBe(startingLevel + 1);
     expect(app.drainEvents().filter((event) => event.type === 'levelStarted')).toHaveLength(1);
+  });
+
+  it('keeps wins on screen for the level-cleared image hold window', () => {
+    const app = new MagusMatchGameApp(778, { debugLevelType: 'TRIAL' });
+    finishTrialEntrance(app);
+    app.update(LEVEL_TRANSITION_HOLD_SEC, []);
+    app.drainEvents();
+    const startingLevel = app.getRunStateForDebug().levelNumber;
+
+    beginLevelResultForDebug(app, 'win');
+    app.drainEvents();
+
+    app.update(LEVEL_CLEAR_OVERLAY_TOTAL_SEC - 0.001, []);
+    expect(app.getHudState().phase).toBe('WIN');
+    expect(app.getRunStateForDebug().levelNumber).toBe(startingLevel);
+
+    app.update(0.01, []);
+    expect(app.getHudState().phase).toBe('IDLE');
+    expect(app.getRunStateForDebug().levelNumber).toBe(startingLevel + 1);
   });
 
   it('does not require the Trial mage exit tween for Journey wins or Trial losses', () => {
@@ -1009,6 +1065,9 @@ describe('MagusMatchGameApp', () => {
     journeyApp.drainEvents();
     beginLevelResultForDebug(journeyApp, 'win');
     journeyApp.update(LEVEL_TRANSITION_HOLD_SEC, []);
+    expect(journeyApp.getHudState().phase).toBe('WIN');
+    expect(journeyApp.getRunStateForDebug().levelNumber).toBe(journeyStartLevel);
+    journeyApp.update(LEVEL_CLEAR_OVERLAY_TOTAL_SEC - LEVEL_TRANSITION_HOLD_SEC, []);
     expect(journeyApp.getHudState().phase).toBe('IDLE');
     expect(journeyApp.getRunStateForDebug().levelNumber).toBe(journeyStartLevel + 1);
 
@@ -1332,7 +1391,7 @@ function longCollapseTrace(revisionId: number): BoardAnimationTrace {
     tileType: 'FIRE' as const,
     coord: { col: 0, row: 0 },
     isPath: false,
-    clearDelayMs: 1800,
+    clearDelayMs: 4200,
   };
 
   return {

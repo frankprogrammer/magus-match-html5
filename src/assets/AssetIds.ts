@@ -59,6 +59,7 @@ export const AssetIds = {
     activateFire: 'ui.activateFire',
     activateIce: 'ui.activateIce',
     activateLightning: 'ui.activateLightning',
+    levelCleared: 'ui.levelCleared',
   },
   materials: {
     mageTexture: 'material.mageTexture',

@@ -285,7 +285,7 @@ function drawHudHearts(
 
 function drawTrialEnemyCount(
   renderer: GameRenderer,
-  trialEnemyCount: { defeated: number; remaining: number },
+  trialEnemyCount: { defeated: number; total: number },
 ): void {
   const iconRef = { id: AssetIds.ui.trialFillBarKoboldIcon };
   if (renderer.hasImage(iconRef)) {
@@ -313,7 +313,7 @@ function drawTrialEnemyCount(
     },
   );
   renderer.drawText(
-    `${Math.max(0, trialEnemyCount.defeated)}/${Math.max(0, trialEnemyCount.remaining)}`,
+    `${Math.max(0, trialEnemyCount.defeated)}/${Math.max(0, trialEnemyCount.total)}`,
     HUD_TRIAL_ENEMY_COUNT_VALUE_X,
     HUD_BAND_TOP_Y,
     HUD_TRIAL_ENEMY_COUNT_VALUE_WIDTH,
@@ -781,8 +781,8 @@ function drawScreenOverlay(renderer: GameRenderer, screenState: ScreenRenderStat
     return;
   }
 
-  if (screenState.transitionText != null) {
-    drawTransitionOverlay(renderer, screenState.transitionText);
+  if (screenState.transitionText != null || screenState.levelClearOverlay != null) {
+    drawTransitionOverlay(renderer, screenState);
   }
 }
 
@@ -843,15 +843,31 @@ function drawGameOverScreen(renderer: GameRenderer, screenState: ScreenRenderSta
   );
 }
 
-function drawTransitionOverlay(renderer: GameRenderer, text: string): void {
+function drawTransitionOverlay(renderer: GameRenderer, screenState: ScreenRenderState): void {
   renderer.drawRect('rgba(20, 14, 32, 0.55)', 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
-  const textRect = centeredScreenRect(840, 800, 120);
-  renderer.drawText(text, textRect.x, textRect.y, textRect.width, textRect.height, {
-    fontSize: 70,
-    fontWeight: 'bold',
-    color: '#f5e9c9',
-    align: 'center',
-  });
+  if (screenState.transitionText != null) {
+    const textRect = centeredScreenRect(840, 800, 120);
+    renderer.drawText(screenState.transitionText, textRect.x, textRect.y, textRect.width, textRect.height, {
+      fontSize: 70,
+      fontWeight: 'bold',
+      color: '#f5e9c9',
+      align: 'center',
+    });
+  }
+
+  const overlay = screenState.levelClearOverlay;
+  if (overlay == null || overlay.alpha <= 0 || overlay.width <= 0 || overlay.height <= 0) {
+    return;
+  }
+
+  const imageRef = { id: overlay.assetId };
+  if (!renderer.hasImage(imageRef)) {
+    return;
+  }
+
+  renderer.pushAlpha(overlay.alpha);
+  renderer.drawImage(imageRef, overlay.x, overlay.y, overlay.width, overlay.height);
+  renderer.pop();
 }
 
 function drawButton(

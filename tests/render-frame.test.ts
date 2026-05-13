@@ -716,6 +716,57 @@ describe('buildBoardCellVisuals', () => {
     expect(frameIndex).toBeGreaterThan(clippedLayerPopIndex);
   });
 
+  it('draws opaque board tiles without alpha stack churn and preserves translucent tile alpha', () => {
+    const opaqueRenderer = new FakeRenderer(new Set(['tile.fire']));
+    renderFrame(opaqueRenderer, oneTileState('tile.fire'), hudState(), 0);
+    expect(opaqueRenderer.calls).not.toContain('pushAlpha:1');
+
+    const translucentRenderer = new FakeRenderer(new Set(['tile.fire']));
+    const translucentState = oneTileState('tile.fire');
+    translucentState.boardCells = [{ ...translucentState.boardCells[0], alpha: 0.5 }];
+    renderFrame(translucentRenderer, translucentState, hudState(), 0);
+    const tileIndex = translucentRenderer.calls.indexOf('image:tile.fire');
+    expect(translucentRenderer.calls).toContain('pushAlpha:0.5');
+    expect(translucentRenderer.calls[tileIndex + 2]).toBe('pop');
+  });
+
+  it('uses pre-sorted board cells when requested and sorts normal board cells', () => {
+    const renderer = new FakeRenderer(new Set([AssetIds.tiles.fire, AssetIds.tiles.lightning]));
+    const state = oneTileState(AssetIds.tiles.fire);
+    state.boardCells = [
+      {
+        tileId: 'lightning',
+        coord: { col: 0, row: 1 },
+        assetId: AssetIds.tiles.lightning,
+        tileType: 'LIGHTNING',
+        isPath: false,
+        alpha: 1,
+        zIndex: 7,
+      },
+      {
+        tileId: 'fire',
+        coord: { col: 0, row: 0 },
+        assetId: AssetIds.tiles.fire,
+        tileType: 'FIRE',
+        isPath: false,
+        alpha: 1,
+        zIndex: 0,
+      },
+    ];
+    state.boardCellsArePreSorted = true;
+
+    renderFrame(renderer, state, hudState(), 0);
+    expect(renderer.calls.indexOf(`image:${AssetIds.tiles.lightning}`)).toBeLessThan(
+      renderer.calls.indexOf(`image:${AssetIds.tiles.fire}`),
+    );
+
+    const sortedRenderer = new FakeRenderer(new Set([AssetIds.tiles.fire, AssetIds.tiles.lightning]));
+    renderFrame(sortedRenderer, { ...state, boardCellsArePreSorted: false }, hudState(), 0);
+    expect(sortedRenderer.calls.indexOf(`image:${AssetIds.tiles.fire}`)).toBeLessThan(
+      sortedRenderer.calls.indexOf(`image:${AssetIds.tiles.lightning}`),
+    );
+  });
+
   it('draws particles inside the clipped board layer after tiles and before the frame', () => {
     const renderer = new FakeRenderer(new Set(['tile.fire', AssetIds.powerUps.orb, AssetIds.powerUps.lightballStream]));
     const state = oneTileState('tile.fire');

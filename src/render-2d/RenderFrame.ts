@@ -395,18 +395,21 @@ function drawBoard(renderer: GameRenderer, boardState: BoardRenderState, elapsed
   renderer.pushTranslate(shake, 0);
   drawBoardBackground(renderer);
 
-  const visuals = buildBoardCellVisuals(boardState, elapsedSec).sort(
-    (first, second) =>
-      first.zIndex - second.zIndex ||
-      first.coord.row - second.coord.row ||
-      first.coord.col - second.coord.col,
-  );
+  const visuals = buildBoardCellVisuals(boardState, elapsedSec);
+  const sortedVisuals = boardState.boardCellsArePreSorted === true
+    ? visuals
+    : visuals.sort(
+        (first, second) =>
+          first.zIndex - second.zIndex ||
+          first.coord.row - second.coord.row ||
+          first.coord.col - second.coord.col,
+      );
 
   renderer.pushClipRect(BOARD_RECT.x, BOARD_RECT.y, BOARD_RECT.width, BOARD_RECT.height);
   for (const emptyCell of boardState.emptyCells ?? []) {
     drawEmptyCell(renderer, emptyCell.coord, emptyCell.assetId);
   }
-  for (const visual of visuals) {
+  for (const visual of sortedVisuals) {
     drawCell(renderer, visual);
   }
   drawLightballStreams(renderer, boardState);
@@ -463,12 +466,17 @@ function drawCell(renderer: GameRenderer, visual: BoardCellVisual): void {
     return;
   }
 
-  renderer.pushAlpha(visual.alpha);
+  const alphaPushed = visual.alpha < 1;
+  if (alphaPushed) {
+    renderer.pushAlpha(visual.alpha);
+  }
 
   const imageRef = { id: visual.assetId };
   const hasImage = renderer.hasImage(imageRef);
   if (!hasImage) {
-    renderer.pop();
+    if (alphaPushed) {
+      renderer.pop();
+    }
     return;
   }
 
@@ -505,7 +513,9 @@ function drawCell(renderer: GameRenderer, visual: BoardCellVisual): void {
       align: 'center',
     });
   }
-  renderer.pop();
+  if (alphaPushed) {
+    renderer.pop();
+  }
 }
 
 function drawFloatingTutorialMatch(renderer: GameRenderer, boardState: BoardRenderState): void {

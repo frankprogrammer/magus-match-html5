@@ -101,6 +101,8 @@ interface VisualSample {
 interface ActiveBoardAnimation {
   trace: BoardAnimationTrace;
   startSec: number;
+  stepTimings: readonly BoardAnimationStepTiming[];
+  durationMs: number;
   retargetStarts: Map<string, VisualSample>;
 }
 
@@ -122,9 +124,12 @@ export class BoardAnimationPresenter {
       const currentState = this.activeAnimation == null || !shouldRetargetIntoTrace(trace)
         ? null
         : this.sampleActiveAnimation(authoritativeState, elapsedSec, options);
+      const stepTimings = getBoardAnimationStepTimings(trace);
       this.activeAnimation = {
         trace,
         startSec: elapsedSec,
+        stepTimings,
+        durationMs: getBoardAnimationTraceDurationMs(trace),
         retargetStarts: currentState == null ? new Map() : sampleCells(currentState),
       };
       this.lastRevisionId = trace.revisionId;
@@ -154,7 +159,7 @@ export class BoardAnimationPresenter {
 
     const elapsedMs = Math.max(0, (elapsedSec - this.activeAnimation.startSec) * 1000);
     const trace = this.activeAnimation.trace;
-    const stepTimings = getBoardAnimationStepTimings(trace);
+    const stepTimings = this.activeAnimation.stepTimings;
     const boardCells = sampleTraceCells(trace, stepTimings, elapsedMs, this.activeAnimation.retargetStarts);
     const particles = sampleTraceParticles(trace, stepTimings, elapsedMs);
     const matchEnergyStreams = sampleTraceMatchEnergyStreams(trace, stepTimings, elapsedMs, options.matchEnergyTarget);
@@ -181,6 +186,7 @@ export class BoardAnimationPresenter {
               floatingMatch,
             },
       boardCells,
+      boardCellsArePreSorted: trace.kind === 'levelIntro',
       particles,
       matchEnergyStreams,
       burstRings,
@@ -195,9 +201,8 @@ export class BoardAnimationPresenter {
       return true;
     }
 
-    const totalMs = getBoardAnimationTraceDurationMs(this.activeAnimation.trace);
     const elapsedMs = Math.max(0, (elapsedSec - this.activeAnimation.startSec) * 1000);
-    return elapsedMs >= totalMs;
+    return elapsedMs >= this.activeAnimation.durationMs;
   }
 }
 
@@ -215,7 +220,11 @@ function sampleTraceCells(
     return sampleInvalidSwapCells(trace, elapsedMs, retargetStarts);
   }
 
-  if (trace.kind !== 'levelIntro' && (elapsedMs < TILE_SWAP_RETARGET_MS || stepTimings.length === 0)) {
+  if (trace.kind === 'levelIntro') {
+    return sampleLevelIntroCells(trace, stepTimings, elapsedMs);
+  }
+
+  if (elapsedMs < TILE_SWAP_RETARGET_MS || stepTimings.length === 0) {
     return sampleSwapCells(trace, elapsedMs, retargetStarts);
   }
 
@@ -234,7 +243,25 @@ function sampleTraceCells(
     activeStep.endMs - activeStep.fallStartMs,
     activeStep.fallDelaysByTileId,
     retargetStarts,
-    trace.kind === 'levelIntro',
+    false,
+  );
+}
+
+function sampleLevelIntroCells(
+  trace: BoardAnimationTrace,
+  stepTimings: readonly BoardAnimationStepTiming[],
+  elapsedMs: number,
+): BoardCellVisualState[] {
+  const activeStep = stepTimings.find((timing) => elapsedMs < timing.endMs);
+  if (activeStep == null) {
+    return snapshotToCells(trace.finalSnapshot);
+  }
+
+  return sampleLevelIntroRefillCells(
+    activeStep.step,
+    elapsedMs - activeStep.fallStartMs,
+    activeStep.endMs - activeStep.fallStartMs,
+    activeStep.fallDelaysByTileId,
   );
 }
 
@@ -1080,6 +1107,52 @@ function sampleFallCells(
   }
 
   return cells;
+}
+
+function sampleLevelIntroRefillCells(
+  step: BoardAnimationCascadeStep,
+  stepElapsedMs: number,
+  stepDurationMs: number,
+  fallDelaysByTileId: ReadonlyMap<string, number>,
+): BoardCellVisualState[] {
+  const cells: BoardCellVisualState[] = [];
+  for (const refill of step.refillTiles) {
+    cells.push(sampleLevelIntroRefillTile(refill, stepElapsedMs, stepDurationMs, fallDelaysByTileId));
+  }
+  return cells;
+}
+
+function sampleLevelIntroRefillTile(
+  refill: BoardAnimationRefill,
+  stepElapsedMs: number,
+  stepDurationMs: number,
+  fallDelaysByTileId: ReadonlyMap<string, number>,
+): BoardCellVisualState {
+  const distanceRows = Math.max(1, Math.abs(refill.to.row - refill.from.row));
+  const delayMs = fallDelaysByTileId.get(refill.tileId) ?? 0;
+  const fallMs = clamp(
+    distanceRows * TILE_FALL_DURATION_PER_ROW_MS + TILE_LANDING_SETTLE_MS,
+    TILE_FALL_MIN_MS,
+    Math.min(TILE_FALL_MAX_MS, stepDurationMs),
+  );
+  const progress = clamp01((stepElapsedMs - delayMs) / fallMs);
+  const eased = gravityFallEase(progress);
+  const target = coordToRender(refill.to);
+  const start = coordToRender({ col: refill.to.col, row: refill.from.row });
+
+  return {
+    tileId: refill.tileId,
+    coord: refill.to,
+    assetId: assetIdForTileType(refill.tileType),
+    tileType: refill.tileType,
+    isPath: refill.isPath,
+    alpha: progress <= 0 ? 0 : 1,
+    renderX: target.renderX,
+    renderY: lerp(start.renderY, target.renderY, eased),
+    scale: landingScale(progress),
+    zIndex: 7,
+    isGhost: true,
+  };
 }
 
 function sampleMovingTile(

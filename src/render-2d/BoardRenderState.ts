@@ -197,6 +197,7 @@ export interface BoardRenderState {
   tutorialPresentation?: TutorialPresentationState;
   heroActivationOverlay?: HeroActivationOverlayVisualState | null;
   boardCells: readonly BoardCellVisualState[];
+  boardCellsArePreSorted?: boolean;
   particles?: readonly BoardParticleVisualState[];
   matchEnergyStreams?: readonly BoardMatchEnergyStreamVisualState[];
   burstRings?: readonly BoardBurstRingVisualState[];

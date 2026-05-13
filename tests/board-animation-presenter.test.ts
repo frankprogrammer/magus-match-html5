@@ -514,6 +514,35 @@ describe('BoardAnimationPresenter', () => {
     );
   });
 
+  it('keeps full-board level intro rendering bounded to refill tiles only', () => {
+    const presenter = new BoardAnimationPresenter();
+    const tileTypes: BoardCellVisualState['tileType'][] = ['FIRE', 'ICE', 'EARTH', 'LIGHTNING'];
+    const board = createBoardFromTileTypes(
+      Array.from({ length: 8 }, (_, row) =>
+        Array.from({ length: 8 }, (_, col) => tileTypes[(row + col) % tileTypes.length]),
+      ),
+    );
+    const trace = createLevelIntroBoardAnimationTrace(board, 77);
+    const state = boardState(trace);
+
+    presenter.present(state, 0);
+    const start = presenter.present(state, 0);
+    const falling = presenter.present(state, 0.25);
+    const settled = presenter.present(state, getBoardAnimationTraceDurationMs(trace) / 1000);
+
+    expect(start.boardCells).toHaveLength(64);
+    expect(start.boardCells.every((cell) => cell.alpha === 0)).toBe(true);
+    expect(start.boardCellsArePreSorted).toBe(true);
+    expect(falling.boardCells).toHaveLength(64);
+    expect(falling.boardCellsArePreSorted).toBe(true);
+    expect(falling.particles ?? []).toHaveLength(0);
+    expect(falling.matchEnergyStreams ?? []).toHaveLength(0);
+    expect(falling.lightballStreams ?? []).toHaveLength(0);
+    expect(falling.burstRings ?? []).toHaveLength(0);
+    expect(settled).toBe(state);
+    expect(settled.boardCellsArePreSorted).toBeUndefined();
+  });
+
   it('animates invalid swaps forward and then back to the authoritative cells', () => {
     const presenter = new BoardAnimationPresenter();
     const board = createBoardFromTileTypes([

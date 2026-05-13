@@ -4,7 +4,6 @@ export type LevelType = 'JOURNEY' | 'TRIAL';
 
 export type GamePhase =
   | 'BOOT'
-  | 'TITLE'
   | 'LEVEL_INTRO'
   | 'IDLE'
   | 'SWAP_VALIDATING'

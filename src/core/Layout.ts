@@ -141,13 +141,6 @@ export interface UiRect {
   height: number;
 }
 
-export const TITLE_PLAY_BUTTON_RECT: UiRect = {
-  x: (LOGICAL_WIDTH - 480) / 2,
-  y: 1040,
-  width: 480,
-  height: 112,
-};
-
 export const GAME_OVER_TRY_AGAIN_BUTTON_RECT: UiRect = {
   x: (LOGICAL_WIDTH - 480) / 2,
   y: 1570,

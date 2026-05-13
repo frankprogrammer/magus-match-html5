@@ -5,7 +5,6 @@ import {
   HERO_STAGE_HEIGHT,
   LOGICAL_HEIGHT,
   LOGICAL_WIDTH,
-  TITLE_PLAY_BUTTON_RECT,
   pointInRect,
 } from './core/Layout';
 import {
@@ -17,7 +16,6 @@ import {
 } from './platform-browser/BrowserInputAdapter';
 import { isMobileFullscreenTarget, shouldRequestGameFullscreen } from './platform-browser/FullscreenPolicy';
 import { loadBrowserImages } from './platform-browser/BrowserImageLoader';
-import { resolveBrowserAssetUrl } from './platform-browser/BrowserAssetUrl';
 import { LocalLeaderboardStore } from './platform-browser/LocalLeaderboardStore';
 import { BoardAnimationPresenter } from './render-2d/BoardAnimationPresenter';
 import { Canvas2DRenderer } from './render-2d/Canvas2DRenderer';
@@ -74,9 +72,6 @@ root.innerHTML = `
       <div class="debug-panel" data-debug></div>
     </section>
   </main>
-  <button class="launch-overlay" data-launch-overlay type="button" aria-label="Start Magus Match">
-    <img class="launch-overlay__image" src="${resolveBrowserAssetUrl('/assets/ui/launch.png')}" alt="" draggable="false" />
-  </button>
 `;
 
 const shell = root.querySelector<HTMLElement>('.game-shell');
@@ -88,7 +83,6 @@ if (shell == null || logicalStage == null) {
 
 const gameShell = shell;
 const stageElement = logicalStage;
-const launchOverlay = root.querySelector<HTMLButtonElement>('[data-launch-overlay]');
 const debugPanel = mustQuery(root, '[data-debug]');
 const canvas = mustQuery(root, '.game-canvas') as HTMLCanvasElement;
 const heroStageElement = mustQuery(root, '[data-hero-stage]');
@@ -110,7 +104,6 @@ let audioPreloadStarted = false;
 
 const input = new BrowserInputAdapter(gameShell);
 let fullscreenRequestAttempted = false;
-let launchOverlayDismissed = false;
 
 void loadBrowserImages().then((images) => {
   renderer.setImages(images);
@@ -127,20 +120,6 @@ if (ENABLE_BROWSER_AUDIO) {
 }
 
 gameShell.addEventListener('pointerdown', requestGameFullscreen, { passive: true });
-
-launchOverlay?.addEventListener('pointerdown', (event) => {
-  event.preventDefault();
-  event.stopPropagation();
-  if (launchOverlayDismissed) {
-    return;
-  }
-
-  launchOverlayDismissed = true;
-  launchOverlay.remove();
-  unlockBrowserAudio();
-  requestGameFullscreen();
-  app.startFromTitle();
-});
 
 function unlockBrowserAudio(): void {
   if (!ENABLE_BROWSER_AUDIO || audio == null) {
@@ -163,10 +142,6 @@ function updateOverlayPrimaryButtonPressed(event: PointerEvent, down: boolean): 
   }
   const logical = clientToLogicalPoint(event, gameShell.getBoundingClientRect());
   const phase = app.getScreenState(leaderboardRows, highlightedRank).phase;
-  if (phase === 'TITLE' && pointInRect(logical, TITLE_PLAY_BUTTON_RECT)) {
-    overlayPrimaryButtonPressed = true;
-    return;
-  }
   if (phase === 'GAME_OVER' && pointInRect(logical, GAME_OVER_TRY_AGAIN_BUTTON_RECT)) {
     overlayPrimaryButtonPressed = true;
   }

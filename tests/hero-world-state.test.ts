@@ -139,7 +139,6 @@ describe('HeroWorldState', () => {
 
   it('emits node visibility overrides for tutorial kobolds', () => {
     const app = new MagusMatchGameApp(555);
-    app.startFromTitle();
 
     const runtime = app.getTrialRuntimeForDebug();
     const level = app.getCurrentLevelForDebug();
@@ -160,7 +159,7 @@ describe('HeroWorldState', () => {
   });
 
   it('includes stable Trial enemy health bar objects above alive monsters', () => {
-    const state = new MagusMatchGameApp(789).getHeroWorldState();
+    const state = new MagusMatchGameApp(789, { debugLevelType: 'TRIAL' }).getHeroWorldState();
     const monster = state.objects.find((object) => object.templateId === HeroStageTemplateIds.monsterPlaceholder);
     const track = state.objects.find((object) => object.templateId === HeroStageTemplateIds.healthBarTrack);
     const fill = state.objects.find((object) => object.templateId === HeroStageTemplateIds.healthBarFill);
@@ -381,7 +380,7 @@ describe('HeroWorldState', () => {
   });
 
   it('uses player scale and FBX material colors for Trial enemies', () => {
-    const app = new MagusMatchGameApp(789);
+    const app = new MagusMatchGameApp(789, { debugLevelType: 'TRIAL' });
     const state = app.getHeroWorldState();
     const level = app.getCurrentLevelForDebug();
     const runtime = app.getTrialRuntimeForDebug();
@@ -399,7 +398,7 @@ describe('HeroWorldState', () => {
   });
 
   it('emits a pulsing cyan tint for frozen Trial enemies without tinting health bars', () => {
-    const app = new MagusMatchGameApp(789);
+    const app = new MagusMatchGameApp(789, { debugLevelType: 'TRIAL' });
     const runtime = app.getTrialRuntimeForDebug();
     if (runtime == null) {
       throw new Error('Expected Trial runtime.');

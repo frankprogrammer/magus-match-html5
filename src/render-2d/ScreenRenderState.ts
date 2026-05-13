@@ -2,10 +2,9 @@ import type { GamePhase } from '../core/Types';
 import type { UiRect } from '../core/Layout';
 import type { LeaderboardEntry } from '../run/Leaderboard';
 
-export type ScreenKind = 'title' | 'play' | 'gameOver';
+export type ScreenKind = 'play' | 'gameOver';
 
 export interface ScreenButtonRects {
-  play: UiRect;
   tryAgain: UiRect;
   mute: UiRect;
   bgm: UiRect;
@@ -21,6 +20,6 @@ export interface ScreenRenderState {
   buttonRects: ScreenButtonRects;
   muted: boolean;
   transitionText: string | null;
-  /** Browser shell: true while pointer is down on title Play or game-over Try Again. */
+  /** Browser shell: true while pointer is down on game-over Try Again. */
   overlayPrimaryButtonPressed?: boolean;
 }

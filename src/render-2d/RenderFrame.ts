@@ -662,11 +662,6 @@ function drawDamagePopups(renderer: GameRenderer, boardState: BoardRenderState):
 }
 
 function drawScreenOverlay(renderer: GameRenderer, screenState: ScreenRenderState): void {
-  if (screenState.screen === 'title') {
-    drawTitleScreen(renderer, screenState);
-    return;
-  }
-
   if (screenState.screen === 'gameOver') {
     drawGameOverScreen(renderer, screenState);
     return;
@@ -687,26 +682,6 @@ function centeredScreenRect(maxWidth: number, y: number, height: number): UiRect
     width,
     height,
   };
-}
-
-function drawTitleScreen(renderer: GameRenderer, screenState: ScreenRenderState): void {
-  renderer.drawRect('rgba(20, 14, 32, 0.78)', 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
-  const titleRect = centeredScreenRect(880, 250, 150);
-  renderer.drawText('MAGUS MATCH', titleRect.x, titleRect.y, titleRect.width, titleRect.height, {
-    fontSize: 86,
-    fontWeight: 'bold',
-    color: '#f5e9c9',
-    align: 'center',
-  });
-  const subtitleRect = centeredScreenRect(760, 390, 60);
-  renderer.drawText('Save the prince one spell at a time', subtitleRect.x, subtitleRect.y, subtitleRect.width, subtitleRect.height, {
-    fontSize: 34,
-    fontWeight: 'normal',
-    color: '#c8a24b',
-    align: 'center',
-  });
-  drawButton(renderer, screenState.buttonRects.play, 'PLAY', screenState.overlayPrimaryButtonPressed === true);
-  drawLeaderboardPreview(renderer, screenState, 1260, 5);
 }
 
 function drawGameOverScreen(renderer: GameRenderer, screenState: ScreenRenderState): void {

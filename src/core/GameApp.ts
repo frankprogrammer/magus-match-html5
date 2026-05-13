@@ -9,7 +9,6 @@ import {
   LOGICAL_WIDTH,
   logicalPointToBoardCell,
   pointInHudBgmToggle,
-  TITLE_PLAY_BUTTON_RECT,
   pointInRect,
 } from "./Layout";
 import type { CellCoord } from "./Layout";
@@ -113,7 +112,6 @@ export interface GameApp {
     highlightedRank?: number | null,
   ): ScreenRenderState;
   drainEvents(): GameEvent[];
-  startFromTitle(): boolean;
   reset(seed?: number): void;
 }
 
@@ -168,7 +166,7 @@ export class MagusMatchGameApp implements GameApp {
   private currentLevel: GeneratedLevel | null = null;
   private journeyRuntime: JourneyRuntimeState | null = null;
   private trialRuntime: TrialRuntimeState | null = null;
-  private phase: GamePhase = "TITLE";
+  private phase: GamePhase = "IDLE";
   private muted = false;
   private bgmMuted = false;
   private transitionTimerSec = 0;
@@ -336,7 +334,6 @@ export class MagusMatchGameApp implements GameApp {
       leaderboardRows,
       highlightedRank,
       buttonRects: {
-        play: TITLE_PLAY_BUTTON_RECT,
         tryAgain: GAME_OVER_TRY_AGAIN_BUTTON_RECT,
         mute: HUD_MUTE_TOGGLE_RECT,
         bgm: HUD_BGM_TOGGLE_RECT,
@@ -350,16 +347,6 @@ export class MagusMatchGameApp implements GameApp {
     const drained = this.events;
     this.events = [];
     return drained;
-  }
-
-  startFromTitle(): boolean {
-    if (this.phase !== "TITLE") {
-      return false;
-    }
-
-    this.emitUiClick();
-    this.startPreparedLevel();
-    return true;
   }
 
   reset(seed = createRandomSeed()): void {
@@ -391,10 +378,10 @@ export class MagusMatchGameApp implements GameApp {
     this.animationClockSec = 0;
     this.nextBoardAnimationRevision = 1;
     this.resetMatchHintTimer();
-    this.phase = "TITLE";
     this.events = [];
     this.bgmMuted = false;
     this.trialTutorial = null;
+    this.startPreparedLevel();
   }
 
   getRunStateForDebug(): RunState {
@@ -657,18 +644,12 @@ export class MagusMatchGameApp implements GameApp {
       return;
     }
 
-    if (this.phase === "TITLE" && pointInRect(point, TITLE_PLAY_BUTTON_RECT)) {
-      this.startFromTitle();
-      return;
-    }
-
     if (
       this.phase === "GAME_OVER" &&
       pointInRect(point, GAME_OVER_TRY_AGAIN_BUTTON_RECT)
     ) {
       this.tryAgain();
       this.emitUiClick();
-      this.startPreparedLevel();
       return;
     }
 
@@ -1973,10 +1954,6 @@ function createTrialTutorialRuntime(
 }
 
 function screenForPhase(phase: GamePhase): ScreenRenderState["screen"] {
-  if (phase === "TITLE") {
-    return "title";
-  }
-
   if (phase === "GAME_OVER") {
     return "gameOver";
   }

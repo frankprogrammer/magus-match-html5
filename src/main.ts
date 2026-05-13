@@ -14,7 +14,15 @@ import {
   parseDebugLevelType,
   parseDebugSeed,
 } from './platform-browser/BrowserInputAdapter';
-import { isMobileFullscreenTarget, shouldRequestGameFullscreen } from './platform-browser/FullscreenPolicy';
+import {
+  canRequestElementFullscreen,
+  getActiveFullscreenElement,
+  isMobileFullscreenTarget,
+  requestElementFullscreen,
+  shouldRequestGameFullscreen,
+  type FullscreenCapableDocument,
+  type FullscreenCapableElement,
+} from './platform-browser/FullscreenPolicy';
 import { loadBrowserImages } from './platform-browser/BrowserImageLoader';
 import { LocalLeaderboardStore } from './platform-browser/LocalLeaderboardStore';
 import { BoardAnimationPresenter } from './render-2d/BoardAnimationPresenter';
@@ -201,21 +209,21 @@ function getMatchEnergyTarget(): { x: number; y: number } | undefined {
 function requestGameFullscreen(): void {
   if (!shouldRequestGameFullscreen({
     requestAttempted: fullscreenRequestAttempted,
-    fullscreenElement: document.fullscreenElement,
-    canRequestFullscreen: gameShell.requestFullscreen != null,
+    fullscreenElement: getActiveFullscreenElement(document as FullscreenCapableDocument),
+    canRequestFullscreen: canRequestElementFullscreen(gameShell as FullscreenCapableElement),
     isMobileFullscreenTarget: isMobileFullscreenTarget(window.matchMedia.bind(window)),
   })) {
     return;
   }
 
   fullscreenRequestAttempted = true;
-  void gameShell.requestFullscreen().catch(() => {
+  void requestElementFullscreen(gameShell as FullscreenCapableElement).catch(() => {
     fullscreenRequestAttempted = false;
   });
 }
 
 function handleFullscreenChange(): void {
-  if (document.fullscreenElement == null) {
+  if (getActiveFullscreenElement(document as FullscreenCapableDocument) == null) {
     fullscreenRequestAttempted = false;
   }
   resizeLogicalStage();
@@ -306,6 +314,7 @@ renderFrame(
 );
 window.addEventListener('resize', () => resizeLogicalStage());
 document.addEventListener('fullscreenchange', handleFullscreenChange);
+document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
 window.addEventListener('beforeunload', () => {
   heroStage.dispose();
   audio?.stopTrialWalkLoop();

@@ -173,6 +173,7 @@ export interface TutorialPresentationState {
   mode: TutorialPresentationMode;
   heroHeight: number;
   sceneScale: number;
+  sceneOffsetX?: number;
   hideHud: boolean;
   hideBoard: boolean;
   floatingMatch: FloatingTutorialMatchVisualState | null;

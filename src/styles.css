@@ -94,7 +94,7 @@ body {
 
 .hero-stage-canvas {
   position: absolute;
-  left: 0;
+  left: var(--hero-scene-offset-x, 0px);
   top: 0;
   display: block;
   width: 864px;

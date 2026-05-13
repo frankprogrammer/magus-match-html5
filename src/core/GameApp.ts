@@ -174,6 +174,7 @@ const TRIAL_TUTORIAL_MONSTER_X_POSITIONS = [-1.25, 0.1, 1.45] as const;
 const TRIAL_TUTORIAL_MAGE_X_OFFSET = -0.35;
 const TUTORIAL_FULL_HERO_HEIGHT = LOGICAL_HEIGHT;
 const TUTORIAL_FULL_HERO_SCENE_SCALE = 1.5;
+const TUTORIAL_FULL_HERO_SCENE_OFFSET_X = -50;
 const TUTORIAL_ZOOM_OUT_DURATION_SEC = 0.65;
 const TUTORIAL_FLOATING_TILE_SIZE = 192;
 const TUTORIAL_FLOATING_TILE_GAP = 18;
@@ -1687,6 +1688,7 @@ export class MagusMatchGameApp implements GameApp {
       mode,
       heroHeight: this.getActiveHeroHeight(mode),
       sceneScale: this.getTutorialSceneScale(mode),
+      sceneOffsetX: this.getTutorialSceneOffsetX(mode),
       hideHud,
       hideBoard,
       floatingMatch: mode === "tutorialFullHero" ? this.getFloatingTutorialMatchVisualState() : null,
@@ -1725,6 +1727,23 @@ export class MagusMatchGameApp implements GameApp {
     );
     const eased = 1 - Math.pow(1 - progress, 3);
     return TUTORIAL_FULL_HERO_SCENE_SCALE + (1 - TUTORIAL_FULL_HERO_SCENE_SCALE) * eased;
+  }
+
+  private getTutorialSceneOffsetX(mode = this.tutorialPresentationMode): number {
+    if (mode === "tutorialFullHero") {
+      return TUTORIAL_FULL_HERO_SCENE_OFFSET_X;
+    }
+
+    if (mode !== "tutorialZoomOut") {
+      return 0;
+    }
+
+    const progress = Math.max(
+      0,
+      Math.min(1, this.tutorialZoomOutElapsedSec / TUTORIAL_ZOOM_OUT_DURATION_SEC),
+    );
+    const eased = 1 - Math.pow(1 - progress, 3);
+    return TUTORIAL_FULL_HERO_SCENE_OFFSET_X * (1 - eased);
   }
 
   private isFullHeroTutorialPresentationActive(): boolean {
@@ -1769,9 +1788,10 @@ export class MagusMatchGameApp implements GameApp {
     const groupX = (LOGICAL_WIDTH - groupWidth) / 2;
     const groupY = LOGICAL_HEIGHT - groupHeight - TUTORIAL_FLOATING_SIDE_PADDING - TUTORIAL_FLOATING_RAISE_PX;
     const progress = (this.matchHintTimerSec % MATCH_HINT_ACTIVE_SEC) / MATCH_HINT_ACTIVE_SEC;
-    const pulse = (Math.sin(progress * Math.PI * 2 * 5) + 1) / 2;
+    const hintWave = Math.sin(progress * Math.PI * 2 * 5);
+    const pulse = (hintWave + 1) / 2;
     const flash = 0.18 + pulse * 0.32;
-    const bounce = Math.max(0, Math.sin(progress * Math.PI * 2 * 3)) * MATCH_HINT_BOUNCE_DISTANCE_PX;
+    const bounce = Math.max(0, hintWave) * MATCH_HINT_BOUNCE_DISTANCE_PX;
     const tutorialPhase = this.trialTutorial?.phase === "resolving" ? "resolving" : "idle";
     const hintActive = tutorialPhase === "idle";
     const allowedSwap = this.trialTutorial?.allowedSwap;
@@ -1804,7 +1824,7 @@ export class MagusMatchGameApp implements GameApp {
     });
     const tiles = [
       tile("topLeftLightning", "LIGHTNING", 0, 0, { col: topCenter.col - 1, row: topCenter.row }),
-      tile("earth", "EARTH", 1, 0, topCenter, "pulse"),
+      tile("earth", "EARTH", 1, 0, topCenter),
       tile("topRightLightning", "LIGHTNING", 2, 0, { col: topCenter.col + 1, row: topCenter.row }),
       tile("lowerLightning", "LIGHTNING", 1, 1, lowerCenter, "bounce"),
     ];

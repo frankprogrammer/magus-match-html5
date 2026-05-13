@@ -107,6 +107,7 @@ let fullscreenRequestAttempted = false;
 let activeHeroHeight = HERO_STAGE_HEIGHT;
 let activeHeroRenderHeight = HERO_STAGE_HEIGHT;
 let activeHeroSceneScale = 1;
+let activeHeroSceneOffsetX = 0;
 
 void loadBrowserImages().then((images) => {
   renderer.setImages(images);
@@ -158,15 +159,18 @@ function resizeLogicalStage(
   nextHeroHeight = activeHeroHeight,
   nextHeroSceneScale = activeHeroSceneScale,
   nextHeroRenderHeight = activeHeroRenderHeight,
+  nextHeroSceneOffsetX = activeHeroSceneOffsetX,
 ): void {
   activeHeroHeight = nextHeroHeight;
   activeHeroSceneScale = nextHeroSceneScale;
   activeHeroRenderHeight = nextHeroRenderHeight;
+  activeHeroSceneOffsetX = nextHeroSceneOffsetX;
   const rect = gameShell.getBoundingClientRect();
   const scale = Math.min(rect.width / LOGICAL_WIDTH, rect.height / LOGICAL_HEIGHT);
   stageElement.style.transform = `scale(${scale})`;
   heroStageElement.style.height = `${activeHeroHeight}px`;
   heroStageElement.style.setProperty('--hero-scene-scale', `${activeHeroSceneScale}`);
+  heroStageElement.style.setProperty('--hero-scene-offset-x', `${activeHeroSceneOffsetX}px`);
   heroStage.resize(LOGICAL_WIDTH, activeHeroRenderHeight);
 }
 
@@ -181,7 +185,7 @@ function getMatchEnergyTarget(): { x: number; y: number } | undefined {
   }
 
   return {
-    x: projected.x * activeHeroSceneScale,
+    x: activeHeroSceneOffsetX + projected.x * activeHeroSceneScale,
     y: projected.y * activeHeroSceneScale,
   };
 }
@@ -254,6 +258,7 @@ function tick(timeMs: number): void {
     tutorialPresentation?.heroHeight ?? HERO_STAGE_HEIGHT,
     tutorialPresentation?.sceneScale ?? 1,
     heroRenderHeightForTutorialMode(tutorialPresentation?.mode),
+    tutorialPresentation?.sceneOffsetX ?? 0,
   );
   heroStage.render(app.getHeroWorldState(), dtSec);
   renderFrame(
@@ -275,6 +280,7 @@ resizeLogicalStage(
   initialTutorialPresentation?.heroHeight ?? HERO_STAGE_HEIGHT,
   initialTutorialPresentation?.sceneScale ?? 1,
   heroRenderHeightForTutorialMode(initialTutorialPresentation?.mode),
+  initialTutorialPresentation?.sceneOffsetX ?? 0,
 );
 heroStage.render(app.getHeroWorldState(), 0);
 renderFrame(

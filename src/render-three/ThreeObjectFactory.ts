@@ -83,9 +83,9 @@ export class ThreeObjectFactory {
       case HeroStageTemplateIds.earthImpact:
         return createEarthImpactSprite();
       case HeroStageTemplateIds.healthBarTrack:
-        return createHealthBarPlane("#1f1830", 0.85);
+        return createHealthBarPlane(AssetIds.ui.trialFillBarBg, "health-bar-track");
       case HeroStageTemplateIds.healthBarFill:
-        return createHealthBarPlane("#27ae60", 0.95);
+        return createHealthBarPlane(AssetIds.ui.trialFillBarFill, "health-bar-fill");
       default:
         return createFallback(templateId);
     }
@@ -765,6 +765,38 @@ function startSpriteTextureLoad(
   );
 }
 
+function startUiTextureLoad(
+  material: THREE.MeshBasicMaterial,
+  assetId: string,
+  label: string,
+): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const entry = getAssetManifestEntry(assetId);
+  if (entry == null) {
+    return;
+  }
+
+  const textureUrl = resolveBrowserAssetUrl(entry.browserUrl);
+  new THREE.TextureLoader().load(
+    textureUrl,
+    (texture) => {
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.wrapS = THREE.ClampToEdgeWrapping;
+      texture.wrapT = THREE.ClampToEdgeWrapping;
+      material.map?.dispose();
+      material.map = texture;
+      material.needsUpdate = true;
+    },
+    undefined,
+    (error) => {
+      console.warn(`Failed to load ${label} texture from ${textureUrl}`, error);
+    },
+  );
+}
+
 function createTransparentPlaceholderTexture(): THREE.DataTexture {
   const texture = new THREE.DataTexture(new Uint8Array([0, 0, 0, 0]), 1, 1, THREE.RGBAFormat);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -772,15 +804,20 @@ function createTransparentPlaceholderTexture(): THREE.DataTexture {
   return texture;
 }
 
-function createHealthBarPlane(color: string, opacity: number): THREE.Object3D {
+function createHealthBarPlane(assetId: string, label: string): THREE.Object3D {
   const material = new THREE.MeshBasicMaterial({
-    color,
-    transparent: opacity < 1,
-    opacity,
+    map: createTransparentPlaceholderTexture(),
+    color: "#ffffff",
+    transparent: true,
+    opacity: 1,
     depthWrite: false,
+    side: THREE.DoubleSide,
   });
   const plane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), material);
+  plane.name = label;
   plane.renderOrder = 8;
+  plane.userData.textureAssetId = assetId;
+  startUiTextureLoad(material, assetId, label);
   return plane;
 }
 

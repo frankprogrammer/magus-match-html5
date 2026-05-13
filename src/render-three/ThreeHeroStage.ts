@@ -2,7 +2,11 @@ import * as THREE from 'three';
 import { HERO_STAGE_HEIGHT, LOGICAL_WIDTH } from '../core/Layout';
 import type { HeroWorldState, ProjectileState } from '../world-3d/HeroWorldState';
 import { HeroStageTemplateIds } from '../world-3d/HeroStageTemplates';
-import type { WorldObjectNodeVisibility, WorldObjectState } from '../world-3d/WorldObjectState';
+import type {
+  WorldObjectNodeVisibility,
+  WorldObjectState,
+  WorldObjectTextureCrop,
+} from '../world-3d/WorldObjectState';
 import {
   HERO_STAGE_ORTHO_VIEW_WIDTH,
   type OrthographicAnchor,
@@ -671,6 +675,7 @@ function applyWorldObjectState(object: THREE.Object3D, objectState: WorldObjectS
       if (objectState.templateId === HeroStageTemplateIds.earthImpact) {
         applyEarthImpactSpriteFrame(child.material, objectState.animationTimeSec ?? elapsedSec);
       }
+      applyTextureCrop(child.material, objectState.textureCrop);
       applyMaterialOverrides(child.material, objectState.tintHex, objectState.opacity, objectState.materialDepthTest);
     }
   });
@@ -764,6 +769,26 @@ function applySpriteSheetFrame(
 
     item.map.repeat.set(uv.repeatX, uv.repeatY);
     item.map.offset.set(uv.offsetX, uv.offsetY);
+    item.map.needsUpdate = true;
+  }
+}
+
+export function applyTextureCrop(
+  material: THREE.Material | THREE.Material[],
+  textureCrop?: WorldObjectTextureCrop,
+): void {
+  if (textureCrop == null) {
+    return;
+  }
+
+  const materials = Array.isArray(material) ? material : [material];
+  for (const item of materials) {
+    if (!(item instanceof THREE.MeshBasicMaterial) || item.map == null) {
+      continue;
+    }
+
+    item.map.repeat.set(textureCrop.repeatX, textureCrop.repeatY);
+    item.map.offset.set(textureCrop.offsetX, textureCrop.offsetY);
     item.map.needsUpdate = true;
   }
 }

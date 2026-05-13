@@ -8,6 +8,7 @@ import {
   createMageAnimationController,
   earthImpactSpriteFrameIndex,
   fireBurnSpriteFrameIndex,
+  applyTextureCrop,
   isBackgroundLayerObject,
   isProjectileChargeVisible,
   isProjectileCastReady,
@@ -250,6 +251,19 @@ describe('ThreeHeroStage projectile VFX', () => {
       offsetX: 0.5,
       offsetY: 0,
     });
+  });
+
+  it('applies health bar texture crops without squeezing the authored fill art', () => {
+    const texture = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1, THREE.RGBAFormat);
+    texture.needsUpdate = true;
+    const material = new THREE.MeshBasicMaterial({ map: texture });
+
+    applyTextureCrop(material, { repeatX: 0.5, repeatY: 1, offsetX: 0, offsetY: 0 });
+
+    expect(texture.repeat.x).toBeCloseTo(0.5);
+    expect(texture.repeat.y).toBeCloseTo(1);
+    expect(texture.offset.x).toBeCloseTo(0);
+    expect(texture.offset.y).toBeCloseTo(0);
   });
 
   it('projects the mage particleSource into logical hero-stage coordinates', () => {

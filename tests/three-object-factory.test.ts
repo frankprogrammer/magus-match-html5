@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
+import { AssetIds } from '../src/assets/AssetIds';
 import {
   applyKoboldModelFacingCorrection,
   applyMageModelFacingCorrection,
@@ -107,7 +108,7 @@ describe('ThreeObjectFactory', () => {
     expect(plane?.scale.y).toBeCloseTo(HERO_BACKDROP_VIEW_HEIGHT);
   });
 
-  it('creates synchronous unlit health bar track and fill objects', () => {
+  it('creates textured health bar track and fill objects with transparent placeholder maps', () => {
     const factory = new ThreeObjectFactory();
     const track = factory.create(HeroStageTemplateIds.healthBarTrack);
     const fill = factory.create(HeroStageTemplateIds.healthBarFill);
@@ -116,8 +117,19 @@ describe('ThreeObjectFactory', () => {
     expect(fill).toBeInstanceOf(THREE.Mesh);
     expect((track as THREE.Mesh).material).toBeInstanceOf(THREE.MeshBasicMaterial);
     expect((fill as THREE.Mesh).material).toBeInstanceOf(THREE.MeshBasicMaterial);
-    expect(((track as THREE.Mesh).material as THREE.MeshBasicMaterial).depthWrite).toBe(false);
-    expect(((fill as THREE.Mesh).material as THREE.MeshBasicMaterial).depthWrite).toBe(false);
+    expect(track.name).toBe('health-bar-track');
+    expect(fill.name).toBe('health-bar-fill');
+    expect(track.userData.textureAssetId).toBe(AssetIds.ui.trialFillBarBg);
+    expect(fill.userData.textureAssetId).toBe(AssetIds.ui.trialFillBarFill);
+
+    const trackMaterial = (track as THREE.Mesh).material as THREE.MeshBasicMaterial;
+    const fillMaterial = (fill as THREE.Mesh).material as THREE.MeshBasicMaterial;
+    expect(trackMaterial.map).toBeInstanceOf(THREE.DataTexture);
+    expect(fillMaterial.map).toBeInstanceOf(THREE.DataTexture);
+    expect(trackMaterial.transparent).toBe(true);
+    expect(fillMaterial.transparent).toBe(true);
+    expect(trackMaterial.depthWrite).toBe(false);
+    expect(fillMaterial.depthWrite).toBe(false);
   });
 
   it('creates a depth-independent fire burn sprite plane', () => {

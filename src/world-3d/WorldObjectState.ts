@@ -8,6 +8,13 @@ export interface WorldObjectNodeVisibility {
   hiddenNodeNames?: readonly string[];
 }
 
+export interface WorldObjectTextureCrop {
+  repeatX: number;
+  repeatY: number;
+  offsetX: number;
+  offsetY: number;
+}
+
 export interface WorldObjectState {
   objectId: string;
   templateId: string;
@@ -22,6 +29,7 @@ export interface WorldObjectState {
   materialDepthTest?: boolean;
   tintHex?: string;
   opacity?: number;
+  textureCrop?: WorldObjectTextureCrop;
   animationId?: string;
   animationTimeSec?: number;
   animationPaused?: boolean;

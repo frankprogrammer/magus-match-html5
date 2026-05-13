@@ -4,7 +4,6 @@ import {
   createTrialEarthImpactObjects,
   createTrialMonsterFireBurnObjects,
   createTrialMonsterHealthBarObjects,
-  healthBarTintForRatio,
   MagusMatchGameApp,
   MAGE_WORLD_SCALE,
   MAGE_WORLD_Y_OFFSET,
@@ -29,6 +28,11 @@ import {
   TRIAL_MONSTER_BOTTOM_VISUAL_Y_OFFSET,
   TRIAL_MONSTER_TOP_VISUAL_Y_OFFSET,
 } from '../src/generator/TrialRules';
+import {
+  TRIAL_FILLBAR_FILL_HEIGHT_FRAC,
+  TRIAL_FILLBAR_INNER_PAD_X_FRAC,
+  TRIAL_FILLBAR_INNER_WIDTH_FRAC,
+} from '../src/core/Layout';
 import { HeroStageTemplateIds } from '../src/world-3d/HeroStageTemplates';
 
 describe('HeroWorldState', () => {
@@ -145,7 +149,7 @@ describe('HeroWorldState', () => {
     expect((bossTrack?.transform.position.y ?? 0) - (boss?.transform.position.y ?? 0)).toBeCloseTo(5.8);
     expect(bossTrack?.transform.scale.x).toBeCloseTo(1.84);
     expect(bossTrack?.transform.scale.y).toBeCloseTo(0.36);
-    expect(bossFill?.transform.scale.y).toBeCloseTo(0.22);
+    expect(bossFill?.transform.scale.y).toBeCloseTo(0.36 * TRIAL_FILLBAR_FILL_HEIGHT_FRAC);
   });
 
   it('emits node visibility overrides for tutorial kobolds', () => {
@@ -184,10 +188,11 @@ describe('HeroWorldState', () => {
     expect(fill?.replication).toBe('localCosmetic');
     expect(track?.transform.position.y).toBeGreaterThan(monster?.transform.position.y ?? 0);
     expect((track?.transform.position.y ?? 0) - (monster?.transform.position.y ?? 0)).toBeCloseTo(3.72);
-    expect(fill?.transform.scale.x).toBeCloseTo(track?.transform.scale.x ?? 0);
+    expect(fill?.transform.scale.x).toBeCloseTo((track?.transform.scale.x ?? 0) * TRIAL_FILLBAR_INNER_WIDTH_FRAC);
     expect(track?.transform.scale.y).toBeCloseTo(0.18);
-    expect(fill?.transform.scale.y).toBeCloseTo(0.11);
-    expect(fill?.tintHex).toBe('#27ae60');
+    expect(fill?.transform.scale.y).toBeCloseTo(0.18 * TRIAL_FILLBAR_FILL_HEIGHT_FRAC);
+    expect(fill?.textureCrop).toEqual({ repeatX: 1, repeatY: 1, offsetX: 0, offsetY: 0 });
+    expect(fill?.tintHex).toBeUndefined();
   });
 
   it('renders Trial actor entrance with enemies tweening in before the mage', () => {
@@ -311,7 +316,7 @@ describe('HeroWorldState', () => {
     expect(exitEndMonster.transform.position.x).toBeCloseTo(normalMonster.transform.position.x);
   });
 
-  it('scales and colors health bar fill from monster health ratio', () => {
+  it('scales and crops textured health bar fill from monster health ratio', () => {
     const bars = createTrialMonsterHealthBarObjects(
       {
         monsterId: 'low',
@@ -330,12 +335,21 @@ describe('HeroWorldState', () => {
     const fill = bars.find((object) => object.templateId === HeroStageTemplateIds.healthBarFill);
 
     expect(bars).toHaveLength(2);
-    expect(fill?.transform.scale.x).toBeCloseTo((track?.transform.scale.x ?? 0) * 0.2);
-    expect(fill?.transform.position.x).toBeLessThan(track?.transform.position.x ?? 0);
-    expect(fill?.tintHex).toBe('#eb5757');
+    const trackWidth = track?.transform.scale.x ?? 0;
+    const fillWidth = fill?.transform.scale.x ?? 0;
+    expect(fillWidth).toBeCloseTo(trackWidth * TRIAL_FILLBAR_INNER_WIDTH_FRAC * 0.2);
+    expect(fill?.transform.scale.y).toBeCloseTo((track?.transform.scale.y ?? 0) * TRIAL_FILLBAR_FILL_HEIGHT_FRAC);
+    expect(fill?.transform.position.x).toBeCloseTo(
+      (track?.transform.position.x ?? 0) -
+      trackWidth / 2 +
+      trackWidth * TRIAL_FILLBAR_INNER_PAD_X_FRAC +
+      fillWidth / 2,
+    );
+    expect(fill?.textureCrop).toEqual({ repeatX: 0.2, repeatY: 1, offsetX: 0, offsetY: 0 });
+    expect(fill?.tintHex).toBeUndefined();
   });
 
-  it('uses delayed displayed health for Trial health bar fill and tint', () => {
+  it('uses delayed displayed health for Trial health bar fill crop', () => {
     const bars = createTrialMonsterHealthBarObjects(
       {
         monsterId: 'delayed',
@@ -355,8 +369,53 @@ describe('HeroWorldState', () => {
     const fill = bars.find((object) => object.templateId === HeroStageTemplateIds.healthBarFill);
 
     expect(bars).toHaveLength(2);
-    expect(fill?.transform.scale.x).toBeCloseTo((track?.transform.scale.x ?? 0) * 0.6);
-    expect(fill?.tintHex).toBe('#27ae60');
+    expect(fill?.transform.scale.x).toBeCloseTo(
+      (track?.transform.scale.x ?? 0) * TRIAL_FILLBAR_INNER_WIDTH_FRAC * 0.6,
+    );
+    expect(fill?.textureCrop).toEqual({ repeatX: 0.6, repeatY: 1, offsetX: 0, offsetY: 0 });
+    expect(fill?.tintHex).toBeUndefined();
+  });
+
+  it('keeps mini-boss health bars at the existing doubled scale', () => {
+    const baseBars = createTrialMonsterHealthBarObjects(
+      {
+        monsterId: 'kobold',
+        kind: 'kobold',
+        laneId: 0,
+        hp: 50,
+        maxHp: 100,
+        x: 0,
+        spawnTimeMs: 0,
+        walkSpeed: 0.2,
+        scoreValue: 100,
+      },
+      { x: 2, y: -0.5, z: 0.35 },
+    );
+    const bossBars = createTrialMonsterHealthBarObjects(
+      {
+        monsterId: 'boss',
+        kind: 'miniBoss',
+        laneId: 0,
+        hp: 50,
+        maxHp: 100,
+        x: 0,
+        spawnTimeMs: 0,
+        walkSpeed: 0.2,
+        scoreValue: 100,
+      },
+      { x: 2, y: -0.5, z: 0.35 },
+    );
+
+    const baseTrack = baseBars.find((object) => object.templateId === HeroStageTemplateIds.healthBarTrack);
+    const baseFill = baseBars.find((object) => object.templateId === HeroStageTemplateIds.healthBarFill);
+    const bossTrack = bossBars.find((object) => object.templateId === HeroStageTemplateIds.healthBarTrack);
+    const bossFill = bossBars.find((object) => object.templateId === HeroStageTemplateIds.healthBarFill);
+
+    expect(bossTrack?.transform.scale.x).toBeCloseTo((baseTrack?.transform.scale.x ?? 0) * 2);
+    expect(bossTrack?.transform.scale.y).toBeCloseTo((baseTrack?.transform.scale.y ?? 0) * 2);
+    expect(bossFill?.transform.scale.x).toBeCloseTo((baseFill?.transform.scale.x ?? 0) * 2);
+    expect(bossFill?.transform.scale.y).toBeCloseTo((baseFill?.transform.scale.y ?? 0) * 2);
+    expect(bossFill?.textureCrop).toEqual({ repeatX: 0.5, repeatY: 1, offsetX: 0, offsetY: 0 });
   });
 
   it('applies the same Trial hit shake offset to the enemy and health bar objects', () => {
@@ -479,13 +538,6 @@ describe('HeroWorldState', () => {
     expect(bars).toEqual([]);
   });
 
-  it('maps health bar color thresholds to green, gold, and red', () => {
-    expect(healthBarTintForRatio(0.75)).toBe('#27ae60');
-    expect(healthBarTintForRatio(0.5)).toBe('#f2c94c');
-    expect(healthBarTintForRatio(0.25)).toBe('#f2c94c');
-    expect(healthBarTintForRatio(0.24)).toBe('#eb5757');
-  });
-
   it('uses doubled readable mage world scale for normalized FBX models', () => {
     const journeyMage = new MagusMatchGameApp(123, { debugLevelType: 'JOURNEY' })
       .getHeroWorldState()
@@ -590,7 +642,7 @@ describe('HeroWorldState', () => {
     expect(monster?.animationPaused).toBe(true);
     expect(track).toBeDefined();
     expect(track?.tintHex).toBeUndefined();
-    expect(fill?.tintHex).toBe('#f2c94c');
+    expect(fill?.tintHex).toBeUndefined();
   });
 
   it('uses walk animation for living and projectile-pending defeated Trial monsters', () => {

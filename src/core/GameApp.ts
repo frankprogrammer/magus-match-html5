@@ -8,6 +8,9 @@ import {
   HUD_MUTE_TOGGLE_RECT,
   LOGICAL_HEIGHT,
   LOGICAL_WIDTH,
+  TRIAL_FILLBAR_FILL_HEIGHT_FRAC,
+  TRIAL_FILLBAR_INNER_PAD_X_FRAC,
+  TRIAL_FILLBAR_INNER_WIDTH_FRAC,
   logicalPointToBoardCell,
   pointInHudBgmToggle,
   pointInRect,
@@ -153,7 +156,6 @@ export const TRIAL_MAGE_EXIT_DURATION_SEC = 0.45;
 export const TRIAL_MAGE_EXIT_OFFSCREEN_X_OFFSET = TRIAL_ACTOR_ENTRANCE_OFFSCREEN_X_OFFSET;
 const TRIAL_HEALTH_BAR_WIDTH = 0.92;
 const TRIAL_HEALTH_BAR_HEIGHT = 0.18;
-const TRIAL_HEALTH_BAR_FILL_HEIGHT = 0.11;
 const TRIAL_HEALTH_BAR_Z_OFFSET = 0.08;
 const TRIAL_KOBOLD_HEALTH_BAR_Y_OFFSET = 3.72;
 const TRIAL_MINI_BOSS_HEALTH_BAR_SCALE = 2;
@@ -2485,13 +2487,17 @@ export function createTrialMonsterHealthBarObjects(
 
   const healthBarWidth = healthBarWidthForTrialMonster(monster.kind);
   const healthBarHeight = healthBarHeightForTrialMonster(monster.kind);
-  const healthBarFillHeight = healthBarFillHeightForTrialMonster(monster.kind);
+  const healthBarInnerWidth = healthBarWidth * TRIAL_FILLBAR_INNER_WIDTH_FRAC;
+  const healthBarFillHeight = healthBarHeight * TRIAL_FILLBAR_FILL_HEIGHT_FRAC;
   const barY =
     monsterPosition.y + healthBarYOffsetForTrialMonster(monster.kind);
   const barZ = monsterPosition.z + TRIAL_HEALTH_BAR_Z_OFFSET;
-  const fillWidth = healthBarWidth * ratio;
+  const fillWidth = healthBarInnerWidth * ratio;
   const fillCenterX =
-    monsterPosition.x - healthBarWidth / 2 + fillWidth / 2;
+    monsterPosition.x -
+    healthBarWidth / 2 +
+    healthBarWidth * TRIAL_FILLBAR_INNER_PAD_X_FRAC +
+    fillWidth / 2;
 
   return [
     createWorldObject(
@@ -2502,7 +2508,6 @@ export function createTrialMonsterHealthBarObjects(
         scale: { x: healthBarWidth, y: healthBarHeight, z: 1 },
         renderOrder: 6,
         replication: "localCosmetic",
-        opacity: 0.85,
       },
     ),
     createWorldObject(
@@ -2513,8 +2518,12 @@ export function createTrialMonsterHealthBarObjects(
         scale: { x: fillWidth, y: healthBarFillHeight, z: 1 },
         renderOrder: 7,
         replication: "localCosmetic",
-        tintHex: healthBarTintForRatio(ratio),
-        opacity: 0.95,
+        textureCrop: {
+          repeatX: ratio,
+          repeatY: 1,
+          offsetX: 0,
+          offsetY: 0,
+        },
       },
     ),
   ];
@@ -2600,19 +2609,6 @@ export function trialMonsterHitShakeOffset(monster: ActiveTrialMonster): { x: nu
   };
 }
 
-export function healthBarTintForRatio(ratio: number): string {
-  const clampedRatio = Math.max(0, Math.min(1, ratio));
-  if (clampedRatio > 0.5) {
-    return "#27ae60";
-  }
-
-  if (clampedRatio >= 0.25) {
-    return "#f2c94c";
-  }
-
-  return "#eb5757";
-}
-
 function healthRatioForTrialMonster(monster: ActiveTrialMonster): number {
   if (monster.maxHp <= 0) {
     return 0;
@@ -2666,12 +2662,6 @@ function healthBarHeightForTrialMonster(kind: ActiveTrialMonster["kind"]): numbe
   return kind === "miniBoss"
     ? TRIAL_HEALTH_BAR_HEIGHT * TRIAL_MINI_BOSS_HEALTH_BAR_SCALE
     : TRIAL_HEALTH_BAR_HEIGHT;
-}
-
-function healthBarFillHeightForTrialMonster(kind: ActiveTrialMonster["kind"]): number {
-  return kind === "miniBoss"
-    ? TRIAL_HEALTH_BAR_FILL_HEIGHT * TRIAL_MINI_BOSS_HEALTH_BAR_SCALE
-    : TRIAL_HEALTH_BAR_FILL_HEIGHT;
 }
 
 function heroStageTemplateForTrialMonster(kind: ActiveTrialMonster["kind"]): string {
@@ -2756,6 +2746,7 @@ function createWorldObject(
     animationPaused?: boolean;
     tintHex?: string;
     opacity?: number;
+    textureCrop?: WorldObjectState["textureCrop"];
     animationTimeSec?: number;
     nodeVisibility?: WorldObjectState["nodeVisibility"];
   },
@@ -2777,6 +2768,7 @@ function createWorldObject(
     materialDepthTest: options.materialDepthTest,
     tintHex: options.tintHex,
     opacity: options.opacity,
+    textureCrop: options.textureCrop,
     animationId: options.animationId,
     animationTimeSec: options.animationTimeSec,
     animationPaused: options.animationPaused,

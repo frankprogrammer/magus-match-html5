@@ -331,6 +331,26 @@ describe('BoardAnimationPresenter', () => {
     );
   });
 
+  it('caps dense Lightball collection and match-energy visuals deterministically', () => {
+    const presenter = new BoardAnimationPresenter();
+    const trace = fullBoardLightballTrace();
+    const state = boardState(trace);
+
+    presenter.present(state, 0);
+    const collection = presenter.present(state, 0.42);
+    const repeatedCollection = presenter.present(state, 0.42);
+    const targetClear = presenter.present(state, 0.88);
+    const repeatedTargetClear = presenter.present(state, 0.88);
+
+    expect(collection.lightballStreams).toHaveLength(32);
+    expect(collection.lightballStreams).toEqual(repeatedCollection.lightballStreams);
+    expect(new Set(collection.lightballStreams?.map((stream) => stream.streamId))).toHaveLength(32);
+    expect(targetClear.matchEnergyStreams).toHaveLength(126);
+    expect(targetClear.matchEnergyStreams).toEqual(repeatedTargetClear.matchEnergyStreams);
+    expect(targetClear.matchEnergyStreams?.every((stream) => stream.assetId === AssetIds.powerUps.orb)).toBe(true);
+    expect(targetClear.matchEnergyStreams?.every((stream) => stream.alpha === 1)).toBe(true);
+  });
+
   it('emits horizontal rocket cloud sprites along the row in delayed sweep timing', () => {
     const presenter = new BoardAnimationPresenter();
     const trace = horizontalRocketCloudTrace();
@@ -926,6 +946,38 @@ function lightballWaveTrace(): BoardAnimationTrace {
       },
     ],
     finalSnapshot: { cells: [cells[2]] },
+  };
+}
+
+function fullBoardLightballTrace(): BoardAnimationTrace {
+  const cells = Array.from({ length: 64 }, (_, index) => {
+    const col = index % 8;
+    const row = Math.floor(index / 8);
+    return snapshotCell(index === 0 ? 'lightball' : `fire-${index}`, index === 0 ? 'LIGHTBALL' : 'FIRE', col, row);
+  });
+
+  return {
+    kind: 'resolution',
+    revisionId: 30,
+    swappedCells: null,
+    preSwapSnapshot: { cells },
+    postSwapSnapshot: { cells },
+    cascadeSteps: [
+      {
+        stepIndex: 0,
+        beforeClearSnapshot: { cells },
+        beforeGravitySnapshot: { cells: [] },
+        afterGravitySnapshot: { cells: [] },
+        finalSnapshot: { cells: [] },
+        clearedTiles: [
+          cells[0],
+          ...cells.slice(1).map((cell) => ({ ...cell, clearDelayMs: LIGHTBALL_COLLECTION_WAVE_MS })),
+        ],
+        fallingTiles: [],
+        refillTiles: [],
+      },
+    ],
+    finalSnapshot: { cells: [] },
   };
 }
 

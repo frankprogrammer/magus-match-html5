@@ -51,6 +51,7 @@ const MATCH_PARTICLE_MAX_DISTANCE_PX = 62;
 const MATCH_PARTICLE_START_RADIUS_PX = 12;
 const MATCH_PARTICLE_END_RADIUS_PX = 2.25;
 const MATCH_ENERGY_STREAMS_PER_TILE = 5;
+const MATCH_ENERGY_STREAM_BUDGET_PER_FRAME = 120;
 const MATCH_ENERGY_STREAM_TARGET_X_PX = 120;
 const MATCH_ENERGY_STREAM_TARGET_Y_PX = 180;
 const MATCH_ENERGY_STREAM_MAX_ARC_PX = 70;
@@ -79,6 +80,16 @@ const ROCKET_CLOUD_SPRITE_SPAWN_SPACING_PX = BOARD_RECT.cellSize * 0.6;
 const LIGHTBALL_STREAM_TILE_WIDTH_PX = 192;
 const LIGHTBALL_STREAM_TILE_HEIGHT_PX = 64;
 const LIGHTBALL_STREAM_SCROLL_SPEED_PX_PER_MS = 0.55;
+const LIGHTBALL_COLLECTION_STREAM_BUDGET = 32;
+
+interface MatchEnergyOrbSeed {
+  arc: number;
+  jitterX: number;
+  jitterY: number;
+  size: number;
+}
+
+const matchEnergyOrbSeedCache = new Map<string, MatchEnergyOrbSeed>();
 
 interface VisualSample {
   renderX: number;
@@ -237,14 +248,64 @@ function sampleTraceMatchEnergyStreams(
     return [];
   }
 
-  return stepTimings.flatMap((timing) => {
+  const streams: BoardMatchEnergyStreamVisualState[] = [];
+  const streamsPerTile = matchEnergyStreamsPerTileForFrame(stepTimings, elapsedMs);
+  if (streamsPerTile <= 0) {
+    return streams;
+  }
+
+  for (const timing of stepTimings) {
     const stepElapsedMs = elapsedMs - timing.popStartMs;
     if (stepElapsedMs < 0) {
-      return [];
+      continue;
     }
 
-    return timing.step.clearedTiles.flatMap((tile) => sampleClearedTileEnergyStreams(tile, stepElapsedMs, target));
-  });
+    for (const tile of timing.step.clearedTiles) {
+      streams.push(...sampleClearedTileEnergyStreams(tile, stepElapsedMs, target, undefined, streamsPerTile));
+    }
+  }
+
+  return streams;
+}
+
+function matchEnergyStreamsPerTileForFrame(
+  stepTimings: readonly BoardAnimationStepTiming[],
+  elapsedMs: number,
+): number {
+  const eligibleTileCount = countActiveMatchEnergyTiles(stepTimings, elapsedMs);
+  if (eligibleTileCount <= 0) {
+    return 0;
+  }
+
+  return Math.min(
+    MATCH_ENERGY_STREAMS_PER_TILE,
+    Math.max(1, Math.ceil(MATCH_ENERGY_STREAM_BUDGET_PER_FRAME / eligibleTileCount)),
+  );
+}
+
+function countActiveMatchEnergyTiles(
+  stepTimings: readonly BoardAnimationStepTiming[],
+  elapsedMs: number,
+): number {
+  let count = 0;
+  for (const timing of stepTimings) {
+    const stepElapsedMs = elapsedMs - timing.popStartMs;
+    if (stepElapsedMs < 0) {
+      continue;
+    }
+
+    for (const tile of timing.step.clearedTiles) {
+      if (matchEnergyOrbColorForTileType(tile.tileType) == null) {
+        continue;
+      }
+
+      const localElapsedMs = stepElapsedMs - (tile.clearDelayMs ?? 0);
+      if (localElapsedMs >= 0 && localElapsedMs <= MATCH_ENERGY_STREAM_DURATION_MS) {
+        count++;
+      }
+    }
+  }
+  return count;
 }
 
 function sampleFloatingTutorialMatch(
@@ -401,18 +462,24 @@ function sampleFloatingTutorialMatchEnergyStreams(
   }
 
   const floatingCoords = new Set(floatingMatch.tiles.map((tile) => coordKey(tile.sourceCoord)));
-  return stepTimings.flatMap((timing) => {
+  const streams: BoardMatchEnergyStreamVisualState[] = [];
+  for (const timing of stepTimings) {
     const stepElapsedMs = elapsedMs - timing.popStartMs;
     if (stepElapsedMs < 0) {
-      return [];
+      continue;
     }
 
-    return timing.step.clearedTiles
-      .filter((tile) => floatingCoords.has(coordKey(tile.coord)))
-      .flatMap((tile) =>
-        sampleClearedTileEnergyStreams(tile, stepElapsedMs, target, floatingCenterForCoord(tile.coord, geometry)),
+    for (const tile of timing.step.clearedTiles) {
+      if (!floatingCoords.has(coordKey(tile.coord))) {
+        continue;
+      }
+
+      streams.push(
+        ...sampleClearedTileEnergyStreams(tile, stepElapsedMs, target, floatingCenterForCoord(tile.coord, geometry)),
       );
-  });
+    }
+  }
+  return streams;
 }
 
 function sampleTraceParticles(
@@ -434,7 +501,11 @@ function sampleTraceParticles(
     return [];
   }
 
-  return activeStep.step.clearedTiles.flatMap((tile) => sampleClearedTileParticles(tile, stepElapsedMs));
+  const particles: BoardParticleVisualState[] = [];
+  for (const tile of activeStep.step.clearedTiles) {
+    particles.push(...sampleClearedTileParticles(tile, stepElapsedMs));
+  }
+  return particles;
 }
 
 function sampleTraceBurstRings(
@@ -517,14 +588,16 @@ function sampleTraceLightballStreams(
     return [];
   }
 
-  return stepTimings.flatMap((timing) => {
+  const streams: BoardLightballStreamVisualState[] = [];
+  for (const timing of stepTimings) {
     const stepElapsedMs = elapsedMs - timing.popStartMs;
     if (stepElapsedMs < 0) {
-      return [];
+      continue;
     }
 
-    return sampleStepLightballStreams(timing.step, stepElapsedMs);
-  });
+    streams.push(...sampleStepLightballStreams(timing.step, stepElapsedMs));
+  }
+  return streams;
 }
 
 function sampleStepLightballStreams(
@@ -536,16 +609,49 @@ function sampleStepLightballStreams(
     return [];
   }
 
-  return lightballs.flatMap((lightball) => {
+  const streams: BoardLightballStreamVisualState[] = [];
+  for (const lightball of lightballs) {
     const activationDelayMs = lightball.clearDelayMs ?? 0;
-    return step.clearedTiles
-      .filter((tile) =>
+    const eligibleTargets: Array<BoardAnimationCascadeStep['clearedTiles'][number]> = [];
+    for (const tile of step.clearedTiles) {
+      if (
         tile.tileId !== lightball.tileId &&
         matchEnergyOrbColorForTileType(tile.tileType) != null &&
-        (tile.clearDelayMs ?? 0) === activationDelayMs + LIGHTBALL_COLLECTION_WAVE_MS)
-      .map((tile) => sampleLightballStream(lightball, tile, stepElapsedMs - activationDelayMs))
-      .filter((stream): stream is BoardLightballStreamVisualState => stream != null);
-  });
+        (tile.clearDelayMs ?? 0) === activationDelayMs + LIGHTBALL_COLLECTION_WAVE_MS
+      ) {
+        eligibleTargets.push(tile);
+      }
+    }
+
+    for (const tile of deterministicSpread(eligibleTargets, LIGHTBALL_COLLECTION_STREAM_BUDGET)) {
+      const stream = sampleLightballStream(lightball, tile, stepElapsedMs - activationDelayMs);
+      if (stream != null) {
+        streams.push(stream);
+      }
+    }
+  }
+  return streams;
+}
+
+function deterministicSpread<T>(items: readonly T[], budget: number): T[] {
+  if (budget <= 0 || items.length === 0) {
+    return [];
+  }
+
+  if (items.length <= budget) {
+    return [...items];
+  }
+
+  if (budget === 1) {
+    return [items[0]];
+  }
+
+  const selected: T[] = [];
+  for (let index = 0; index < budget; index++) {
+    const itemIndex = Math.round((index * (items.length - 1)) / (budget - 1));
+    selected.push(items[itemIndex]);
+  }
+  return selected;
 }
 
 function sampleLightballStream(
@@ -597,6 +703,7 @@ function sampleClearedTileEnergyStreams(
   stepElapsedMs: number,
   targetOverride?: { x: number; y: number },
   startOverride?: { x: number; y: number },
+  streamsPerTile = MATCH_ENERGY_STREAMS_PER_TILE,
 ): BoardMatchEnergyStreamVisualState[] {
   const color = matchEnergyOrbColorForTileType(tile.tileType);
   if (color == null) {
@@ -615,20 +722,23 @@ function sampleClearedTileEnergyStreams(
     y: MATCH_ENERGY_STREAM_TARGET_Y_PX,
   };
 
-  return Array.from({ length: MATCH_ENERGY_STREAMS_PER_TILE }, (_, index) => {
+  const streams: BoardMatchEnergyStreamVisualState[] = [];
+  for (let index = 0; index < streamsPerTile; index++) {
     const offsetProgress = clamp01(progress * MATCH_ENERGY_STREAM_PROGRESS_SCALE - index * MATCH_ENERGY_STREAM_STAGGER_PROGRESS);
     const offsetEased = easeInCubic(offsetProgress);
-    const seed = `${tile.tileId}:energy:${index}`;
-    const side = deterministicUnit(`${seed}:side`) < 0.5 ? -1 : 1;
-    const arc = lerp(18, MATCH_ENERGY_STREAM_MAX_ARC_PX, deterministicUnit(`${seed}:arc`)) * side;
-    const jitterX = lerp(-14, 14, deterministicUnit(`${seed}:x`)) * Math.sin(offsetProgress * Math.PI);
-    const jitterY = lerp(-10, 10, deterministicUnit(`${seed}:y`)) * Math.sin(offsetProgress * Math.PI * 2);
-    const x = lerp(start.x, target.x, offsetEased) + arc * Math.sin(offsetProgress * Math.PI) + jitterX;
+    const seed = matchEnergyOrbSeed(tile.tileId, index);
+    const jitterX = seed.jitterX * Math.sin(offsetProgress * Math.PI);
+    const jitterY = seed.jitterY * Math.sin(offsetProgress * Math.PI * 2);
+    const x = lerp(start.x, target.x, offsetEased) + seed.arc * Math.sin(offsetProgress * Math.PI) + jitterX;
     const y = lerp(start.y, target.y, offsetEased) + jitterY;
-    const baseRadius = MATCH_ENERGY_STREAM_START_RADIUS_PX * (0.82 + deterministicUnit(`${seed}:size`) * 0.36);
+    const baseRadius = MATCH_ENERGY_STREAM_START_RADIUS_PX * seed.size;
     const arrivalScale = 1 - clamp01((offsetProgress - 0.95) / 0.05);
     const radius = baseRadius * arrivalScale;
-    return {
+    if (radius <= 0) {
+      continue;
+    }
+
+    streams.push({
       streamId: `${tile.tileId}-energy-${index}`,
       assetId: AssetIds.powerUps.orb,
       x,
@@ -639,8 +749,28 @@ function sampleClearedTileEnergyStreams(
       color,
       alpha: MATCH_ENERGY_STREAM_MAX_ALPHA,
       zIndex: 23 + index / 100,
-    };
-  }).filter((stream) => stream.alpha > 0 && stream.radius > 0);
+    });
+  }
+
+  return streams;
+}
+
+function matchEnergyOrbSeed(tileId: string, index: number): MatchEnergyOrbSeed {
+  const key = `${tileId}:energy:${index}`;
+  const cached = matchEnergyOrbSeedCache.get(key);
+  if (cached != null) {
+    return cached;
+  }
+
+  const side = deterministicUnit(`${key}:side`) < 0.5 ? -1 : 1;
+  const seed: MatchEnergyOrbSeed = {
+    arc: lerp(18, MATCH_ENERGY_STREAM_MAX_ARC_PX, deterministicUnit(`${key}:arc`)) * side,
+    jitterX: lerp(-14, 14, deterministicUnit(`${key}:x`)),
+    jitterY: lerp(-10, 10, deterministicUnit(`${key}:y`)),
+    size: 0.82 + deterministicUnit(`${key}:size`) * 0.36,
+  };
+  matchEnergyOrbSeedCache.set(key, seed);
+  return seed;
 }
 
 function sampleClearedTileParticles(

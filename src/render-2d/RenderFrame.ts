@@ -579,7 +579,7 @@ function drawHeroActivationOverlay(renderer: GameRenderer, boardState: BoardRend
 }
 
 function drawParticles(renderer: GameRenderer, boardState: BoardRenderState): void {
-  const particles = [...(boardState.particles ?? [])].sort((first, second) => first.zIndex - second.zIndex);
+  const particles = boardState.particles ?? [];
   for (const particle of particles) {
     if (particle.alpha <= 0 || particle.radius <= 0) {
       continue;
@@ -599,8 +599,7 @@ function drawMatchEnergyStreamList(
   renderer: GameRenderer,
   streams: readonly NonNullable<BoardRenderState['matchEnergyStreams']>[number][],
 ): void {
-  const sortedStreams = [...streams].sort((first, second) => first.zIndex - second.zIndex);
-  for (const stream of sortedStreams) {
+  for (const stream of streams) {
     if (stream.alpha <= 0 || stream.width <= 0 || stream.height <= 0) {
       continue;
     }
@@ -610,7 +609,9 @@ function drawMatchEnergyStreamList(
       continue;
     }
 
-    renderer.pushAlpha(stream.alpha);
+    if (stream.alpha < 1) {
+      renderer.pushAlpha(stream.alpha);
+    }
     renderer.drawTintedImage(
       imageRef,
       stream.color,
@@ -619,12 +620,14 @@ function drawMatchEnergyStreamList(
       stream.width,
       stream.height,
     );
-    renderer.pop();
+    if (stream.alpha < 1) {
+      renderer.pop();
+    }
   }
 }
 
 function drawLightballStreams(renderer: GameRenderer, boardState: BoardRenderState): void {
-  const streams = [...(boardState.lightballStreams ?? [])].sort((first, second) => first.zIndex - second.zIndex);
+  const streams = boardState.lightballStreams ?? [];
   for (const stream of streams) {
     if (stream.alpha <= 0 || stream.length <= 0 || stream.thickness <= 0 || stream.tileWidth <= 0 || stream.tileHeight <= 0) {
       continue;

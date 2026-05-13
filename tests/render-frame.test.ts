@@ -838,6 +838,33 @@ describe('buildBoardCellVisuals', () => {
     expect(renderer.calls).not.toContain('ellipse:#38d5ff');
   });
 
+  it('draws fully opaque match energy streams without alpha stack churn', () => {
+    const renderer = new FakeRenderer(new Set(['tile.fire', AssetIds.powerUps.orb]));
+    const state = oneTileState('tile.fire');
+    state.matchEnergyStreams = [
+      {
+        streamId: 'energy-0',
+        assetId: AssetIds.powerUps.orb,
+        x: BOARD_RECT.x + 80,
+        y: BOARD_RECT.y + 80,
+        radius: 10,
+        width: 20,
+        height: 20,
+        color: '#38d5ff',
+        alpha: 1,
+        zIndex: 23,
+      },
+    ];
+
+    renderFrame(renderer, state, hudState(), 0);
+
+    const orbDrawCall = `tintedImage:${AssetIds.powerUps.orb}:#38d5ff:${BOARD_RECT.x + 70},${BOARD_RECT.y + 70},20,20`;
+    const orbDrawIndex = renderer.calls.indexOf(orbDrawCall);
+    expect(orbDrawIndex).toBeGreaterThan(-1);
+    expect(renderer.calls[orbDrawIndex - 2]).not.toBe('pushAlpha:1');
+    expect(renderer.calls[orbDrawIndex + 1]).not.toBe('pop');
+  });
+
   it('skips Lightball stream visuals when the lightning strip is missing', () => {
     const renderer = new FakeRenderer(new Set(['tile.fire']));
     const state = oneTileState('tile.fire');

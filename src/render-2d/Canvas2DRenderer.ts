@@ -230,6 +230,13 @@ export class Canvas2DRenderer implements GameRenderer {
     this.ctx.textAlign = style.align ?? 'left';
     this.ctx.textBaseline = 'middle';
     const tx = style.align === 'center' ? x + width / 2 : style.align === 'right' ? x + width : x;
+    if (style.strokeColor != null && (style.strokeWidth ?? 0) > 0) {
+      this.ctx.strokeStyle = style.strokeColor;
+      this.ctx.lineWidth = style.strokeWidth ?? 0;
+      this.ctx.lineJoin = 'round';
+      this.ctx.strokeText(text, tx, y + height / 2, width);
+    }
+    this.ctx.fillStyle = style.color;
     this.ctx.fillText(text, tx, y + height / 2, width);
   }
 

@@ -8,6 +8,8 @@ export interface TextStyle {
   fontFamily?: string;
   fontWeight?: 'normal' | 'bold';
   color: string;
+  strokeColor?: string;
+  strokeWidth?: number;
   align?: 'left' | 'center' | 'right';
 }
 

@@ -169,6 +169,21 @@ export interface FloatingTutorialMatchVisualState {
   };
 }
 
+export interface TutorialHeadlineVisualState {
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  fontSize: number;
+  minFontSize: number;
+  fontWeight: 'normal' | 'bold';
+  color: string;
+  strokeColor?: string;
+  strokeWidth?: number;
+  align: 'left' | 'center' | 'right';
+}
+
 export interface TutorialPresentationState {
   mode: TutorialPresentationMode;
   heroHeight: number;
@@ -179,6 +194,7 @@ export interface TutorialPresentationState {
   sceneOffsetY?: number;
   hideHud: boolean;
   hideBoard: boolean;
+  headline?: TutorialHeadlineVisualState | null;
   floatingMatch: FloatingTutorialMatchVisualState | null;
 }
 

@@ -152,6 +152,20 @@ describe('MagusMatchGameApp', () => {
       sceneOffsetY: -60,
       hideHud: true,
       hideBoard: true,
+      headline: {
+        text: 'Defeat the Kobolds!',
+        x: 0,
+        y: 150,
+        width: LOGICAL_WIDTH,
+        height: 120,
+        fontSize: 84,
+        minFontSize: 52,
+        fontWeight: 'bold',
+        color: '#ffffff',
+        strokeColor: '#000000',
+        strokeWidth: 8,
+        align: 'center',
+      },
     });
     expect(boardState.tutorialPresentation?.floatingMatch?.tiles.map((tile) => tile.rect.x)).toEqual([
       126,
@@ -315,8 +329,10 @@ describe('MagusMatchGameApp', () => {
       sceneOffsetX: 0,
       hideHud: false,
       hideBoard: false,
+      headline: null,
       floatingMatch: null,
     });
+    expect(debugSeedSession.getBoardRenderState().tutorialPresentation?.headline).toBeNull();
     expect(debugSeedSession.getBoardRenderState().tutorialPresentation?.floatingMatch).toBeNull();
   });
 
@@ -566,6 +582,7 @@ describe('MagusMatchGameApp', () => {
       sceneOffsetX: 0,
       hideHud: false,
       hideBoard: false,
+      headline: null,
       floatingMatch: null,
     });
   });

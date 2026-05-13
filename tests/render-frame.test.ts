@@ -317,6 +317,20 @@ describe('buildBoardCellVisuals', () => {
       foregroundSceneScale: 1.5,
       hideHud: true,
       hideBoard: true,
+      headline: {
+        text: 'Defeat the Kobolds!',
+        x: 0,
+        y: 150,
+        width: LOGICAL_WIDTH,
+        height: 120,
+        fontSize: 84,
+        minFontSize: 52,
+        fontWeight: 'bold',
+        color: '#ffffff',
+        strokeColor: '#000000',
+        strokeWidth: 8,
+        align: 'center',
+      },
       floatingMatch: {
         phase: 'idle',
         tiles: [
@@ -403,12 +417,31 @@ describe('buildBoardCellVisuals', () => {
     expect(renderer.calls).not.toContain(
       `clip:${BOARD_RECT.x},${BOARD_RECT.y},${BOARD_RECT.width},${BOARD_RECT.height}`,
     );
+    expect(renderer.calls).toContain(`text:Defeat the Kobolds!:0,150,${LOGICAL_WIDTH},120`);
     expect(renderer.calls.filter((call) => call === `image:${AssetIds.tiles.lightning}`)).toHaveLength(3);
     expect(renderer.calls.filter((call) => call === `image:${AssetIds.tiles.earth}`)).toHaveLength(1);
     expect(renderer.calls).toContain(`pushRotate:-15,432,1534`);
     expect(renderer.calls).toContain(`image:${AssetIds.ui.tutorialFinger}:288,1534,288,288`);
     expect(renderer.calls).toContain(`mask:${AssetIds.tiles.lightning}:#ffffff`);
     expect(renderer.calls).toContain(`tintedImage:${AssetIds.powerUps.orb}`);
+    expect(renderer.textCalls).toContainEqual(
+      expect.objectContaining({
+        text: 'Defeat the Kobolds!',
+        x: 0,
+        y: 150,
+        width: LOGICAL_WIDTH,
+        height: 120,
+        style: expect.objectContaining({
+          fontSize: 84,
+          minFontSize: 52,
+          fontWeight: 'bold',
+          color: '#ffffff',
+          strokeColor: '#000000',
+          strokeWidth: 8,
+          align: 'center',
+        }),
+      }),
+    );
     expect(renderer.calls.indexOf(`image:${AssetIds.ui.tutorialFinger}`)).toBeGreaterThan(
       renderer.calls.lastIndexOf(`image:${AssetIds.tiles.lightning}`),
     );

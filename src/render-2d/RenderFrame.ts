@@ -94,6 +94,7 @@ export function renderFrame(
   if (presentation?.hideBoard !== true) {
     drawBoard(renderer, boardState, elapsedSec);
   }
+  drawTutorialHeadline(renderer, boardState);
   drawFloatingTutorialMatch(renderer, boardState);
   drawHeroActivationOverlay(renderer, boardState);
   if (screenState != null) {
@@ -102,6 +103,23 @@ export function renderFrame(
   if (presentation?.hideHud !== true) {
     drawHudBgmToggle(renderer, hudState);
   }
+}
+
+function drawTutorialHeadline(renderer: GameRenderer, boardState: BoardRenderState): void {
+  const headline = boardState.tutorialPresentation?.headline ?? null;
+  if (headline == null || headline.text.length === 0 || headline.width <= 0 || headline.height <= 0) {
+    return;
+  }
+
+  renderer.drawText(headline.text, headline.x, headline.y, headline.width, headline.height, {
+    fontSize: headline.fontSize,
+    minFontSize: headline.minFontSize,
+    fontWeight: headline.fontWeight,
+    color: headline.color,
+    strokeColor: headline.strokeColor,
+    strokeWidth: headline.strokeWidth,
+    align: headline.align,
+  });
 }
 
 export function buildBoardCellVisuals(boardState: BoardRenderState, elapsedSec: number): BoardCellVisual[] {

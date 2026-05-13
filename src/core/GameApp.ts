@@ -190,6 +190,12 @@ const TUTORIAL_FINGER_HINT_LOOP_SEC = 1;
 const TUTORIAL_FINGER_HINT_SIZE = 288;
 const TUTORIAL_FINGER_HINT_ROTATION_DEGREES = -15;
 const TUTORIAL_FINGER_HINT_Z_INDEX = 40;
+const TUTORIAL_HEADLINE_TEXT = "Defeat the Kobolds!";
+const TUTORIAL_HEADLINE_Y = 150;
+const TUTORIAL_HEADLINE_HEIGHT = 120;
+const TUTORIAL_HEADLINE_FONT_SIZE = 84;
+const TUTORIAL_HEADLINE_MIN_FONT_SIZE = 52;
+const TUTORIAL_HEADLINE_STROKE_WIDTH = 8;
 const HERO_ACTIVATION_OVERLAY_WIDTH = 800;
 const HERO_ACTIVATION_OVERLAY_HEIGHT = 450;
 const HERO_ACTIVATION_OVERLAY_TOTAL_SEC = 0.8;
@@ -1709,7 +1715,31 @@ export class MagusMatchGameApp implements GameApp {
       sceneOffsetY: this.getTutorialSceneOffsetY(mode),
       hideHud,
       hideBoard,
+      headline: this.getTutorialHeadlineVisualState(mode),
       floatingMatch: mode === "tutorialFullHero" ? this.getFloatingTutorialMatchVisualState() : null,
+    };
+  }
+
+  private getTutorialHeadlineVisualState(
+    mode = this.tutorialPresentationMode,
+  ): NonNullable<NonNullable<BoardRenderState["tutorialPresentation"]>["headline"]> | null {
+    if (mode !== "tutorialFullHero" || this.trialTutorial == null) {
+      return null;
+    }
+
+    return {
+      text: TUTORIAL_HEADLINE_TEXT,
+      x: 0,
+      y: TUTORIAL_HEADLINE_Y,
+      width: LOGICAL_WIDTH,
+      height: TUTORIAL_HEADLINE_HEIGHT,
+      fontSize: TUTORIAL_HEADLINE_FONT_SIZE,
+      minFontSize: TUTORIAL_HEADLINE_MIN_FONT_SIZE,
+      fontWeight: "bold",
+      color: "#ffffff",
+      strokeColor: "#000000",
+      strokeWidth: TUTORIAL_HEADLINE_STROKE_WIDTH,
+      align: "center",
     };
   }
 

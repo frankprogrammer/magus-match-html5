@@ -30,6 +30,47 @@ describe('Canvas2DRenderer', () => {
     expect(ctx.fillTextCalls[0]?.font).toBe('bold 34px Inter, Arial, sans-serif');
   });
 
+  it('strokes text before filling it when stroke styling is provided', () => {
+    const ctx = new FakeCanvasContext();
+    const renderer = new Canvas2DRenderer(ctx.asCanvasContext(), {}, 1080, 1920);
+
+    renderer.drawText('Defeat the Kobolds!', 0, 150, 864, 120, {
+      fontSize: 84,
+      minFontSize: 52,
+      fontWeight: 'bold',
+      color: '#ffffff',
+      strokeColor: '#000000',
+      strokeWidth: 8,
+      align: 'center',
+    });
+
+    expect(ctx.strokeTextCalls[0]).toMatchObject({
+      text: 'Defeat the Kobolds!',
+      maxWidth: 864,
+    });
+    expect(ctx.fillTextCalls[0]).toMatchObject({
+      text: 'Defeat the Kobolds!',
+      maxWidth: 864,
+    });
+    expect(ctx.strokeTextCalls[0]?.font).toBe(ctx.fillTextCalls[0]?.font);
+    expect(ctx.strokeTextCalls[0]?.font).toBe('bold 73px Inter, Arial, sans-serif');
+    expect(ctx.strokeStyle).toBe('#000000');
+    expect(ctx.lineWidth).toBe(8);
+    expect(ctx.lineJoin).toBe('round');
+  });
+
+  it('does not stroke text when stroke styling is omitted', () => {
+    const ctx = new FakeCanvasContext();
+    const renderer = new Canvas2DRenderer(ctx.asCanvasContext(), {}, 1080, 1920);
+
+    renderer.drawText('Score 10', 0, 0, 300, 40, {
+      fontSize: 34,
+      color: '#ffffff',
+    });
+
+    expect(ctx.strokeTextCalls).toEqual([]);
+  });
+
   it('draws rings with stroke style and line width', () => {
     const ctx = new FakeCanvasContext();
     const renderer = new Canvas2DRenderer(ctx.asCanvasContext(), {}, 1080, 1920);
@@ -404,12 +445,14 @@ class FakeCanvasContext {
   fillStyle = '';
   strokeStyle = '';
   lineWidth = 1;
+  lineJoin = '';
   textAlign = '';
   textBaseline = '';
   strokeCount = 0;
   private currentGlobalAlpha = 1;
   private currentGlobalCompositeOperation = 'source-over';
   readonly fillTextCalls: Array<{ text: string; font: string; maxWidth?: number }> = [];
+  readonly strokeTextCalls: Array<{ text: string; font: string; maxWidth?: number }> = [];
   readonly drawImageCalls: Array<{
     image: unknown;
     sx?: number;
@@ -458,6 +501,10 @@ class FakeCanvasContext {
 
   fillText(text: string, _x: number, _y: number, maxWidth?: number): void {
     this.fillTextCalls.push({ text, font: this.font, maxWidth });
+  }
+
+  strokeText(text: string, _x: number, _y: number, maxWidth?: number): void {
+    this.strokeTextCalls.push({ text, font: this.font, maxWidth });
   }
 
   clearRect(): void {}

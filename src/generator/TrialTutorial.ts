@@ -26,7 +26,7 @@ const PATCH_TYPES: readonly {
   type: StandardTileType;
 }[] = [
   { offset: { col: 0, row: 0 }, type: 'LIGHTNING' },
-  { offset: { col: 1, row: 0 }, type: 'EARTH' },
+  { offset: { col: 1, row: 0 }, type: 'FIRE' },
   { offset: { col: 2, row: 0 }, type: 'LIGHTNING' },
   { offset: { col: 0, row: 1 }, type: 'ICE' },
   { offset: { col: 1, row: 1 }, type: 'LIGHTNING' },

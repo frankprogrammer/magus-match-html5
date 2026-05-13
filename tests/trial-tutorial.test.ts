@@ -12,7 +12,7 @@ describe('Trial tutorial setup', () => {
     expect(detectMatches(setup.board)).toHaveLength(0);
     expect(validateSwap(setup.board, setup.allowedSwap.from, setup.allowedSwap.to).valid).toBe(true);
     expect(setup.flashCells).toEqual([setup.allowedSwap.to, setup.allowedSwap.from]);
-    expect(setup.board[setup.allowedSwap.to.row][setup.allowedSwap.to.col].tile?.type).toBe('EARTH');
+    expect(setup.board[setup.allowedSwap.to.row][setup.allowedSwap.to.col].tile?.type).toBe('FIRE');
     expect(setup.board[setup.allowedSwap.from.row][setup.allowedSwap.from.col].tile?.type).toBe('LIGHTNING');
     expect(setup.matchCells).toHaveLength(3);
     expect(setup.flashCells).toContainEqual(setup.allowedSwap.to);

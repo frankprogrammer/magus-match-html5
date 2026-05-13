@@ -109,6 +109,7 @@ let activeHeroRenderHeight = HERO_STAGE_HEIGHT;
 let activeHeroBackgroundSceneScale = 1;
 let activeHeroForegroundSceneScale = 1;
 let activeHeroSceneOffsetX = 0;
+let activeHeroSceneOffsetY = 0;
 
 void loadBrowserImages().then((images) => {
   renderer.setImages(images);
@@ -162,12 +163,14 @@ function resizeLogicalStage(
   nextHeroForegroundSceneScale = activeHeroForegroundSceneScale,
   nextHeroRenderHeight = activeHeroRenderHeight,
   nextHeroSceneOffsetX = activeHeroSceneOffsetX,
+  nextHeroSceneOffsetY = activeHeroSceneOffsetY,
 ): void {
   activeHeroHeight = nextHeroHeight;
   activeHeroBackgroundSceneScale = nextHeroBackgroundSceneScale;
   activeHeroForegroundSceneScale = nextHeroForegroundSceneScale;
   activeHeroRenderHeight = nextHeroRenderHeight;
   activeHeroSceneOffsetX = nextHeroSceneOffsetX;
+  activeHeroSceneOffsetY = nextHeroSceneOffsetY;
   const rect = gameShell.getBoundingClientRect();
   const scale = Math.min(rect.width / LOGICAL_WIDTH, rect.height / LOGICAL_HEIGHT);
   stageElement.style.transform = `scale(${scale})`;
@@ -175,6 +178,7 @@ function resizeLogicalStage(
   heroStageElement.style.setProperty('--hero-background-scene-scale', `${activeHeroBackgroundSceneScale}`);
   heroStageElement.style.setProperty('--hero-foreground-scene-scale', `${activeHeroForegroundSceneScale}`);
   heroStageElement.style.setProperty('--hero-scene-offset-x', `${activeHeroSceneOffsetX}px`);
+  heroStageElement.style.setProperty('--hero-scene-offset-y', `${activeHeroSceneOffsetY}px`);
   heroStage.resize(LOGICAL_WIDTH, activeHeroRenderHeight);
 }
 
@@ -190,7 +194,7 @@ function getMatchEnergyTarget(): { x: number; y: number } | undefined {
 
   return {
     x: activeHeroSceneOffsetX + projected.x * activeHeroForegroundSceneScale,
-    y: projected.y * activeHeroForegroundSceneScale,
+    y: activeHeroSceneOffsetY + projected.y * activeHeroForegroundSceneScale,
   };
 }
 
@@ -264,6 +268,7 @@ function tick(timeMs: number): void {
     tutorialPresentation?.foregroundSceneScale ?? tutorialPresentation?.sceneScale ?? 1,
     heroRenderHeightForTutorialMode(tutorialPresentation?.mode),
     tutorialPresentation?.sceneOffsetX ?? 0,
+    tutorialPresentation?.sceneOffsetY ?? 0,
   );
   heroStage.render(app.getHeroWorldState(), dtSec);
   renderFrame(
@@ -287,6 +292,7 @@ resizeLogicalStage(
   initialTutorialPresentation?.foregroundSceneScale ?? initialTutorialPresentation?.sceneScale ?? 1,
   heroRenderHeightForTutorialMode(initialTutorialPresentation?.mode),
   initialTutorialPresentation?.sceneOffsetX ?? 0,
+  initialTutorialPresentation?.sceneOffsetY ?? 0,
 );
 heroStage.render(app.getHeroWorldState(), 0);
 renderFrame(

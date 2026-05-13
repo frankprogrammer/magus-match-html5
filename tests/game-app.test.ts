@@ -149,6 +149,7 @@ describe('MagusMatchGameApp', () => {
       backgroundSceneScale: 1.75,
       foregroundSceneScale: 1.5,
       sceneOffsetX: -50,
+      sceneOffsetY: -60,
       hideHud: true,
       hideBoard: true,
     });
@@ -159,10 +160,10 @@ describe('MagusMatchGameApp', () => {
       336,
     ]);
     expect(boardState.tutorialPresentation?.floatingMatch?.tiles.map((tile) => tile.rect.y)).toEqual([
-      1328,
-      1328,
-      1328,
-      1538,
+      1228,
+      1228,
+      1228,
+      1438,
     ]);
     expect(boardState.tutorialPresentation?.floatingMatch?.tiles.map((tile) => tile.rect.width)).toEqual([
       192,
@@ -172,7 +173,7 @@ describe('MagusMatchGameApp', () => {
     ]);
     expect(boardState.tutorialPresentation?.floatingMatch?.tiles.map((tile) => tile.tileType)).toEqual([
       'LIGHTNING',
-      'EARTH',
+      'FIRE',
       'LIGHTNING',
       'LIGHTNING',
     ]);
@@ -182,10 +183,10 @@ describe('MagusMatchGameApp', () => {
       'topRightLightning',
       'lowerLightning',
     ]);
-    const earthHint = boardState.tutorialPresentation?.floatingMatch?.tiles.find((tile) => tile.role === 'earth');
+    const fireHint = boardState.tutorialPresentation?.floatingMatch?.tiles.find((tile) => tile.role === 'earth');
     const lowerHint = boardState.tutorialPresentation?.floatingMatch?.tiles.find((tile) => tile.role === 'lowerLightning');
-    expect(earthHint?.flash).toBe(0);
-    expect(earthHint?.scale).toBe(1);
+    expect(fireHint?.flash).toBe(0);
+    expect(fireHint?.scale).toBe(1);
     expect(lowerHint?.flash).toBeGreaterThan(0);
     expect(boardState.tutorialLock).toBeNull();
     expect(boardState.matchHint).toBeNull();
@@ -211,7 +212,7 @@ describe('MagusMatchGameApp', () => {
     expect(tutorialKoboldObjects.map((object) => object.animationTimeSec)).toEqual([0, 0, 0]);
   });
 
-  it('shows a looping finger hint from lower Lightning to Earth as soon as floating tutorial tiles are visible', () => {
+  it('shows a looping finger hint from lower Lightning to Fire as soon as floating tutorial tiles are visible', () => {
     const app = new MagusMatchGameApp(555);
 
     const initialFloatingMatch = app.getBoardRenderState().tutorialPresentation?.floatingMatch;
@@ -244,13 +245,13 @@ describe('MagusMatchGameApp', () => {
     const halfwayFloatingMatch = app.getBoardRenderState().tutorialPresentation?.floatingMatch;
     const halfwayHint = halfwayFloatingMatch?.fingerHint;
     const halfwayLowerLightning = tileCenter(halfwayFloatingMatch?.tiles.find((tile) => tile.role === 'lowerLightning'));
-    const halfwayEarth = tileCenter(halfwayFloatingMatch?.tiles.find((tile) => tile.role === 'earth'));
+    const halfwayFire = tileCenter(halfwayFloatingMatch?.tiles.find((tile) => tile.role === 'earth'));
     const easedHalfway = 0.875;
     expect(halfwayHint?.point.x).toBeCloseTo(
-      halfwayLowerLightning.x + (halfwayEarth.x - halfwayLowerLightning.x) * easedHalfway,
+      halfwayLowerLightning.x + (halfwayFire.x - halfwayLowerLightning.x) * easedHalfway,
     );
     expect(halfwayHint?.point.y).toBeCloseTo(
-      halfwayLowerLightning.y + (halfwayEarth.y - halfwayLowerLightning.y) * easedHalfway,
+      halfwayLowerLightning.y + (halfwayFire.y - halfwayLowerLightning.y) * easedHalfway,
     );
 
     dragFloatingTutorialTile(app, 'lowerLightning', 'earth');

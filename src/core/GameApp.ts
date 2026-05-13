@@ -159,6 +159,8 @@ const TRIAL_KOBOLD_HEALTH_BAR_Y_OFFSET = 3.72;
 const TRIAL_MINI_BOSS_HEALTH_BAR_SCALE = 2;
 const TRIAL_MINI_BOSS_HEALTH_BAR_Y_OFFSET = 5.8;
 const TRIAL_FIRE_BURN_SCALE = 3.3;
+const TRIAL_MINI_BOSS_FIRE_BURN_SCALE_MULTIPLIER = 1.5;
+const TRIAL_MINI_BOSS_FIRE_BURN_X_OFFSET = 20 * HERO_WORLD_UNITS_PER_LOGICAL_PIXEL;
 const TRIAL_FIRE_BURN_Y_OFFSET = 1.2425;
 const TRIAL_FIRE_BURN_RENDER_ORDER = 12;
 const TRIAL_EARTH_IMPACT_SCALE = 3.5;
@@ -176,12 +178,13 @@ const TUTORIAL_FULL_HERO_HEIGHT = LOGICAL_HEIGHT;
 const TUTORIAL_FULL_HERO_SCENE_SCALE = 1.5;
 const TUTORIAL_FULL_HERO_BACKGROUND_SCENE_SCALE = 1.75;
 const TUTORIAL_FULL_HERO_SCENE_OFFSET_X = -50;
+const TUTORIAL_FULL_HERO_SCENE_OFFSET_Y = -60;
 const TUTORIAL_FOREGROUND_DOWN_OFFSET_PX = 100;
 const TUTORIAL_ZOOM_OUT_DURATION_SEC = 0.65;
 const TUTORIAL_FLOATING_TILE_SIZE = 192;
 const TUTORIAL_FLOATING_TILE_GAP = 18;
 const TUTORIAL_FLOATING_SIDE_PADDING = 24;
-const TUTORIAL_FLOATING_RAISE_PX = 166;
+const TUTORIAL_FLOATING_RAISE_PX = 266;
 const TUTORIAL_FLOATING_MATCH_Z_INDEX = 20;
 const TUTORIAL_FINGER_HINT_LOOP_SEC = 1;
 const TUTORIAL_FINGER_HINT_SIZE = 288;
@@ -1703,6 +1706,7 @@ export class MagusMatchGameApp implements GameApp {
       backgroundSceneScale: this.getTutorialBackgroundSceneScale(mode),
       foregroundSceneScale: this.getTutorialSceneScale(mode),
       sceneOffsetX: this.getTutorialSceneOffsetX(mode),
+      sceneOffsetY: this.getTutorialSceneOffsetY(mode),
       hideHud,
       hideBoard,
       floatingMatch: mode === "tutorialFullHero" ? this.getFloatingTutorialMatchVisualState() : null,
@@ -1775,6 +1779,23 @@ export class MagusMatchGameApp implements GameApp {
     );
     const eased = 1 - Math.pow(1 - progress, 3);
     return TUTORIAL_FULL_HERO_SCENE_OFFSET_X * (1 - eased);
+  }
+
+  private getTutorialSceneOffsetY(mode = this.tutorialPresentationMode): number {
+    if (mode === "tutorialFullHero") {
+      return TUTORIAL_FULL_HERO_SCENE_OFFSET_Y;
+    }
+
+    if (mode !== "tutorialZoomOut") {
+      return 0;
+    }
+
+    const progress = Math.max(
+      0,
+      Math.min(1, this.tutorialZoomOutElapsedSec / TUTORIAL_ZOOM_OUT_DURATION_SEC),
+    );
+    const eased = 1 - Math.pow(1 - progress, 3);
+    return TUTORIAL_FULL_HERO_SCENE_OFFSET_Y * (1 - eased);
   }
 
   private isFullHeroTutorialPresentationActive(): boolean {
@@ -1855,7 +1876,7 @@ export class MagusMatchGameApp implements GameApp {
     });
     const tiles = [
       tile("topLeftLightning", "LIGHTNING", 0, 0, { col: topCenter.col - 1, row: topCenter.row }),
-      tile("earth", "EARTH", 1, 0, topCenter),
+      tile("earth", "FIRE", 1, 0, topCenter),
       tile("topRightLightning", "LIGHTNING", 2, 0, { col: topCenter.col + 1, row: topCenter.row }),
       tile("lowerLightning", "LIGHTNING", 1, 1, lowerCenter, "bounce"),
     ];
@@ -2462,6 +2483,11 @@ export function createTrialMonsterFireBurnObjects(
   if (!hasActiveBurn || monster.hp <= 0) {
     return [];
   }
+  const isMiniBoss = monster.kind === "miniBoss";
+  const fireBurnScale = isMiniBoss
+    ? TRIAL_FIRE_BURN_SCALE * TRIAL_MINI_BOSS_FIRE_BURN_SCALE_MULTIPLIER
+    : TRIAL_FIRE_BURN_SCALE;
+  const fireBurnXOffset = isMiniBoss ? TRIAL_MINI_BOSS_FIRE_BURN_X_OFFSET : 0;
 
   return [
     createWorldObject(
@@ -2469,11 +2495,11 @@ export function createTrialMonsterFireBurnObjects(
       HeroStageTemplateIds.fireBurn,
       {
         position: {
-          x: monsterPosition.x,
+          x: monsterPosition.x + fireBurnXOffset,
           y: monsterPosition.y + TRIAL_FIRE_BURN_Y_OFFSET,
           z: monsterPosition.z + 0.12,
         },
-        scale: { x: TRIAL_FIRE_BURN_SCALE, y: TRIAL_FIRE_BURN_SCALE, z: 1 },
+        scale: { x: fireBurnScale, y: fireBurnScale, z: 1 },
         renderOrder: TRIAL_FIRE_BURN_RENDER_ORDER,
         replication: "localCosmetic",
         animationTimeSec,

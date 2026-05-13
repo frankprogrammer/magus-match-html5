@@ -822,6 +822,40 @@ describe('HeroWorldState', () => {
     expect(delayed).toEqual([]);
   });
 
+  it('scales and offsets the mini-boss fire burn visual', () => {
+    const position = { x: 1, y: 2, z: 3 };
+    const fireBurn = createTrialMonsterFireBurnObjects(
+      {
+        monsterId: 'boss-burning',
+        kind: 'miniBoss',
+        laneId: 0,
+        hp: 20,
+        maxHp: 30,
+        x: 1,
+        spawnTimeMs: 0,
+        walkSpeed: 0,
+        scoreValue: 5,
+        fireBurnStacks: [
+          {
+            burnId: 'active',
+            damage: 10,
+            tickDelayQueueSec: [0.5],
+            visualRemainingSec: 0.5,
+            visualDurationSec: 2,
+          },
+        ],
+      },
+      position,
+      0.75,
+    )[0];
+
+    expect(fireBurn?.transform.scale.x).toBeCloseTo(4.95);
+    expect(fireBurn?.transform.scale.y).toBeCloseTo(4.95);
+    expect(fireBurn?.transform.scale.z).toBe(1);
+    expect(fireBurn?.transform.position.x).toBeCloseTo(position.x + 0.25);
+    expect(fireBurn?.transform.position.y).toBeCloseTo(position.y + 1.2425);
+  });
+
   it('adds an earth impact sprite centered on the monster x and attack hit y', () => {
     const app = new MagusMatchGameApp(789);
     const runtime = app.getTrialRuntimeForDebug();

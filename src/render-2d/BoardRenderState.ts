@@ -176,6 +176,7 @@ export interface TutorialPresentationState {
   backgroundSceneScale: number;
   foregroundSceneScale: number;
   sceneOffsetX?: number;
+  sceneOffsetY?: number;
   hideHud: boolean;
   hideBoard: boolean;
   floatingMatch: FloatingTutorialMatchVisualState | null;

@@ -54,6 +54,7 @@ export const AssetIds = {
     trialFillBarKoboldIcon: 'ui.trialFillBarKoboldIcon',
     primaryButton: 'ui.primaryButton',
     primaryButtonPressed: 'ui.primaryButtonPressed',
+    tutorialFinger: 'ui.tutorialFinger',
   },
   materials: {
     mageTexture: 'material.mageTexture',

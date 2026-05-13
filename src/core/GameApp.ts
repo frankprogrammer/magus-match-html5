@@ -73,6 +73,7 @@ import {
 import type {
   BoardRenderState,
   FloatingTutorialTileRole,
+  FloatingTutorialTileVisualState,
   BoardVisualCueKind,
   BoardVisualCueState,
 } from "../render-2d/BoardRenderState";
@@ -179,6 +180,10 @@ const TUTORIAL_FLOATING_TILE_GAP = 18;
 const TUTORIAL_FLOATING_SIDE_PADDING = 24;
 const TUTORIAL_FLOATING_RAISE_PX = 266;
 const TUTORIAL_FLOATING_MATCH_Z_INDEX = 20;
+const TUTORIAL_FINGER_HINT_LOOP_SEC = 1;
+const TUTORIAL_FINGER_HINT_SIZE = 288;
+const TUTORIAL_FINGER_HINT_ROTATION_DEGREES = -15;
+const TUTORIAL_FINGER_HINT_Z_INDEX = 40;
 const TRIAL_MONSTER_RENDER_ORDER_BASE = 4;
 const TRIAL_MONSTER_RENDER_ORDER_STEP = 0.01;
 
@@ -1700,15 +1705,17 @@ export class MagusMatchGameApp implements GameApp {
       scale: hintActive && hintKind === "pulse" ? 1 + pulse * 0.08 : 1,
       zIndex: TUTORIAL_FLOATING_MATCH_Z_INDEX + row * 3 + col,
     });
+    const tiles = [
+      tile("topLeftLightning", "LIGHTNING", 0, 0, { col: topCenter.col - 1, row: topCenter.row }),
+      tile("earth", "EARTH", 1, 0, topCenter, "pulse"),
+      tile("topRightLightning", "LIGHTNING", 2, 0, { col: topCenter.col + 1, row: topCenter.row }),
+      tile("lowerLightning", "LIGHTNING", 1, 1, lowerCenter, "bounce"),
+    ];
 
     return {
       phase: tutorialPhase,
-      tiles: [
-        tile("topLeftLightning", "LIGHTNING", 0, 0, { col: topCenter.col - 1, row: topCenter.row }),
-        tile("earth", "EARTH", 1, 0, topCenter, "pulse"),
-        tile("topRightLightning", "LIGHTNING", 2, 0, { col: topCenter.col + 1, row: topCenter.row }),
-        tile("lowerLightning", "LIGHTNING", 1, 1, lowerCenter, "bounce"),
-      ],
+      tiles,
+      fingerHint: hintActive ? floatingTutorialFingerHint(tiles, this.matchHintTimerSec) : null,
       allowedDrag: {
         fromRole: "lowerLightning",
         toRole: "earth",
@@ -1928,6 +1935,7 @@ export class MagusMatchGameApp implements GameApp {
     ];
     const monsterPositions = new Map<string, TransformState["position"]>();
     const monsterRenderRanks = trialMonsterRenderRanks(this.trialRuntime.monsters);
+    const showMonsterHealthBars = !this.isTrialActorEntranceActive();
 
     for (const monster of this.trialRuntime.monsters) {
       const baseMonsterPosition = translateY(
@@ -1962,7 +1970,7 @@ export class MagusMatchGameApp implements GameApp {
           },
         ),
         ...createTrialMonsterFireBurnObjects(monster, monsterPosition, this.trialRuntime.elapsedMs / 1000),
-        ...createTrialMonsterHealthBarObjects(monster, monsterPosition),
+        ...(showMonsterHealthBars ? createTrialMonsterHealthBarObjects(monster, monsterPosition) : []),
       );
     }
 
@@ -1991,6 +1999,43 @@ export class MagusMatchGameApp implements GameApp {
       0,
     );
   }
+}
+
+function floatingTutorialFingerHint(
+  tiles: readonly FloatingTutorialTileVisualState[],
+  elapsedSec: number,
+): NonNullable<
+  NonNullable<BoardRenderState["tutorialPresentation"]>["floatingMatch"]
+>["fingerHint"] {
+  const lowerLightning = tiles.find((tile) => tile.role === "lowerLightning");
+  const earth = tiles.find((tile) => tile.role === "earth");
+  if (lowerLightning == null || earth == null) {
+    return null;
+  }
+
+  const start = centerOfRect(lowerLightning.rect);
+  const end = centerOfRect(earth.rect);
+  const progress = (elapsedSec % TUTORIAL_FINGER_HINT_LOOP_SEC) / TUTORIAL_FINGER_HINT_LOOP_SEC;
+  const easedProgress = easeOutCubic(progress);
+  return {
+    assetId: AssetIds.ui.tutorialFinger,
+    point: {
+      x: start.x + (end.x - start.x) * easedProgress,
+      y: start.y + (end.y - start.y) * easedProgress,
+    },
+    width: TUTORIAL_FINGER_HINT_SIZE,
+    height: TUTORIAL_FINGER_HINT_SIZE,
+    rotationDegrees: TUTORIAL_FINGER_HINT_ROTATION_DEGREES,
+    alpha: 1,
+    zIndex: TUTORIAL_FINGER_HINT_Z_INDEX,
+  };
+}
+
+function centerOfRect(rect: { x: number; y: number; width: number; height: number }): { x: number; y: number } {
+  return {
+    x: rect.x + rect.width / 2,
+    y: rect.y + rect.height / 2,
+  };
 }
 
 function isFloatingTutorialDragPair(

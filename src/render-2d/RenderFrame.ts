@@ -540,6 +540,24 @@ function drawFloatingTutorialMatch(renderer: GameRenderer, boardState: BoardRend
     renderer.pop();
   }
 
+  const fingerHint = floatingMatch.fingerHint;
+  if (fingerHint != null && fingerHint.alpha > 0 && fingerHint.width > 0 && fingerHint.height > 0) {
+    const imageRef = { id: fingerHint.assetId };
+    if (renderer.hasImage(imageRef)) {
+      renderer.pushAlpha(fingerHint.alpha);
+      renderer.pushRotate(fingerHint.rotationDegrees, fingerHint.point.x, fingerHint.point.y);
+      renderer.drawImage(
+        imageRef,
+        fingerHint.point.x - fingerHint.width / 2,
+        fingerHint.point.y,
+        fingerHint.width,
+        fingerHint.height,
+      );
+      renderer.pop();
+      renderer.pop();
+    }
+  }
+
   drawMatchEnergyStreamList(renderer, floatingMatch.matchEnergyStreams ?? []);
 }
 

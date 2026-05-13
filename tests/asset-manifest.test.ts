@@ -85,6 +85,12 @@ describe("AssetManifest", () => {
     expect(AssetManifest[AssetIds.ui.boardBackground].runtimeSize).toBe(
       "1080x1080",
     );
+    expect(AssetManifest[AssetIds.ui.tutorialFinger].browserUrl).toBe(
+      "/assets/ui/finger.png",
+    );
+    expect(AssetManifest[AssetIds.ui.tutorialFinger].runtimeSize).toBe(
+      "256x256",
+    );
     expect(AssetManifest[AssetIds.materials.mageTexture].browserUrl).toBe(
       "/assets/rigs/knight2.fbm/knight_texture_final.png",
     );

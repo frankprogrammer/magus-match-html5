@@ -148,9 +148,20 @@ export interface FloatingTutorialTileVisualState {
   zIndex: number;
 }
 
+export interface FloatingTutorialFingerHintState {
+  assetId: string;
+  point: { x: number; y: number };
+  width: number;
+  height: number;
+  rotationDegrees: number;
+  alpha: number;
+  zIndex: number;
+}
+
 export interface FloatingTutorialMatchVisualState {
   phase: 'idle' | 'resolving';
   tiles: readonly FloatingTutorialTileVisualState[];
+  fingerHint?: FloatingTutorialFingerHintState | null;
   matchEnergyStreams?: readonly BoardMatchEnergyStreamVisualState[];
   allowedDrag: {
     fromRole: 'lowerLightning';

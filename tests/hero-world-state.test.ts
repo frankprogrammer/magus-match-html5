@@ -110,6 +110,7 @@ describe('HeroWorldState', () => {
     if (runtime == null || runtime.monsters[0] == null) {
       throw new Error('Expected Trial runtime.');
     }
+    finishTrialEntrance(app);
 
     setTrialRuntimeForDebug(app, {
       ...runtime,
@@ -169,7 +170,9 @@ describe('HeroWorldState', () => {
   });
 
   it('includes stable Trial enemy health bar objects above alive monsters', () => {
-    const state = new MagusMatchGameApp(789, { debugLevelType: 'TRIAL' }).getHeroWorldState();
+    const app = new MagusMatchGameApp(789, { debugLevelType: 'TRIAL' });
+    finishTrialEntrance(app);
+    const state = app.getHeroWorldState();
     const monster = state.objects.find((object) => object.templateId === HeroStageTemplateIds.monsterPlaceholder);
     const track = state.objects.find((object) => object.templateId === HeroStageTemplateIds.healthBarTrack);
     const fill = state.objects.find((object) => object.templateId === HeroStageTemplateIds.healthBarFill);
@@ -201,6 +204,7 @@ describe('HeroWorldState', () => {
     const startMonster = getHeroObject(startApp, monsterId);
     const startMage = getHeroObject(startApp, 'actor-mage');
     const finalMonster = getHeroObject(finalApp, monsterId);
+    const finalTrack = getHeroObject(finalApp, `${monsterId}-health-track`);
     const finalMage = getHeroObject(finalApp, 'actor-mage');
 
     expect(startMonster.transform.position.x).toBeCloseTo(
@@ -209,6 +213,10 @@ describe('HeroWorldState', () => {
     expect(startMage.transform.position.x).toBeCloseTo(
       finalMage.transform.position.x - TRIAL_ACTOR_ENTRANCE_OFFSCREEN_X_OFFSET,
     );
+    expect(startApp.getHeroWorldState().objects.some((object) => object.objectId === `${monsterId}-health-track`)).toBe(
+      false,
+    );
+    expect(finalTrack.transform.position.x).toBeCloseTo(finalMonster.transform.position.x);
 
     const midApp = new MagusMatchGameApp(789, { debugLevelType: 'TRIAL' });
     midApp.update(TRIAL_ACTOR_ENTRANCE_ENEMY_DURATION_SEC / 2, []);
@@ -233,16 +241,16 @@ describe('HeroWorldState', () => {
     expect(mageMidTween.transform.position.x).toBeLessThan(finalMage.transform.position.x);
   });
 
-  it('uses the same entrance sequence for tutorial kobolds and keeps health bars aligned', () => {
+  it('uses the same entrance sequence for tutorial kobolds and shows health bars after the entrance', () => {
     const startApp = new MagusMatchGameApp(555);
     const finalApp = new MagusMatchGameApp(555);
     finishTrialEntrance(finalApp);
 
     const monsterId = 'trial-monster-tutorial-kobold-0';
     const startMonster = getHeroObject(startApp, monsterId);
-    const startTrack = getHeroObject(startApp, `${monsterId}-health-track`);
     const startMage = getHeroObject(startApp, 'actor-mage');
     const finalMonster = getHeroObject(finalApp, monsterId);
+    const finalTrack = getHeroObject(finalApp, `${monsterId}-health-track`);
     const finalMage = getHeroObject(finalApp, 'actor-mage');
 
     expect(startMonster.transform.position.x).toBeCloseTo(
@@ -251,8 +259,11 @@ describe('HeroWorldState', () => {
     expect(startMage.transform.position.x).toBeCloseTo(
       finalMage.transform.position.x - TRIAL_ACTOR_ENTRANCE_OFFSCREEN_X_OFFSET,
     );
-    expect(startTrack.transform.position.x).toBeCloseTo(startMonster.transform.position.x);
-    expect(startTrack.transform.position.y).toBeGreaterThan(startMonster.transform.position.y);
+    expect(startApp.getHeroWorldState().objects.some((object) => object.objectId === `${monsterId}-health-track`)).toBe(
+      false,
+    );
+    expect(finalTrack.transform.position.x).toBeCloseTo(finalMonster.transform.position.x);
+    expect(finalTrack.transform.position.y).toBeGreaterThan(finalMonster.transform.position.y);
   });
 
   it('tweens the Trial mage off-screen right on wins without moving enemies', () => {
@@ -346,6 +357,7 @@ describe('HeroWorldState', () => {
     if (runtime == null) {
       throw new Error('Expected Trial runtime.');
     }
+    finishTrialEntrance(app);
 
     const monster = {
       ...runtime.monsters[0],
@@ -389,6 +401,7 @@ describe('HeroWorldState', () => {
     if (runtime == null) {
       throw new Error('Expected Trial runtime.');
     }
+    finishTrialEntrance(app);
 
     const monster = {
       ...runtime.monsters[0],
@@ -552,6 +565,7 @@ describe('HeroWorldState', () => {
     if (runtime == null) {
       throw new Error('Expected Trial runtime.');
     }
+    finishTrialEntrance(app);
 
     setTrialRuntimeForDebug(app, {
       ...runtime,

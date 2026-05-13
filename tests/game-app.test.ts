@@ -166,6 +166,53 @@ describe('MagusMatchGameApp', () => {
     expect(tutorialKoboldObjects.map((object) => object.animationTimeSec)).toEqual([0, 0, 0]);
   });
 
+  it('shows a looping finger hint from lower Lightning to Earth as soon as floating tutorial tiles are visible', () => {
+    const app = new MagusMatchGameApp(555);
+
+    const initialFloatingMatch = app.getBoardRenderState().tutorialPresentation?.floatingMatch;
+    const initialHint = initialFloatingMatch?.fingerHint;
+    expect(initialHint).toMatchObject({
+      assetId: AssetIds.ui.tutorialFinger,
+      width: 288,
+      height: 288,
+      rotationDegrees: -15,
+      alpha: 1,
+      zIndex: 40,
+    });
+
+    app.update(TRIAL_ACTOR_ENTRANCE_TOTAL_DURATION_SEC + 0.2, []);
+    const startFloatingMatch = app.getBoardRenderState().tutorialPresentation?.floatingMatch;
+    const startHint = startFloatingMatch?.fingerHint;
+    const startLowerLightning = startFloatingMatch?.tiles.find((tile) => tile.role === 'lowerLightning');
+    expect(startHint).toMatchObject({
+      assetId: AssetIds.ui.tutorialFinger,
+      width: 288,
+      height: 288,
+      rotationDegrees: -15,
+      alpha: 1,
+      zIndex: 40,
+    });
+    expect(startHint?.point.x).toBeCloseTo(tileCenter(startLowerLightning).x);
+    expect(startHint?.point.y).toBeCloseTo(tileCenter(startLowerLightning).y);
+
+    app.update(0.5, []);
+    const halfwayFloatingMatch = app.getBoardRenderState().tutorialPresentation?.floatingMatch;
+    const halfwayHint = halfwayFloatingMatch?.fingerHint;
+    const halfwayLowerLightning = tileCenter(halfwayFloatingMatch?.tiles.find((tile) => tile.role === 'lowerLightning'));
+    const halfwayEarth = tileCenter(halfwayFloatingMatch?.tiles.find((tile) => tile.role === 'earth'));
+    const easedHalfway = 0.875;
+    expect(halfwayHint?.point.x).toBeCloseTo(
+      halfwayLowerLightning.x + (halfwayEarth.x - halfwayLowerLightning.x) * easedHalfway,
+    );
+    expect(halfwayHint?.point.y).toBeCloseTo(
+      halfwayLowerLightning.y + (halfwayEarth.y - halfwayLowerLightning.y) * easedHalfway,
+    );
+
+    dragFloatingTutorialTile(app, 'lowerLightning', 'earth');
+    expect(app.getTrialTutorialStateForDebug()?.phase).toBe('resolving');
+    expect(app.getBoardRenderState().tutorialPresentation?.floatingMatch?.fingerHint).toBeNull();
+  });
+
   it('locks Trial movement and floating tutorial input until the actor entrance finishes', () => {
     const app = new MagusMatchGameApp(777);
     const startRuntime = app.getTrialRuntimeForDebug();
@@ -943,6 +990,20 @@ function dragFloatingTutorialTile(
     { type: 'dragStart', x: from.rect.x + from.rect.width / 2, y: from.rect.y + from.rect.height / 2 },
     { type: 'dragEnd', x: to.rect.x + to.rect.width / 2, y: to.rect.y + to.rect.height / 2 },
   ]);
+}
+
+function tileCenter(tile: { rect: { x: number; y: number; width: number; height: number } } | undefined): {
+  x: number;
+  y: number;
+} {
+  if (tile == null) {
+    throw new Error('Expected floating tutorial tile.');
+  }
+
+  return {
+    x: tile.rect.x + tile.rect.width / 2,
+    y: tile.rect.y + tile.rect.height / 2,
+  };
 }
 
 function tap(app: MagusMatchGameApp, rect: { x: number; y: number; width: number; height: number }): void {

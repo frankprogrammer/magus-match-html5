@@ -83,6 +83,8 @@ const UI_TRIAL_KOBOLD_ICON_NOTES =
   "Runtime ~447x429 transparent PNG; badge on bottom-right of trial enemy fill bar.";
 const UI_PRIMARY_BUTTON_NOTES =
   "Wide horizontal CTA; title Play / game-over Try Again. Transparent PNG with gold frame.";
+const UI_TUTORIAL_FINGER_NOTES =
+  "Runtime transparent PNG pointer hand used as the floating tutorial drag hint.";
 const TNT_EXPLOSION_SPRITE_NOTES =
   "Runtime 512x256 transparent PNG spritesheet. Two rows by four columns, eight 128x128 frames, played at 30 FPS for TNT detonations.";
 const ROCKET_CLOUD_SPRITE_NOTES =
@@ -468,6 +470,13 @@ export const AssetManifest: Record<string, AssetManifestEntry> = {
     "Assets/Textures/UI/ui-button-pressed.png",
     UI_PRIMARY_BUTTON_NOTES,
     "~1920x384",
+  ),
+  [AssetIds.ui.tutorialFinger]: ui(
+    AssetIds.ui.tutorialFinger,
+    "/assets/ui/finger.png",
+    "Assets/Textures/UI/finger.png",
+    UI_TUTORIAL_FINGER_NOTES,
+    "256x256",
   ),
   ...Object.fromEntries(
     Object.values(SoundManifest).map((entry) => [entry.id, audio(entry)]),

@@ -326,7 +326,9 @@ describe('buildBoardCellVisuals', () => {
   });
 
   it('draws only the floating tutorial tiles over the transparent canvas in full-hero mode', () => {
-    const renderer = new FakeRenderer(new Set([AssetIds.tiles.earth, AssetIds.tiles.lightning, AssetIds.powerUps.orb]));
+    const renderer = new FakeRenderer(
+      new Set([AssetIds.tiles.earth, AssetIds.tiles.lightning, AssetIds.powerUps.orb, AssetIds.ui.tutorialFinger]),
+    );
     const state = oneTileState(AssetIds.tiles.earth);
     state.tutorialPresentation = {
       mode: 'tutorialFullHero',
@@ -386,6 +388,15 @@ describe('buildBoardCellVisuals', () => {
             zIndex: 3,
           },
         ],
+        fingerHint: {
+          assetId: AssetIds.ui.tutorialFinger,
+          point: { x: 432, y: 1534 },
+          width: 288,
+          height: 288,
+          rotationDegrees: -15,
+          alpha: 1,
+          zIndex: 40,
+        },
         matchEnergyStreams: [
           {
             streamId: 'floating-stream',
@@ -413,8 +424,13 @@ describe('buildBoardCellVisuals', () => {
     );
     expect(renderer.calls.filter((call) => call === `image:${AssetIds.tiles.lightning}`)).toHaveLength(3);
     expect(renderer.calls.filter((call) => call === `image:${AssetIds.tiles.earth}`)).toHaveLength(1);
+    expect(renderer.calls).toContain(`pushRotate:-15,432,1534`);
+    expect(renderer.calls).toContain(`image:${AssetIds.ui.tutorialFinger}:288,1534,288,288`);
     expect(renderer.calls).toContain(`mask:${AssetIds.tiles.lightning}:#ffffff`);
     expect(renderer.calls).toContain(`tintedImage:${AssetIds.powerUps.orb}`);
+    expect(renderer.calls.indexOf(`image:${AssetIds.ui.tutorialFinger}`)).toBeGreaterThan(
+      renderer.calls.lastIndexOf(`image:${AssetIds.tiles.lightning}`),
+    );
   });
 
   it('falls back to the flat board fill when the board background image is unavailable', () => {

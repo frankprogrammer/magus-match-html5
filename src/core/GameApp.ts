@@ -231,6 +231,21 @@ export function levelClearOverlayAssetIdForWinLevel(levelNumber: number): string
     : AssetIds.ui.floorCleared;
 }
 
+export function transitionImageOverlayAssetIdForPhase(
+  phase: GamePhase,
+  levelNumber: number,
+): string | null {
+  if (phase === "WIN") {
+    return levelClearOverlayAssetIdForWinLevel(levelNumber);
+  }
+
+  if (phase === "LOSE") {
+    return AssetIds.ui.lifeLost;
+  }
+
+  return null;
+}
+
 export class MagusMatchGameApp implements GameApp {
   private events: GameEvent[] = [];
   private rng = new SeededRng();
@@ -454,7 +469,7 @@ export class MagusMatchGameApp implements GameApp {
       },
       muted: this.muted,
       transitionText: transitionTextForPhase(this.phase),
-      levelClearOverlay: this.getLevelClearOverlayVisualState(),
+      transitionImageOverlay: this.getTransitionImageOverlayVisualState(),
     };
   }
 
@@ -1709,8 +1724,9 @@ export class MagusMatchGameApp implements GameApp {
     };
   }
 
-  private getLevelClearOverlayVisualState(): ScreenRenderState["levelClearOverlay"] {
-    if (this.phase !== "WIN") {
+  private getTransitionImageOverlayVisualState(): ScreenRenderState["transitionImageOverlay"] {
+    const assetId = transitionImageOverlayAssetIdForPhase(this.phase, this.run.levelNumber);
+    if (assetId == null) {
       return null;
     }
 
@@ -1733,7 +1749,7 @@ export class MagusMatchGameApp implements GameApp {
     }
 
     return {
-      assetId: levelClearOverlayAssetIdForWinLevel(this.run.levelNumber),
+      assetId,
       x,
       y: centeredY,
       width: HERO_ACTIVATION_OVERLAY_WIDTH,
@@ -1745,7 +1761,9 @@ export class MagusMatchGameApp implements GameApp {
 
   private isLevelResultHoldComplete(): boolean {
     const requiredSec =
-      this.phase === "WIN" ? LEVEL_CLEAR_OVERLAY_TOTAL_SEC : LEVEL_TRANSITION_HOLD_SEC;
+      this.phase === "WIN" || this.phase === "LOSE"
+        ? LEVEL_CLEAR_OVERLAY_TOTAL_SEC
+        : LEVEL_TRANSITION_HOLD_SEC;
     return this.transitionTimerSec >= requiredSec;
   }
 
@@ -2781,10 +2799,7 @@ function screenForPhase(phase: GamePhase): ScreenRenderState["screen"] {
 }
 
 function transitionTextForPhase(phase: GamePhase): string | null {
-  if (phase === "LOSE") {
-    return "Life Lost";
-  }
-
+  void phase;
   return null;
 }
 

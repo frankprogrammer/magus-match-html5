@@ -18,6 +18,7 @@ import {
 import {
   levelClearOverlayAssetIdForWinLevel,
   MagusMatchGameApp,
+  transitionImageOverlayAssetIdForPhase,
   TRIAL_ACTOR_ENTRANCE_ENEMY_DURATION_SEC,
   TRIAL_ACTOR_ENTRANCE_MAGE_DURATION_SEC,
   TRIAL_ACTOR_ENTRANCE_TOTAL_DURATION_SEC,
@@ -408,7 +409,7 @@ describe('MagusMatchGameApp', () => {
     expect(app.getScreenState()).toMatchObject({
       phase: 'WIN',
       transitionText: null,
-      levelClearOverlay: {
+      transitionImageOverlay: {
         assetId: AssetIds.ui.levelCleared,
         x: -800,
         y: (HERO_STAGE_HEIGHT - 450) / 2,
@@ -420,16 +421,16 @@ describe('MagusMatchGameApp', () => {
 
     app.update(0.1, []);
 
-    expect(app.getScreenState().levelClearOverlay).toMatchObject({
+    expect(app.getScreenState().transitionImageOverlay).toMatchObject({
       x: (LOGICAL_WIDTH - 800) / 2,
       y: (HERO_STAGE_HEIGHT - 450) / 2,
     });
 
     app.update(LEVEL_CLEAR_OVERLAY_EXIT_START_SEC - 0.1, []);
-    expect(app.getScreenState().levelClearOverlay?.x).toBeCloseTo((LOGICAL_WIDTH - 800) / 2);
+    expect(app.getScreenState().transitionImageOverlay?.x).toBeCloseTo((LOGICAL_WIDTH - 800) / 2);
 
     app.update(0.05, []);
-    const exitingX = app.getScreenState().levelClearOverlay?.x ?? 0;
+    const exitingX = app.getScreenState().transitionImageOverlay?.x ?? 0;
     expect(exitingX).toBeGreaterThan((LOGICAL_WIDTH - 800) / 2);
     expect(exitingX).toBeLessThan(LOGICAL_WIDTH);
   });
@@ -440,12 +441,15 @@ describe('MagusMatchGameApp', () => {
     expect(levelClearOverlayAssetIdForWinLevel(18)).toBe(AssetIds.ui.floorCleared);
     expect(levelClearOverlayAssetIdForWinLevel(21)).toBe(AssetIds.ui.levelCleared);
     expect(levelClearOverlayAssetIdForWinLevel(24)).toBe(AssetIds.ui.floorCleared);
+    expect(transitionImageOverlayAssetIdForPhase('WIN', 3)).toBe(AssetIds.ui.floorCleared);
+    expect(transitionImageOverlayAssetIdForPhase('LOSE', 3)).toBe(AssetIds.ui.lifeLost);
+    expect(transitionImageOverlayAssetIdForPhase('IDLE', 3)).toBeNull();
 
     const app = new MagusMatchGameApp(778, { debugLevelType: 'TRIAL', debugStartLevel: 3 });
     finishTrialEntrance(app);
     beginLevelResultForDebug(app, 'win');
 
-    expect(app.getScreenState().levelClearOverlay).toMatchObject({
+    expect(app.getScreenState().transitionImageOverlay).toMatchObject({
       assetId: AssetIds.ui.floorCleared,
       x: -800,
       y: (HERO_STAGE_HEIGHT - 450) / 2,
@@ -453,6 +457,37 @@ describe('MagusMatchGameApp', () => {
       height: 450,
       alpha: 1,
     });
+  });
+
+  it('shows a tweened life-lost image overlay during non-final loss transitions', () => {
+    const app = new MagusMatchGameApp(778, { debugLevelType: 'TRIAL' });
+    finishTrialEntrance(app);
+    beginLevelResultForDebug(app, 'loss');
+
+    expect(app.getScreenState()).toMatchObject({
+      phase: 'LOSE',
+      transitionText: null,
+      transitionImageOverlay: {
+        assetId: AssetIds.ui.lifeLost,
+        x: -800,
+        y: (HERO_STAGE_HEIGHT - 450) / 2,
+        width: 800,
+        height: 450,
+        alpha: 1,
+      },
+    });
+
+    app.update(0.1, []);
+    expect(app.getScreenState().transitionImageOverlay).toMatchObject({
+      x: (LOGICAL_WIDTH - 800) / 2,
+      y: (HERO_STAGE_HEIGHT - 450) / 2,
+    });
+
+    app.update(LEVEL_CLEAR_OVERLAY_TOTAL_SEC - 0.101, []);
+    expect(app.getHudState().phase).toBe('LOSE');
+    app.update(0.01, []);
+    expect(app.getHudState().phase).toBe('IDLE');
+    expect(app.getRunStateForDebug().lives).toBe(2);
   });
 
   it('shows the selected target overlay for tapped Journey Lightballs', () => {
@@ -1099,6 +1134,12 @@ describe('MagusMatchGameApp', () => {
     trialApp.drainEvents();
     beginLevelResultForDebug(trialApp, 'loss');
     trialApp.update(LEVEL_TRANSITION_HOLD_SEC, []);
+    expect(trialApp.getHudState().phase).toBe('LOSE');
+    expect(trialApp.getRunStateForDebug()).toMatchObject({
+      lives: 3,
+      levelNumber: trialStartLevel,
+    });
+    trialApp.update(LEVEL_CLEAR_OVERLAY_TOTAL_SEC - LEVEL_TRANSITION_HOLD_SEC, []);
     expect(trialApp.getHudState().phase).toBe('IDLE');
     expect(trialApp.getRunStateForDebug()).toMatchObject({
       lives: 2,
@@ -1112,7 +1153,7 @@ describe('MagusMatchGameApp', () => {
     app.drainEvents();
 
     beginLevelResultForDebug(app, 'loss');
-    app.update(LEVEL_TRANSITION_HOLD_SEC, []);
+    app.update(LEVEL_CLEAR_OVERLAY_TOTAL_SEC, []);
 
     expect(app.getRunStateForDebug()).toMatchObject({ lives: 2, levelNumber: 1 });
     expect(app.getHudState().phase).toBe('IDLE');
@@ -1127,7 +1168,7 @@ describe('MagusMatchGameApp', () => {
 
     finishTrialEntrance(app);
     beginLevelResultForDebug(app, 'loss');
-    app.update(LEVEL_TRANSITION_HOLD_SEC, []);
+    app.update(LEVEL_CLEAR_OVERLAY_TOTAL_SEC, []);
 
     expect(app.getRunStateForDebug()).toMatchObject({ lives: 1, levelNumber: 1 });
     expect(app.getTrialTutorialStateForDebug()).toBeNull();
@@ -1141,7 +1182,7 @@ describe('MagusMatchGameApp', () => {
     for (let loss = 0; loss < 3; loss += 1) {
       finishTrialEntrance(app);
       beginLevelResultForDebug(app, 'loss');
-      app.update(LEVEL_TRANSITION_HOLD_SEC, []);
+      app.update(LEVEL_CLEAR_OVERLAY_TOTAL_SEC, []);
     }
 
     expect(app.getHudState().phase).toBe('GAME_OVER');

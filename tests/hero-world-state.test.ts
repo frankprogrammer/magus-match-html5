@@ -679,7 +679,7 @@ describe('HeroWorldState', () => {
     for (let loss = 0; loss < 3; loss += 1) {
       finishTrialEntrance(app);
       beginLevelResultForDebug(app, 'loss');
-      app.update(1.2, []);
+      app.update(2.0, []);
     }
 
     const baseMonster = runtime.monsters[0];

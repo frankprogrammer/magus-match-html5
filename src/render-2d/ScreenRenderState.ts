@@ -30,7 +30,7 @@ export interface ScreenRenderState {
   buttonRects: ScreenButtonRects;
   muted: boolean;
   transitionText: string | null;
-  levelClearOverlay?: ScreenImageOverlayState | null;
+  transitionImageOverlay?: ScreenImageOverlayState | null;
   /** Browser shell: true while pointer is down on game-over Try Again. */
   overlayPrimaryButtonPressed?: boolean;
 }

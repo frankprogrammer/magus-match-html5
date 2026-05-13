@@ -490,7 +490,7 @@ describe('buildBoardCellVisuals', () => {
         },
         muted: false,
         transitionText: null,
-        levelClearOverlay: {
+        transitionImageOverlay: {
           assetId: AssetIds.ui.levelCleared,
           x: 32,
           y: (HERO_STAGE_HEIGHT - 450) / 2,
@@ -514,6 +514,49 @@ describe('buildBoardCellVisuals', () => {
       renderer.calls.indexOf(`image:${AssetIds.ui.levelCleared}`),
     );
     expect(renderer.calls.indexOf(`image:${AssetIds.ui.levelCleared}`)).toBeGreaterThan(
+      renderer.calls.indexOf('rect:rgba(20, 14, 32, 0.55)'),
+    );
+  });
+
+  it('draws the life-lost transition image without Life Lost text', () => {
+    const renderer = new FakeRenderer(new Set([AssetIds.tiles.fire, AssetIds.ui.lifeLost]));
+
+    renderFrame(
+      renderer,
+      oneTileState(AssetIds.tiles.fire),
+      hudState(),
+      0,
+      {
+        screen: 'play',
+        phase: 'LOSE',
+        finalScore: 0,
+        highScore: 0,
+        leaderboardRows: [],
+        highlightedRank: null,
+        buttonRects: {
+          tryAgain: { x: 0, y: 0, width: 0, height: 0 },
+          mute: { x: 0, y: 0, width: 0, height: 0 },
+          bgm: { x: 0, y: 0, width: 0, height: 0 },
+        },
+        muted: false,
+        transitionText: null,
+        transitionImageOverlay: {
+          assetId: AssetIds.ui.lifeLost,
+          x: 32,
+          y: (HERO_STAGE_HEIGHT - 450) / 2,
+          width: 800,
+          height: 450,
+          alpha: 1,
+          zIndex: 80,
+        },
+      },
+    );
+
+    expect(renderer.calls).toContain(
+      `image:${AssetIds.ui.lifeLost}:32,${(HERO_STAGE_HEIGHT - 450) / 2},800,450`,
+    );
+    expect(renderer.calls).not.toContain('text:Life Lost');
+    expect(renderer.calls.indexOf(`image:${AssetIds.ui.lifeLost}`)).toBeGreaterThan(
       renderer.calls.indexOf('rect:rgba(20, 14, 32, 0.55)'),
     );
   });

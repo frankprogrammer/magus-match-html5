@@ -109,6 +109,9 @@ describe("AssetManifest", () => {
     expect(AssetManifest[AssetIds.ui.floorCleared].browserUrl).toBe(
       "/assets/ui/floor-cleared.png",
     );
+    expect(AssetManifest[AssetIds.ui.lifeLost].browserUrl).toBe(
+      "/assets/ui/life-lost.png",
+    );
     expect(AssetManifest[AssetIds.ui.activateEarth].runtimeSize).toBe(
       "800x450 display",
     );
@@ -116,6 +119,9 @@ describe("AssetManifest", () => {
       "800x450 display",
     );
     expect(AssetManifest[AssetIds.ui.floorCleared].runtimeSize).toBe(
+      "800x450 display",
+    );
+    expect(AssetManifest[AssetIds.ui.lifeLost].runtimeSize).toBe(
       "800x450 display",
     );
     expect(AssetManifest[AssetIds.materials.mageTexture].browserUrl).toBe(

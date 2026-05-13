@@ -522,6 +522,13 @@ export const AssetManifest: Record<string, AssetManifestEntry> = {
     UI_ACTIVATION_OVERLAY_NOTES,
     "800x450 display",
   ),
+  [AssetIds.ui.lifeLost]: ui(
+    AssetIds.ui.lifeLost,
+    "/assets/ui/life-lost.png",
+    "Assets/Textures/UI/life-lost.png",
+    UI_ACTIVATION_OVERLAY_NOTES,
+    "800x450 display",
+  ),
   ...Object.fromEntries(
     Object.values(SoundManifest).map((entry) => [entry.id, audio(entry)]),
   ),

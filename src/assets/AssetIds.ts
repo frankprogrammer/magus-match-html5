@@ -61,6 +61,7 @@ export const AssetIds = {
     activateLightning: 'ui.activateLightning',
     levelCleared: 'ui.levelCleared',
     floorCleared: 'ui.floorCleared',
+    lifeLost: 'ui.lifeLost',
   },
   materials: {
     mageTexture: 'material.mageTexture',

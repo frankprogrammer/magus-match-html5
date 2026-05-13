@@ -781,7 +781,7 @@ function drawScreenOverlay(renderer: GameRenderer, screenState: ScreenRenderStat
     return;
   }
 
-  if (screenState.transitionText != null || screenState.levelClearOverlay != null) {
+  if (screenState.transitionText != null || screenState.transitionImageOverlay != null) {
     drawTransitionOverlay(renderer, screenState);
   }
 }
@@ -855,7 +855,7 @@ function drawTransitionOverlay(renderer: GameRenderer, screenState: ScreenRender
     });
   }
 
-  const overlay = screenState.levelClearOverlay;
+  const overlay = screenState.transitionImageOverlay;
   if (overlay == null || overlay.alpha <= 0 || overlay.width <= 0 || overlay.height <= 0) {
     return;
   }

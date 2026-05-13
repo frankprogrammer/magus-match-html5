@@ -16,6 +16,7 @@ import {
   type CellCoord,
 } from '../src/core/Layout';
 import {
+  levelClearOverlayAssetIdForWinLevel,
   MagusMatchGameApp,
   TRIAL_ACTOR_ENTRANCE_ENEMY_DURATION_SEC,
   TRIAL_ACTOR_ENTRANCE_MAGE_DURATION_SEC,
@@ -431,6 +432,27 @@ describe('MagusMatchGameApp', () => {
     const exitingX = app.getScreenState().levelClearOverlay?.x ?? 0;
     expect(exitingX).toBeGreaterThan((LOGICAL_WIDTH - 800) / 2);
     expect(exitingX).toBeLessThan(LOGICAL_WIDTH);
+  });
+
+  it('uses the floor-cleared image when a win advances to a new hero backdrop', () => {
+    expect(levelClearOverlayAssetIdForWinLevel(1)).toBe(AssetIds.ui.levelCleared);
+    expect(levelClearOverlayAssetIdForWinLevel(3)).toBe(AssetIds.ui.floorCleared);
+    expect(levelClearOverlayAssetIdForWinLevel(18)).toBe(AssetIds.ui.floorCleared);
+    expect(levelClearOverlayAssetIdForWinLevel(21)).toBe(AssetIds.ui.levelCleared);
+    expect(levelClearOverlayAssetIdForWinLevel(24)).toBe(AssetIds.ui.floorCleared);
+
+    const app = new MagusMatchGameApp(778, { debugLevelType: 'TRIAL', debugStartLevel: 3 });
+    finishTrialEntrance(app);
+    beginLevelResultForDebug(app, 'win');
+
+    expect(app.getScreenState().levelClearOverlay).toMatchObject({
+      assetId: AssetIds.ui.floorCleared,
+      x: -800,
+      y: (HERO_STAGE_HEIGHT - 450) / 2,
+      width: 800,
+      height: 450,
+      alpha: 1,
+    });
   });
 
   it('shows the selected target overlay for tapped Journey Lightballs', () => {

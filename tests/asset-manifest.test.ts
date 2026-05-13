@@ -106,10 +106,16 @@ describe("AssetManifest", () => {
     expect(AssetManifest[AssetIds.ui.levelCleared].browserUrl).toBe(
       "/assets/ui/level-cleared.png",
     );
+    expect(AssetManifest[AssetIds.ui.floorCleared].browserUrl).toBe(
+      "/assets/ui/floor-cleared.png",
+    );
     expect(AssetManifest[AssetIds.ui.activateEarth].runtimeSize).toBe(
       "800x450 display",
     );
     expect(AssetManifest[AssetIds.ui.levelCleared].runtimeSize).toBe(
+      "800x450 display",
+    );
+    expect(AssetManifest[AssetIds.ui.floorCleared].runtimeSize).toBe(
       "800x450 display",
     );
     expect(AssetManifest[AssetIds.materials.mageTexture].browserUrl).toBe(

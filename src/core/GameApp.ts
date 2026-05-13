@@ -223,6 +223,14 @@ interface HeroActivationOverlayRuntimeState {
   elapsedSec: number;
 }
 
+export function levelClearOverlayAssetIdForWinLevel(levelNumber: number): string {
+  const currentBackdrop = heroStageBackdropAssetIdForLevel(levelNumber);
+  const nextBackdrop = heroStageBackdropAssetIdForLevel(levelNumber + 1);
+  return currentBackdrop === nextBackdrop
+    ? AssetIds.ui.levelCleared
+    : AssetIds.ui.floorCleared;
+}
+
 export class MagusMatchGameApp implements GameApp {
   private events: GameEvent[] = [];
   private rng = new SeededRng();
@@ -1725,7 +1733,7 @@ export class MagusMatchGameApp implements GameApp {
     }
 
     return {
-      assetId: AssetIds.ui.levelCleared,
+      assetId: levelClearOverlayAssetIdForWinLevel(this.run.levelNumber),
       x,
       y: centeredY,
       width: HERO_ACTIVATION_OVERLAY_WIDTH,

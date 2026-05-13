@@ -60,6 +60,7 @@ export const AssetIds = {
     activateIce: 'ui.activateIce',
     activateLightning: 'ui.activateLightning',
     levelCleared: 'ui.levelCleared',
+    floorCleared: 'ui.floorCleared',
   },
   materials: {
     mageTexture: 'material.mageTexture',

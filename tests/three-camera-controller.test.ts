@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { HERO_STAGE_HEIGHT, LOGICAL_WIDTH } from '../src/core/Layout';
+import { HERO_STAGE_HEIGHT, LOGICAL_HEIGHT, LOGICAL_WIDTH } from '../src/core/Layout';
 import {
   HERO_STAGE_ORTHO_VIEW_WIDTH,
   orthographicBoundsForAspect,
@@ -26,6 +26,15 @@ describe('ThreeCameraController', () => {
     expect(bounds.right).toBeCloseTo(5.4);
     expect(bounds.top).toBeCloseTo(2.7);
     expect(bounds.bottom).toBeCloseTo(-2.7);
+  });
+
+  it('expands the vertical view for the full-height tutorial hero stage', () => {
+    const bounds = orthographicBoundsForAspect(LOGICAL_WIDTH / LOGICAL_HEIGHT);
+
+    expect(bounds.left).toBeCloseTo(-5.4);
+    expect(bounds.right).toBeCloseTo(5.4);
+    expect(bounds.top).toBeCloseTo(12);
+    expect(bounds.bottom).toBeCloseTo(-12);
   });
 
   it('applies plain camera state to an orthographic camera', () => {

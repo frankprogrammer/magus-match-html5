@@ -14,6 +14,7 @@ import {
   createTrialRuntime,
   damageMultiplierForMatch,
   getTrialMageWorldPosition,
+  getTrialMonsterSpellHitWorldPosition,
   getTrialMonsterWorldPosition,
   getTrialSpellOriginWorldPosition,
   hasTrialMonsterReachedMage,
@@ -31,12 +32,15 @@ import {
   koboldModelVariantForMonster,
   LIGHTNING_CHAIN_HOP_DELAY_SEC,
   SPELL_CAST_WINDUP_SEC,
+  TRIAL_MONSTER_BOTTOM_VISUAL_Y_OFFSET,
+  TRIAL_MONSTER_TOP_VISUAL_Y_OFFSET,
   TRIAL_ICE_FREEZE_SEC,
-  TRIAL_MONSTER_RANDOM_Y_OFFSET_AMPLITUDE,
   TRIAL_NEXT_MONSTER_SPAWN_PROGRESS_RATIO,
+  trialMonsterSpellHitWorldYOffset,
+  trialMonsterVisualWorldYOffset,
   updateTrialRuntime,
   updateTrialRuntimeWithEvents,
-  visualYOffsetForMonster,
+  visualYOffsetForSpawnIndex,
 } from '../src/generator/TrialRules';
 
 describe('TrialRules', () => {
@@ -113,15 +117,47 @@ describe('TrialRules', () => {
     expect(selectNearestAliveMonster(updated, level)?.monsterId).toBe('first');
   });
 
-  it('assigns deterministic visual y offsets to spawned Trial monsters', () => {
-    const level = testTrialLevel([monster({ monsterId: 'first' })]);
-    const firstRuntime = createTrialRuntime(level);
-    const secondRuntime = createTrialRuntime(level);
-    const visualYOffset = firstRuntime.monsters[0].visualYOffset;
+  it('assigns deterministic alternating visual y offsets to spawned Trial monsters by spawn order', () => {
+    const baseLevel = testTrialLevel([
+      monster({ monsterId: 'first' }),
+      monster({ monsterId: 'second', laneId: 1, spawnTimeMs: 0 }),
+      monster({ monsterId: 'third', laneId: 2, spawnTimeMs: 0 }),
+      monster({ monsterId: 'fourth', laneId: 3, spawnTimeMs: 0 }),
+    ]);
+    const spawnX = baseLevel.trial.lanes[0]?.spawnX ?? 4.65;
+    const level = {
+      ...baseLevel,
+      trial: {
+        ...baseLevel.trial,
+        lanes: [0, 1, 2, 3].map((laneId) => ({
+          laneId,
+          y: baseLevel.trial.laneY,
+          spawnX,
+        })),
+      },
+    };
+    const spawnAllDueMonsters = () => {
+      let runtime = createTrialRuntime(level);
+      for (let index = 1; index < level.trial.waveManifest.length; index += 1) {
+        runtime = updateTrialRuntime(runtime, level, 0);
+      }
+      return runtime;
+    };
+    const firstRuntime = spawnAllDueMonsters();
+    const secondRuntime = spawnAllDueMonsters();
 
-    expect(visualYOffset).toBeCloseTo(visualYOffsetForMonster(level, 'first'));
-    expect(visualYOffset).toBe(secondRuntime.monsters[0].visualYOffset);
-    expect(Math.abs(visualYOffset ?? 0)).toBeLessThanOrEqual(TRIAL_MONSTER_RANDOM_Y_OFFSET_AMPLITUDE);
+    expect(firstRuntime.monsters.map((monster) => monster.visualYOffset)).toEqual([
+      TRIAL_MONSTER_TOP_VISUAL_Y_OFFSET,
+      TRIAL_MONSTER_BOTTOM_VISUAL_Y_OFFSET,
+      TRIAL_MONSTER_TOP_VISUAL_Y_OFFSET,
+      TRIAL_MONSTER_BOTTOM_VISUAL_Y_OFFSET,
+    ]);
+    expect(firstRuntime.monsters.map((monster) => monster.visualYOffset)).toEqual(
+      secondRuntime.monsters.map((monster) => monster.visualYOffset),
+    );
+    expect(visualYOffsetForSpawnIndex(0)).toBe(TRIAL_MONSTER_TOP_VISUAL_Y_OFFSET);
+    expect(visualYOffsetForSpawnIndex(1)).toBe(TRIAL_MONSTER_BOTTOM_VISUAL_Y_OFFSET);
+    expect(visualYOffsetForSpawnIndex(2)).toBe(TRIAL_MONSTER_TOP_VISUAL_Y_OFFSET);
   });
 
   it('assigns deterministic kobold model variants to spawned Trial monsters', () => {
@@ -199,7 +235,9 @@ describe('TrialRules', () => {
     const level = testTrialLevel([monster()]);
     const runtime = createTrialRuntime(level);
     const magePosition = getTrialMageWorldPosition(level);
-    const monsterPosition = getTrialMonsterWorldPosition(level, runtime.monsters[0]);
+    const activeMonster = runtime.monsters[0];
+    const monsterPosition = getTrialMonsterWorldPosition(level, activeMonster);
+    const spellHitPosition = getTrialMonsterSpellHitWorldPosition(level, activeMonster);
     const spellOrigin = getTrialSpellOriginWorldPosition(level);
 
     expect(magePosition.x).toBe(level.trial.mageX);
@@ -209,6 +247,16 @@ describe('TrialRules', () => {
     expect(spellOrigin.x).toBeGreaterThan(magePosition.x);
     expect(spellOrigin.y).toBeGreaterThan(magePosition.y);
     expect(spellOrigin.z).toBeGreaterThan(magePosition.z);
+    expect(spellHitPosition.x).toBe(monsterPosition.x);
+    expect(spellHitPosition.y).toBeCloseTo(
+      monsterPosition.y +
+        trialMonsterVisualWorldYOffset(activeMonster.kind) +
+        trialMonsterSpellHitWorldYOffset(activeMonster.kind) +
+        (activeMonster.visualYOffset ?? 0),
+    );
+    expect(spellHitPosition.y).toBeGreaterThan(
+      monsterPosition.y + trialMonsterVisualWorldYOffset(activeMonster.kind) + (activeMonster.visualYOffset ?? 0),
+    );
   });
 
   it('scales match damage by match shape', () => {
@@ -297,6 +345,32 @@ describe('TrialRules', () => {
     expect(updated.projectiles).toHaveLength(0);
     expect(updated.monsters[0]?.hitShakeRemainingSec ?? 0).toBeGreaterThanOrEqual(0);
     expect(updated.monsters[0]?.hp).toBeLessThan(50);
+  });
+
+  it.each([
+    ['fire', fireOnlyMatchSwapBoard],
+    ['ice', iceMatchSwapBoard],
+    ['earth', earthMatchSwapBoard],
+  ] as const)('aims %s match projectiles at the monster center hit point', (schoolId, createBoard) => {
+    const board = createBoard();
+    const level = testTrialLevel([monster({ maxHp: 80 })], board);
+    const runtime = createTrialRuntime(level);
+
+    const result = processTrialSwap(
+      board,
+      runtime,
+      level,
+      { col: 1, row: 0 },
+      { col: 1, row: 1 },
+      new SeededRng(99),
+    );
+    const projectile = result.runtime.projectiles.find((candidate) => candidate.schoolId === schoolId);
+
+    expect(projectile).toMatchObject({
+      schoolId,
+      from: getTrialSpellOriginWorldPosition(level),
+      to: getTrialMonsterSpellHitWorldPosition(level, runtime.monsters[0]),
+    });
   });
 
   it('schedules equal fire burn ticks after a non-lethal fire hit', () => {
@@ -509,7 +583,7 @@ describe('TrialRules', () => {
       vfxId: 'earth-impact-0',
       schoolId: 'earth',
       targetMonsterId: 'earth-target',
-      hitWorldPosition: getTrialMonsterWorldPosition(level, beforeImpact.monsters[0]),
+      hitWorldPosition: getTrialMonsterSpellHitWorldPosition(level, beforeImpact.monsters[0]),
       activationDelaySec: 0,
       remainingSec: EARTH_IMPACT_VFX_DURATION_SEC,
       durationSec: EARTH_IMPACT_VFX_DURATION_SEC,
@@ -552,9 +626,30 @@ describe('TrialRules', () => {
       ...baseRuntime,
       nextSpawnIndex: 3,
       monsters: [
-        { ...activeMonster, monsterId: 'first', hp: 30, maxHp: 30, x: level.trial.mageX + 3 },
-        { ...activeMonster, monsterId: 'second', hp: 30, maxHp: 30, x: level.trial.mageX + 4 },
-        { ...activeMonster, monsterId: 'third', hp: 30, maxHp: 30, x: level.trial.mageX + 5 },
+        {
+          ...activeMonster,
+          monsterId: 'first',
+          hp: 30,
+          maxHp: 30,
+          x: level.trial.mageX + 3,
+          visualYOffset: TRIAL_MONSTER_TOP_VISUAL_Y_OFFSET,
+        },
+        {
+          ...activeMonster,
+          monsterId: 'second',
+          hp: 30,
+          maxHp: 30,
+          x: level.trial.mageX + 4,
+          visualYOffset: TRIAL_MONSTER_BOTTOM_VISUAL_Y_OFFSET,
+        },
+        {
+          ...activeMonster,
+          monsterId: 'third',
+          hp: 30,
+          maxHp: 30,
+          x: level.trial.mageX + 5,
+          visualYOffset: TRIAL_MONSTER_TOP_VISUAL_Y_OFFSET,
+        },
       ],
     };
 
@@ -568,6 +663,9 @@ describe('TrialRules', () => {
     );
     const lightningEvents = result.queuedAttackEvents.filter((event) => event.schoolId === 'lightning');
     const lightningProjectiles = result.runtime.projectiles.filter((projectile) => projectile.schoolId === 'lightning');
+    const firstHitPoint = getTrialMonsterSpellHitWorldPosition(level, runtime.monsters[0]);
+    const secondHitPoint = getTrialMonsterSpellHitWorldPosition(level, runtime.monsters[1]);
+    const thirdHitPoint = getTrialMonsterSpellHitWorldPosition(level, runtime.monsters[2]);
     const firstImpactDelaySec =
       TILE_SWAP_RETARGET_MS / 1000 + SPELL_CAST_WINDUP_SEC + SPELL_MATCH_PROJECTILE_VISUAL_MS / 1000;
 
@@ -586,22 +684,27 @@ describe('TrialRules', () => {
     expect(lightningProjectiles[0]).toMatchObject({
       originKind: 'mage',
       from: getTrialSpellOriginWorldPosition(level),
-      to: getTrialMonsterWorldPosition(level, runtime.monsters[0]),
+      to: firstHitPoint,
     });
     expect(lightningProjectiles[1]).toMatchObject({
       originKind: 'world',
-      from: getTrialMonsterWorldPosition(level, runtime.monsters[0]),
-      to: getTrialMonsterWorldPosition(level, runtime.monsters[1]),
+      from: firstHitPoint,
+      to: secondHitPoint,
       chargeDurationSec: 0,
     });
     expect(lightningProjectiles[2]).toMatchObject({
       originKind: 'world',
-      from: getTrialMonsterWorldPosition(level, runtime.monsters[1]),
-      to: getTrialMonsterWorldPosition(level, runtime.monsters[2]),
+      from: secondHitPoint,
+      to: thirdHitPoint,
       chargeDurationSec: 0,
     });
+    expect(lightningProjectiles[1]?.from.y).not.toBeCloseTo(lightningProjectiles[1]?.to.y ?? 0);
 
     const firstImpact = updateTrialRuntimeWithEvents(result.runtime, level, firstImpactDelaySec);
+    expect(firstImpact.runtime.projectiles.find((projectile) => projectile.attackId === 'trial-attack-1')).toMatchObject({
+      originKind: 'world',
+      from: firstHitPoint,
+    });
     expect(firstImpact.runtime.pendingAttacks).toHaveLength(2);
     const remainingImpacts = updateTrialRuntimeWithEvents(
       firstImpact.runtime,
@@ -642,6 +745,106 @@ describe('TrialRules', () => {
       ...stackedRemainingImpacts.damageEvents,
     ].filter((event) => event.schoolId === 'lightning')).toHaveLength(3);
     expect(stackedRemainingImpacts.runtime.monsters.map((target) => target.hp)).toEqual([10, 10, 10]);
+  });
+
+  it('retargets lightning chain visuals to the next living enemy hit point', () => {
+    const level = testTrialLevel([
+      monster({ monsterId: 'first', maxHp: 5 }),
+      monster({ monsterId: 'second', maxHp: 30 }),
+      monster({ monsterId: 'third', maxHp: 30 }),
+    ]);
+    const baseRuntime = createTrialRuntime(level);
+    const first = {
+      ...baseRuntime.monsters[0],
+      monsterId: 'first',
+      hp: 5,
+      maxHp: 5,
+      x: level.trial.mageX + 3,
+      visualYOffset: TRIAL_MONSTER_TOP_VISUAL_Y_OFFSET,
+    };
+    const second = {
+      ...baseRuntime.monsters[0],
+      monsterId: 'second',
+      hp: 30,
+      maxHp: 30,
+      x: level.trial.mageX + 4,
+      visualYOffset: TRIAL_MONSTER_BOTTOM_VISUAL_Y_OFFSET,
+    };
+    const third = {
+      ...baseRuntime.monsters[0],
+      monsterId: 'third',
+      hp: 30,
+      maxHp: 30,
+      x: level.trial.mageX + 5,
+      visualYOffset: TRIAL_MONSTER_TOP_VISUAL_Y_OFFSET,
+    };
+    const firstHitPoint = getTrialMonsterSpellHitWorldPosition(level, first);
+    const secondHitPoint = getTrialMonsterSpellHitWorldPosition(level, second);
+    const runtime = {
+      ...baseRuntime,
+      nextSpawnIndex: level.trial.waveManifest.length,
+      monsters: [first, second, third],
+      pendingAttacks: [
+        {
+          attackId: 'trial-attack-0',
+          schoolId: 'lightning' as const,
+          effectKind: 'match' as const,
+          damage: 10,
+          targetMonsterId: 'first',
+          impactDelaySec: 0.1,
+          castActivationDelaySec: 0,
+          projectileId: 'trial-0',
+          chainId: 'chain-test',
+          chainIndex: 0,
+        },
+        {
+          attackId: 'trial-attack-1',
+          schoolId: 'lightning' as const,
+          effectKind: 'match' as const,
+          damage: 10,
+          targetMonsterId: 'first',
+          impactDelaySec: 0.3,
+          castActivationDelaySec: 0,
+          projectileId: 'trial-1',
+          chainId: 'chain-test',
+          chainIndex: 1,
+          originAttackId: 'trial-attack-0',
+        },
+      ],
+      projectiles: [
+        {
+          ...testProjectile('trial-0', 'trial-attack-0', 'lightning', first, level, 0, 0.1),
+          to: firstHitPoint,
+        },
+        {
+          ...testProjectile('trial-1', 'trial-attack-1', 'lightning', first, level, 0.2, 0.1),
+          originKind: 'world' as const,
+          from: { x: 99, y: 99, z: 99 },
+          to: firstHitPoint,
+        },
+      ],
+    };
+
+    const impact = updateTrialRuntimeWithEvents(runtime, level, 0.1);
+    const retargetedProjectile = impact.runtime.projectiles.find((projectile) => projectile.projectileId === 'trial-1');
+
+    expect(impact.damageEvents).toMatchObject([
+      { monsterId: 'first', schoolId: 'lightning', damage: 5, defeated: true },
+    ]);
+    expect(impact.runtime.pendingAttacks).toMatchObject([
+      {
+        attackId: 'trial-attack-1',
+        targetMonsterId: 'second',
+        excludedMonsterIds: ['first'],
+      },
+    ]);
+    expect(retargetedProjectile).toMatchObject({
+      originKind: 'world',
+      targetMonsterId: 'second',
+      from: firstHitPoint,
+      to: secondHitPoint,
+    });
+    expect(retargetedProjectile?.from.y).not.toBeCloseTo(retargetedProjectile?.to.y ?? 0);
   });
 
   it('retargets future queued attacks and projectiles after their target dies', () => {
@@ -698,7 +901,7 @@ describe('TrialRules', () => {
     ]);
     expect(impact.runtime.projectiles.find((projectile) => projectile.projectileId === 'trial-1')).toMatchObject({
       targetMonsterId: 'second',
-      to: getTrialMonsterWorldPosition(level, second),
+      to: getTrialMonsterSpellHitWorldPosition(level, second),
     });
   });
 
@@ -799,7 +1002,7 @@ describe('TrialRules', () => {
     ]);
     expect(tick.runtime.projectiles[0]).toMatchObject({
       targetMonsterId: 'next',
-      to: getTrialMonsterWorldPosition(level, next),
+      to: getTrialMonsterSpellHitWorldPosition(level, next),
     });
   });
 
@@ -1467,7 +1670,7 @@ function testProjectile(
     effectKind: 'match' as const,
     originKind: 'mage' as const,
     from: getTrialSpellOriginWorldPosition(level),
-    to: getTrialMonsterWorldPosition(level, target),
+    to: getTrialMonsterSpellHitWorldPosition(level, target),
     castActivationDelaySec: 0,
     activationDelaySec,
     chargeDurationSec: 0,

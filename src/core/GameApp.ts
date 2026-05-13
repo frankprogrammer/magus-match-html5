@@ -3,6 +3,7 @@ import type { GameInputCommand } from "./GameInput";
 import {
   BOARD_SIZE,
   GAME_OVER_TRY_AGAIN_BUTTON_RECT,
+  HERO_STAGE_HEIGHT,
   HUD_BGM_TOGGLE_RECT,
   HUD_MUTE_TOGGLE_RECT,
   LOGICAL_HEIGHT,
@@ -59,8 +60,10 @@ import {
   koboldModelVariantForMonster,
   processTrialPowerUpActivation,
   processTrialSwap,
+  trialMonsterVisualWorldYOffset,
   updateTrialRuntimeWithEvents,
   updateTrialVisuals,
+  visualYOffsetForSpawnIndex,
 } from "../generator/TrialRules";
 import {
   createTrialTutorialBoardSetup,
@@ -69,6 +72,7 @@ import {
 } from "../generator/TrialTutorial";
 import type {
   BoardRenderState,
+  FloatingTutorialTileRole,
   BoardVisualCueKind,
   BoardVisualCueState,
 } from "../render-2d/BoardRenderState";
@@ -93,9 +97,12 @@ import type { SwapScoringStats } from "../run/Scoring";
 import {
   CAMERA_SHAKE_MAX,
   CAMERA_SHAKE_MIN,
+  MATCH_ENERGY_STREAM_DURATION_MS,
   MATCH_HINT_ACTIVE_SEC,
   MATCH_HINT_IDLE_DELAY_SEC,
+  MATCH_HINT_BOUNCE_DISTANCE_PX,
   MATCH_HINT_PAUSE_SEC,
+  TILE_SWAP_RETARGET_MS,
 } from "../data/tuning";
 import { HeroStageTemplateIds } from "../world-3d/HeroStageTemplates";
 import type { HeroWorldState } from "../world-3d/HeroWorldState";
@@ -133,7 +140,8 @@ export interface TrialTutorialState extends TrialTutorialBoardSetup {
   phase: "active" | "resolving";
 }
 
-const MAGE_WORLD_Y_OFFSET = -1.47;
+const HERO_WORLD_UNITS_PER_LOGICAL_PIXEL = 10.8 / LOGICAL_WIDTH;
+export const MAGE_WORLD_Y_OFFSET = -1.47 - 50 * HERO_WORLD_UNITS_PER_LOGICAL_PIXEL;
 const TRIAL_HEALTH_BAR_WIDTH = 0.92;
 const TRIAL_HEALTH_BAR_HEIGHT = 0.18;
 const TRIAL_HEALTH_BAR_FILL_HEIGHT = 0.11;
@@ -147,15 +155,26 @@ const TRIAL_FIRE_BURN_RENDER_ORDER = 12;
 const TRIAL_EARTH_IMPACT_SCALE = 2.4;
 const TRIAL_EARTH_IMPACT_Y_OFFSET = 0.625;
 const TRIAL_EARTH_IMPACT_RENDER_ORDER = 14;
-const TRIAL_MINI_BOSS_EXTRA_Y_OFFSET = -0.55;
 const TRIAL_HIT_SHAKE_X_AMPLITUDE = 0.14;
 const TRIAL_HIT_SHAKE_Y_AMPLITUDE = 0.045;
 const TRIAL_WALK_AUDIO_EPSILON_SEC = 0.000001;
 const TRIAL_PLAYER_DEATH_SFX_DELAY_SEC = 0.18;
 const TRIAL_TUTORIAL_KOBOLD_COUNT = 3;
 const TRIAL_TUTORIAL_HP_RATIO = 0.1;
-const TRIAL_TUTORIAL_MONSTER_X_POSITIONS = [-0.15, 2.25, 4.65] as const;
-const TRIAL_TUTORIAL_MONSTER_Y_OFFSETS = [0.24, 0, -0.24] as const;
+const TRIAL_TUTORIAL_MONSTER_X_POSITIONS = [-1.25, 0.1, 1.45] as const;
+const TRIAL_TUTORIAL_MAGE_X_OFFSET = -0.35;
+const TUTORIAL_FULL_HERO_HEIGHT = LOGICAL_HEIGHT;
+const TUTORIAL_FULL_HERO_SCENE_SCALE = 1.5;
+const TUTORIAL_ZOOM_OUT_DURATION_SEC = 0.65;
+const TUTORIAL_FLOATING_TILE_SIZE = 128;
+const TUTORIAL_FLOATING_TILE_GAP = 12;
+const TUTORIAL_FLOATING_SIDE_PADDING = 24;
+const TUTORIAL_FLOATING_RAISE_PX = 200;
+const TUTORIAL_FLOATING_MATCH_Z_INDEX = 20;
+const TRIAL_MONSTER_RENDER_ORDER_BASE = 4;
+const TRIAL_MONSTER_RENDER_ORDER_STEP = 0.01;
+
+type TutorialPresentationMode = "standard" | "tutorialFullHero" | "tutorialZoomOut";
 
 export class MagusMatchGameApp implements GameApp {
   private events: GameEvent[] = [];
@@ -186,6 +205,10 @@ export class MagusMatchGameApp implements GameApp {
   private matchHintTimerSec = 0;
   private trialPlayerDefeatSfxEmitted = false;
   private trialTutorial: TrialTutorialState | null = null;
+  private tutorialPresentationMode: TutorialPresentationMode = "standard";
+  private tutorialZoomOutElapsedSec = 0;
+  private floatingTutorialResolveElapsedSec = 0;
+  private floatingTutorialDragStart: { x: number; y: number } | null = null;
 
   constructor(
     seed?: number,
@@ -217,10 +240,22 @@ export class MagusMatchGameApp implements GameApp {
         continue;
       }
 
+      if (command.type === "dragStart") {
+        this.handleDragStart(command.x, command.y);
+        continue;
+      }
+
+      if (command.type === "dragEnd") {
+        this.handleDragEnd(command.x, command.y);
+        continue;
+      }
+
       if (command.type === "swap") {
         this.handleSwap(command.from, command.to);
       }
     }
+
+    this.updateTutorialPresentation(clampedDtSec);
 
     if (this.phase === "IDLE") {
       this.elapsedSec += clampedDtSec;
@@ -241,9 +276,11 @@ export class MagusMatchGameApp implements GameApp {
   }
 
   getBoardRenderState(): BoardRenderState {
+    const tutorialPresentation = this.getTutorialPresentationState();
     return {
       logicalWidth: LOGICAL_WIDTH,
       logicalHeight: LOGICAL_HEIGHT,
+      tutorialPresentation,
       boardCells: getAllPlayableCoords(this.board)
         .map((coord) => {
           const tile = this.board[coord.row][coord.col].tile;
@@ -287,7 +324,7 @@ export class MagusMatchGameApp implements GameApp {
       visualCues: this.getBoardVisualCueState(),
       animationTrace: this.latestBoardAnimationTrace,
       matchHint: this.getMatchHintVisualState(),
-      tutorialLock: this.getTrialTutorialVisualState(),
+      tutorialLock: tutorialPresentation.hideBoard ? null : this.getTrialTutorialVisualState(),
     };
   }
 
@@ -381,6 +418,10 @@ export class MagusMatchGameApp implements GameApp {
     this.events = [];
     this.bgmMuted = false;
     this.trialTutorial = null;
+    this.tutorialPresentationMode = "standard";
+    this.tutorialZoomOutElapsedSec = 0;
+    this.floatingTutorialResolveElapsedSec = 0;
+    this.floatingTutorialDragStart = null;
     this.startPreparedLevel();
   }
 
@@ -523,6 +564,10 @@ export class MagusMatchGameApp implements GameApp {
     this.resetMatchHintTimer();
     this.trialPlayerDefeatSfxEmitted = false;
     this.trialTutorial = null;
+    this.tutorialPresentationMode = "standard";
+    this.tutorialZoomOutElapsedSec = 0;
+    this.floatingTutorialResolveElapsedSec = 0;
+    this.floatingTutorialDragStart = null;
   }
 
   private startPreparedLevel(): void {
@@ -562,6 +607,10 @@ export class MagusMatchGameApp implements GameApp {
       ...setup,
       phase: "active",
     };
+    this.tutorialPresentationMode = "tutorialFullHero";
+    this.tutorialZoomOutElapsedSec = 0;
+    this.floatingTutorialResolveElapsedSec = 0;
+    this.floatingTutorialDragStart = null;
   }
 
   private shouldStartTrialTutorial(): boolean {
@@ -622,6 +671,7 @@ export class MagusMatchGameApp implements GameApp {
   private completeTrialTutorial(): void {
     if (this.currentLevel?.type !== "TRIAL") {
       this.trialTutorial = null;
+      this.tutorialPresentationMode = "standard";
       return;
     }
 
@@ -630,6 +680,7 @@ export class MagusMatchGameApp implements GameApp {
     this.elapsedSec = 0;
     this.resetMatchHintTimer();
     this.trialPlayerDefeatSfxEmitted = false;
+    this.startTutorialZoomOut();
   }
 
   private isTrialTutorialInputLocked(): boolean {
@@ -684,6 +735,66 @@ export class MagusMatchGameApp implements GameApp {
 
     if (this.currentLevel?.type === "JOURNEY") {
       this.handleJourneyPowerUpTap(boardCell);
+    }
+  }
+
+  private handleDragStart(x: number, y: number): void {
+    if (!this.isFloatingTutorialInputEnabled()) {
+      this.floatingTutorialDragStart = null;
+      return;
+    }
+
+    const role = this.floatingTutorialTileRoleAtPoint({ x, y });
+    this.floatingTutorialDragStart =
+      role === "earth" || role === "lowerLightning" ? { x, y } : null;
+  }
+
+  private handleDragEnd(x: number, y: number): void {
+    if (!this.isFloatingTutorialInputEnabled() || this.floatingTutorialDragStart == null) {
+      this.floatingTutorialDragStart = null;
+      return;
+    }
+
+    const startRole = this.floatingTutorialTileRoleAtPoint(this.floatingTutorialDragStart);
+    const endRole = this.floatingTutorialTileRoleAtPoint({ x, y });
+    this.floatingTutorialDragStart = null;
+    if (!isFloatingTutorialDragPair(startRole, endRole)) {
+      return;
+    }
+
+    this.activateFloatingTutorialSwap();
+  }
+
+  private activateFloatingTutorialSwap(): void {
+    if (this.trialTutorial == null || this.trialTutorial.phase !== "active") {
+      return;
+    }
+
+    const allowedSwap = this.trialTutorial.allowedSwap;
+    this.resetMatchHintTimer();
+    this.handleTrialTutorialSwap(allowedSwap.from, allowedSwap.to);
+  }
+
+  private startTutorialZoomOut(): void {
+    this.tutorialPresentationMode = "tutorialZoomOut";
+    this.tutorialZoomOutElapsedSec = 0;
+    this.floatingTutorialResolveElapsedSec = 0;
+    this.floatingTutorialDragStart = null;
+  }
+
+  private updateTutorialPresentation(dtSec: number): void {
+    if (this.trialTutorial?.phase === "resolving") {
+      this.floatingTutorialResolveElapsedSec += dtSec;
+    }
+
+    if (this.tutorialPresentationMode !== "tutorialZoomOut") {
+      return;
+    }
+
+    this.tutorialZoomOutElapsedSec += dtSec;
+    if (this.tutorialZoomOutElapsedSec >= TUTORIAL_ZOOM_OUT_DURATION_SEC) {
+      this.tutorialPresentationMode = "standard";
+      this.tutorialZoomOutElapsedSec = TUTORIAL_ZOOM_OUT_DURATION_SEC;
     }
   }
 
@@ -759,6 +870,10 @@ export class MagusMatchGameApp implements GameApp {
     }
 
     if (this.trialTutorial != null) {
+      if (this.tutorialPresentationMode === "tutorialFullHero") {
+        return;
+      }
+
       if (this.trialTutorial.phase !== "active") {
         return;
       }
@@ -963,6 +1078,7 @@ export class MagusMatchGameApp implements GameApp {
       ...this.trialTutorial,
       phase: "resolving",
     };
+    this.floatingTutorialResolveElapsedSec = 0;
     this.captureBoardAnimationTrace(result.animationTrace);
     this.emitMatchAudioAndJuice(result.scoringStats, to);
     this.emitTrialAudioAndJuice(result.queuedAttackEvents, to);
@@ -1312,6 +1428,155 @@ export class MagusMatchGameApp implements GameApp {
     }));
   }
 
+  private getTutorialPresentationState(): NonNullable<BoardRenderState["tutorialPresentation"]> {
+    const mode =
+      this.tutorialPresentationMode === "tutorialFullHero" && !this.isFullHeroTutorialPresentationActive()
+        ? "standard"
+        : this.tutorialPresentationMode;
+    const hideHud = mode !== "standard";
+    const hideBoard = mode !== "standard";
+    return {
+      mode,
+      heroHeight: this.getActiveHeroHeight(mode),
+      sceneScale: this.getTutorialSceneScale(mode),
+      hideHud,
+      hideBoard,
+      floatingMatch: mode === "tutorialFullHero" ? this.getFloatingTutorialMatchVisualState() : null,
+    };
+  }
+
+  private getActiveHeroHeight(mode = this.tutorialPresentationMode): number {
+    if (mode === "tutorialFullHero") {
+      return TUTORIAL_FULL_HERO_HEIGHT;
+    }
+
+    if (mode !== "tutorialZoomOut") {
+      return HERO_STAGE_HEIGHT;
+    }
+
+    const progress = Math.max(
+      0,
+      Math.min(1, this.tutorialZoomOutElapsedSec / TUTORIAL_ZOOM_OUT_DURATION_SEC),
+    );
+    const eased = 1 - Math.pow(1 - progress, 3);
+    return TUTORIAL_FULL_HERO_HEIGHT + (HERO_STAGE_HEIGHT - TUTORIAL_FULL_HERO_HEIGHT) * eased;
+  }
+
+  private getTutorialSceneScale(mode = this.tutorialPresentationMode): number {
+    if (mode === "tutorialFullHero") {
+      return TUTORIAL_FULL_HERO_SCENE_SCALE;
+    }
+
+    if (mode !== "tutorialZoomOut") {
+      return 1;
+    }
+
+    const progress = Math.max(
+      0,
+      Math.min(1, this.tutorialZoomOutElapsedSec / TUTORIAL_ZOOM_OUT_DURATION_SEC),
+    );
+    const eased = 1 - Math.pow(1 - progress, 3);
+    return TUTORIAL_FULL_HERO_SCENE_SCALE + (1 - TUTORIAL_FULL_HERO_SCENE_SCALE) * eased;
+  }
+
+  private isFullHeroTutorialPresentationActive(): boolean {
+    return this.tutorialPresentationMode === "tutorialFullHero" && this.trialTutorial != null;
+  }
+
+  private isFloatingTutorialInputEnabled(): boolean {
+    return this.tutorialPresentationMode === "tutorialFullHero" && this.trialTutorial?.phase === "active";
+  }
+
+  private isFloatingTutorialOverlayVisible(): boolean {
+    if (this.tutorialPresentationMode !== "tutorialFullHero" || this.trialTutorial == null) {
+      return false;
+    }
+
+    if (this.trialTutorial.phase === "active") {
+      return true;
+    }
+
+    return this.floatingTutorialResolveElapsedSec < this.getFloatingTutorialMatchAnimationDurationSec();
+  }
+
+  private getFloatingTutorialMatchAnimationDurationSec(): number {
+    return (TILE_SWAP_RETARGET_MS + MATCH_ENERGY_STREAM_DURATION_MS) / 1000;
+  }
+
+  private getFloatingTutorialMatchVisualState(): NonNullable<
+    NonNullable<BoardRenderState["tutorialPresentation"]>["floatingMatch"]
+  > | null {
+    if (!this.isFloatingTutorialOverlayVisible()) {
+      return null;
+    }
+
+    const size = TUTORIAL_FLOATING_TILE_SIZE;
+    const gap = TUTORIAL_FLOATING_TILE_GAP;
+    const groupWidth = size * 3 + gap * 2;
+    const groupHeight = size * 2 + gap;
+    const groupX = (LOGICAL_WIDTH - groupWidth) / 2;
+    const groupY = LOGICAL_HEIGHT - groupHeight - TUTORIAL_FLOATING_SIDE_PADDING - TUTORIAL_FLOATING_RAISE_PX;
+    const progress = (this.matchHintTimerSec % MATCH_HINT_ACTIVE_SEC) / MATCH_HINT_ACTIVE_SEC;
+    const pulse = (Math.sin(progress * Math.PI * 2 * 5) + 1) / 2;
+    const flash = 0.18 + pulse * 0.32;
+    const bounce = Math.max(0, Math.sin(progress * Math.PI * 2 * 3)) * MATCH_HINT_BOUNCE_DISTANCE_PX;
+    const tutorialPhase = this.trialTutorial?.phase === "resolving" ? "resolving" : "idle";
+    const hintActive = tutorialPhase === "idle";
+    const allowedSwap = this.trialTutorial?.allowedSwap;
+    const topCenter = allowedSwap?.to ?? { col: 1, row: 0 };
+    const lowerCenter = allowedSwap?.from ?? { col: 1, row: 1 };
+
+    const tile = (
+      role: FloatingTutorialTileRole,
+      tileType: TileType,
+      col: number,
+      row: number,
+      sourceCoord: CellCoord,
+      hintKind: "none" | "pulse" | "bounce" = "none",
+    ) => ({
+      tileId: `floating-tutorial-${role}`,
+      role,
+      tileType,
+      assetId: assetIdForTileType(tileType),
+      sourceCoord,
+      rect: {
+        x: groupX + col * (size + gap),
+        y: groupY + row * (size + gap) - (hintActive && hintKind === "bounce" ? bounce : 0),
+        width: size,
+        height: size,
+      },
+      alpha: 1,
+      flash: hintActive && hintKind !== "none" ? flash : 0,
+      scale: hintActive && hintKind === "pulse" ? 1 + pulse * 0.08 : 1,
+      zIndex: TUTORIAL_FLOATING_MATCH_Z_INDEX + row * 3 + col,
+    });
+
+    return {
+      phase: tutorialPhase,
+      tiles: [
+        tile("topLeftLightning", "LIGHTNING", 0, 0, { col: topCenter.col - 1, row: topCenter.row }),
+        tile("earth", "EARTH", 1, 0, topCenter, "pulse"),
+        tile("topRightLightning", "LIGHTNING", 2, 0, { col: topCenter.col + 1, row: topCenter.row }),
+        tile("lowerLightning", "LIGHTNING", 1, 1, lowerCenter, "bounce"),
+      ],
+      allowedDrag: {
+        fromRole: "lowerLightning",
+        toRole: "earth",
+      },
+    };
+  }
+
+  private floatingTutorialTileRoleAtPoint(
+    point: { x: number; y: number },
+  ): FloatingTutorialTileRole | null {
+    const floatingMatch = this.getFloatingTutorialMatchVisualState();
+    if (floatingMatch == null) {
+      return null;
+    }
+
+    return floatingMatch.tiles.find((tile) => pointInRect(point, tile.rect))?.role ?? null;
+  }
+
   private resetMatchHintTimer(): void {
     this.matchHintTimerSec = 0;
   }
@@ -1493,10 +1758,7 @@ export class MagusMatchGameApp implements GameApp {
 
     const objects: WorldObjectState[] = [
       createWorldObject("actor-mage", HeroStageTemplateIds.mage, {
-        position: translateY(
-          getTrialMageWorldPosition(this.currentLevel),
-          MAGE_WORLD_Y_OFFSET,
-        ),
+        position: this.getTrialMageRenderPosition(),
         scale: MAGE_WORLD_SCALE,
         renderOrder: 5,
         animationId: phaseToMageAnimation(this.phase),
@@ -1515,11 +1777,12 @@ export class MagusMatchGameApp implements GameApp {
       }),
     ];
     const monsterPositions = new Map<string, TransformState["position"]>();
+    const monsterRenderRanks = trialMonsterRenderRanks(this.trialRuntime.monsters);
 
     for (const monster of this.trialRuntime.monsters) {
       const baseMonsterPosition = translateY(
         getTrialMonsterWorldPosition(this.currentLevel, monster),
-        trialMonsterWorldYOffset(monster.kind) + (monster.visualYOffset ?? 0),
+        trialMonsterVisualWorldYOffset(monster.kind) + (monster.visualYOffset ?? 0),
       );
       const hitShakeOffset = trialMonsterHitShakeOffset(monster);
       const monsterPosition = translate(
@@ -1535,7 +1798,8 @@ export class MagusMatchGameApp implements GameApp {
           {
             position: monsterPosition,
             scale: scaleForTrialMonster(monster.kind),
-            renderOrder: 4,
+            renderOrder: trialMonsterRenderOrder(monster, monsterRenderRanks),
+            materialDepthTest: false,
             animationId: animationForTrialMonster(monster, this.phase),
             opacity: opacityForTrialMonster(monster),
             tintHex: tintForTrialMonster(monster, this.trialRuntime.elapsedMs / 1000),
@@ -1558,6 +1822,30 @@ export class MagusMatchGameApp implements GameApp {
 
     return objects;
   }
+
+  private getTrialMageRenderPosition(): TransformState["position"] {
+    if (this.currentLevel?.type !== "TRIAL") {
+      return { x: 0, y: 0, z: 0 };
+    }
+
+    const basePosition = translateY(
+      getTrialMageWorldPosition(this.currentLevel),
+      MAGE_WORLD_Y_OFFSET,
+    );
+    return this.isFullHeroTutorialPresentationActive()
+      ? translate(basePosition, TRIAL_TUTORIAL_MAGE_X_OFFSET, 0)
+      : basePosition;
+  }
+}
+
+function isFloatingTutorialDragPair(
+  startRole: FloatingTutorialTileRole | null,
+  endRole: FloatingTutorialTileRole | null,
+): boolean {
+  return (
+    (startRole === "lowerLightning" && endRole === "earth") ||
+    (startRole === "earth" && endRole === "lowerLightning")
+  );
 }
 
 function assetIdForTileType(type: TileType): string {
@@ -1646,19 +1934,31 @@ function phaseToPrinceAnimation(phase: GamePhase): string {
   return "cower";
 }
 
-function trialMonsterWorldYOffset(kind: ActiveTrialMonster["kind"]): number {
-  switch (kind) {
-    case "kobold":
-      return -1.49;
-    case "tallKobold":
-      return -1.63;
-    case "miniBoss":
-      return -1.73 + TRIAL_MINI_BOSS_EXTRA_Y_OFFSET;
-  }
-}
-
 function scaleForTrialMonster(kind: ActiveTrialMonster["kind"]): TransformState["scale"] {
   return kind === "miniBoss" ? MINI_BOSS_WORLD_SCALE : MAGE_WORLD_SCALE;
+}
+
+function trialMonsterRenderRanks(
+  monsters: readonly ActiveTrialMonster[],
+): ReadonlyMap<string, number> {
+  return new Map(
+    [...monsters]
+      .sort(
+        (first, second) =>
+          first.x - second.x ||
+          first.spawnTimeMs - second.spawnTimeMs ||
+          first.monsterId.localeCompare(second.monsterId),
+      )
+      .map((monster, index) => [monster.monsterId, index]),
+  );
+}
+
+function trialMonsterRenderOrder(
+  monster: ActiveTrialMonster,
+  renderRanks: ReadonlyMap<string, number>,
+): number {
+  return TRIAL_MONSTER_RENDER_ORDER_BASE +
+    (renderRanks.get(monster.monsterId) ?? 0) * TRIAL_MONSTER_RENDER_ORDER_STEP;
 }
 
 function animationForTrialMonster(monster: ActiveTrialMonster, phase: GamePhase): string {
@@ -1931,7 +2231,7 @@ function createTrialTutorialRuntime(
       spawnTimeMs: 0,
       walkSpeed: 0,
       scoreValue: 0,
-      visualYOffset: TRIAL_TUTORIAL_MONSTER_Y_OFFSETS[index] ?? 0,
+      visualYOffset: visualYOffsetForSpawnIndex(index),
       modelVariant: koboldModelVariantForMonster(level.seed, `tutorial-kobold-${index}`),
       healthBarHp: tutorialHp,
     }),
@@ -1981,6 +2281,7 @@ function createWorldObject(
     scale: TransformState["scale"];
     backdropTextureId?: string;
     renderOrder?: number;
+    materialDepthTest?: boolean;
     replication?: WorldObjectState["replication"];
     animationId?: string;
     animationPaused?: boolean;
@@ -2004,6 +2305,7 @@ function createWorldObject(
     replication: options.replication ?? "sharedGameplay",
     renderLayer: "heroStage",
     renderOrder: options.renderOrder,
+    materialDepthTest: options.materialDepthTest,
     tintHex: options.tintHex,
     opacity: options.opacity,
     animationId: options.animationId,

@@ -1,4 +1,4 @@
-import type { CellCoord } from '../core/Layout';
+import type { CellCoord, UiRect } from '../core/Layout';
 import type { TileType } from '../board/TileTypes';
 import type { BoardAnimationTrace } from '../board/BoardAnimationTrace';
 
@@ -127,9 +127,50 @@ export interface BoardTutorialLockVisualState extends BoardMatchHintVisualState 
   dimmedCells: readonly CellCoord[];
 }
 
+export type TutorialPresentationMode = 'standard' | 'tutorialFullHero' | 'tutorialZoomOut';
+
+export type FloatingTutorialTileRole =
+  | 'topLeftLightning'
+  | 'earth'
+  | 'topRightLightning'
+  | 'lowerLightning';
+
+export interface FloatingTutorialTileVisualState {
+  tileId: string;
+  role: FloatingTutorialTileRole;
+  tileType: TileType;
+  assetId: string;
+  sourceCoord: CellCoord;
+  rect: UiRect;
+  alpha: number;
+  flash: number;
+  scale: number;
+  zIndex: number;
+}
+
+export interface FloatingTutorialMatchVisualState {
+  phase: 'idle' | 'resolving';
+  tiles: readonly FloatingTutorialTileVisualState[];
+  matchEnergyStreams?: readonly BoardMatchEnergyStreamVisualState[];
+  allowedDrag: {
+    fromRole: 'lowerLightning';
+    toRole: 'earth';
+  };
+}
+
+export interface TutorialPresentationState {
+  mode: TutorialPresentationMode;
+  heroHeight: number;
+  sceneScale: number;
+  hideHud: boolean;
+  hideBoard: boolean;
+  floatingMatch: FloatingTutorialMatchVisualState | null;
+}
+
 export interface BoardRenderState {
   logicalWidth: number;
   logicalHeight: number;
+  tutorialPresentation?: TutorialPresentationState;
   boardCells: readonly BoardCellVisualState[];
   particles?: readonly BoardParticleVisualState[];
   matchEnergyStreams?: readonly BoardMatchEnergyStreamVisualState[];

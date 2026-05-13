@@ -9,7 +9,11 @@ import { createBoardFromTileTypes } from '../src/board/Board';
 import { AssetIds } from '../src/assets/AssetIds';
 import { BOARD_RECT, LOGICAL_HEIGHT, LOGICAL_WIDTH } from '../src/core/Layout';
 import { BoardAnimationPresenter } from '../src/render-2d/BoardAnimationPresenter';
-import type { BoardCellVisualState, BoardRenderState } from '../src/render-2d/BoardRenderState';
+import type {
+  BoardCellVisualState,
+  BoardRenderState,
+  FloatingTutorialTileRole,
+} from '../src/render-2d/BoardRenderState';
 import {
   INVALID_SWAP_FORWARD_MS,
   INVALID_SWAP_HOLD_MS,
@@ -153,6 +157,44 @@ describe('BoardAnimationPresenter', () => {
     expect(earlyTravel).toBeLessThan(totalTravelDistance * 0.1);
     expect(earlyProjection).toBeLessThan(0.1);
     expect(acceleratedProjection - middleProjection).toBeGreaterThan(middleProjection - earlyProjection);
+  });
+
+  it('projects tutorial swap and match energy streams onto the floating match overlay', () => {
+    const presenter = new BoardAnimationPresenter();
+    const trace = floatingTutorialTrace();
+    const state = boardState(trace);
+    state.tutorialPresentation = {
+      mode: 'tutorialFullHero',
+      heroHeight: LOGICAL_HEIGHT,
+      sceneScale: 1.5,
+      hideHud: true,
+      hideBoard: true,
+      floatingMatch: floatingTutorialMatchState('resolving'),
+    };
+    const target = { x: 120, y: 220 };
+
+    presenter.present(state, 0, { matchEnergyTarget: target });
+    const swapping = presenter.present(state, 0.06, { matchEnergyTarget: target });
+    const swappingTiles = swapping.tutorialPresentation?.floatingMatch?.tiles ?? [];
+    const lowerLightning = swappingTiles.find((tile) => tile.role === 'lowerLightning');
+    const earth = swappingTiles.find((tile) => tile.role === 'earth');
+    expect(lowerLightning?.rect.y).toBeGreaterThan(1428);
+    expect(lowerLightning?.rect.y).toBeLessThan(1568);
+    expect(earth?.rect.y).toBeGreaterThan(1428);
+    expect(earth?.rect.y).toBeLessThan(1568);
+
+    const popping = presenter.present(state, 0.13, { matchEnergyTarget: target });
+    const streams = popping.tutorialPresentation?.floatingMatch?.matchEnergyStreams ?? [];
+    const topLeftStream = streams.find((stream) => stream.streamId === 'top-left-lightning-energy-0');
+    expect(streams).toHaveLength(15);
+    expect(topLeftStream?.color).toBe('#fff000');
+    expect(distance(topLeftStream ?? target, { x: 292, y: 1492 })).toBeLessThan(90);
+
+    const clearedTopCenter = popping.tutorialPresentation?.floatingMatch?.tiles.find(
+      (tile) => tile.role === 'lowerLightning',
+    );
+    expect(clearedTopCenter?.rect.y).toBe(1428);
+    expect(clearedTopCenter?.scale).toBeLessThan(1);
   });
 
   it('expands and fades the shockwave ring as it moves outward', () => {
@@ -936,6 +978,103 @@ function nonstandardClearTrace(): BoardAnimationTrace {
     ],
     finalSnapshot: { cells: [] },
   };
+}
+
+function floatingTutorialTrace(): BoardAnimationTrace {
+  const preSwapCells = [
+    snapshotCell('top-left-lightning', 'LIGHTNING', 2, 2),
+    snapshotCell('earth', 'EARTH', 3, 2),
+    snapshotCell('top-right-lightning', 'LIGHTNING', 4, 2),
+    snapshotCell('lower-lightning', 'LIGHTNING', 3, 3),
+  ];
+  const postSwapCells = [
+    snapshotCell('top-left-lightning', 'LIGHTNING', 2, 2),
+    snapshotCell('lower-lightning', 'LIGHTNING', 3, 2),
+    snapshotCell('top-right-lightning', 'LIGHTNING', 4, 2),
+    snapshotCell('earth', 'EARTH', 3, 3),
+  ];
+  return {
+    kind: 'resolution',
+    revisionId: 57,
+    swappedCells: {
+      from: { col: 3, row: 3 },
+      to: { col: 3, row: 2 },
+    },
+    preSwapSnapshot: { cells: preSwapCells },
+    postSwapSnapshot: { cells: postSwapCells },
+    cascadeSteps: [
+      {
+        stepIndex: 0,
+        beforeClearSnapshot: { cells: postSwapCells },
+        beforeGravitySnapshot: { cells: [snapshotCell('earth', 'EARTH', 3, 3)] },
+        afterGravitySnapshot: { cells: [snapshotCell('earth', 'EARTH', 3, 3)] },
+        finalSnapshot: { cells: [snapshotCell('earth', 'EARTH', 3, 3)] },
+        clearedTiles: [
+          snapshotCell('top-left-lightning', 'LIGHTNING', 2, 2),
+          snapshotCell('lower-lightning', 'LIGHTNING', 3, 2),
+          snapshotCell('top-right-lightning', 'LIGHTNING', 4, 2),
+        ],
+        fallingTiles: [],
+        refillTiles: [],
+      },
+    ],
+    finalSnapshot: { cells: [snapshotCell('earth', 'EARTH', 3, 3)] },
+  };
+}
+
+function floatingTutorialMatchState(phase: 'idle' | 'resolving'): NonNullable<
+  NonNullable<BoardRenderState['tutorialPresentation']>['floatingMatch']
+> {
+  return {
+    phase,
+    tiles: [
+      floatingTutorialTile('topLeftLightning', 'LIGHTNING', { col: 2, row: 2 }, 228, 1428, 20),
+      floatingTutorialTile('earth', 'EARTH', { col: 3, row: 2 }, 368, 1428, 21),
+      floatingTutorialTile('topRightLightning', 'LIGHTNING', { col: 4, row: 2 }, 508, 1428, 22),
+      floatingTutorialTile('lowerLightning', 'LIGHTNING', { col: 3, row: 3 }, 368, 1568, 24),
+    ],
+    allowedDrag: {
+      fromRole: 'lowerLightning',
+      toRole: 'earth',
+    },
+  };
+}
+
+function floatingTutorialTile(
+  role: FloatingTutorialTileRole,
+  tileType: BoardCellVisualState['tileType'],
+  sourceCoord: { col: number; row: number },
+  x: number,
+  y: number,
+  zIndex: number,
+) {
+  return {
+    tileId: `floating-${role}`,
+    role,
+    tileType,
+    assetId: floatingTutorialAssetId(tileType),
+    sourceCoord,
+    rect: { x, y, width: 128, height: 128 },
+    alpha: 1,
+    flash: 0,
+    scale: 1,
+    zIndex,
+  };
+}
+
+function floatingTutorialAssetId(tileType: BoardCellVisualState['tileType']): string {
+  switch (tileType) {
+    case 'EARTH':
+      return AssetIds.tiles.earth;
+    case 'FIRE':
+      return AssetIds.tiles.fire;
+    case 'ICE':
+      return AssetIds.tiles.ice;
+    case 'LIGHTNING':
+      return AssetIds.tiles.lightning;
+    default:
+      throw new Error(`Unexpected floating tutorial tile type ${tileType}.`);
+  }
 }
 
 function boardState(trace: BoardAnimationTrace): BoardRenderState {

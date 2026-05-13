@@ -325,6 +325,98 @@ describe('buildBoardCellVisuals', () => {
     );
   });
 
+  it('draws only the floating tutorial tiles over the transparent canvas in full-hero mode', () => {
+    const renderer = new FakeRenderer(new Set([AssetIds.tiles.earth, AssetIds.tiles.lightning, AssetIds.powerUps.orb]));
+    const state = oneTileState(AssetIds.tiles.earth);
+    state.tutorialPresentation = {
+      mode: 'tutorialFullHero',
+      heroHeight: LOGICAL_HEIGHT,
+      sceneScale: 1.5,
+      hideHud: true,
+      hideBoard: true,
+      floatingMatch: {
+        phase: 'idle',
+        tiles: [
+          {
+            tileId: 'floating-top-left',
+            role: 'topLeftLightning',
+            tileType: 'LIGHTNING',
+            assetId: AssetIds.tiles.lightning,
+            sourceCoord: { col: 2, row: 2 },
+            rect: { x: 228, y: 1100, width: 128, height: 128 },
+            alpha: 1,
+            flash: 0,
+            scale: 1,
+            zIndex: 0,
+          },
+          {
+            tileId: 'floating-earth',
+            role: 'earth',
+            tileType: 'EARTH',
+            assetId: AssetIds.tiles.earth,
+            sourceCoord: { col: 3, row: 2 },
+            rect: { x: 368, y: 1100, width: 128, height: 128 },
+            alpha: 1,
+            flash: 0,
+            scale: 1,
+            zIndex: 1,
+          },
+          {
+            tileId: 'floating-top-right',
+            role: 'topRightLightning',
+            tileType: 'LIGHTNING',
+            assetId: AssetIds.tiles.lightning,
+            sourceCoord: { col: 4, row: 2 },
+            rect: { x: 508, y: 1100, width: 128, height: 128 },
+            alpha: 1,
+            flash: 0,
+            scale: 1,
+            zIndex: 2,
+          },
+          {
+            tileId: 'floating-lower',
+            role: 'lowerLightning',
+            tileType: 'LIGHTNING',
+            assetId: AssetIds.tiles.lightning,
+            sourceCoord: { col: 3, row: 3 },
+            rect: { x: 368, y: 1240, width: 128, height: 128 },
+            alpha: 1,
+            flash: 0.5,
+            scale: 1,
+            zIndex: 3,
+          },
+        ],
+        matchEnergyStreams: [
+          {
+            streamId: 'floating-stream',
+            assetId: AssetIds.powerUps.orb,
+            x: 400,
+            y: 980,
+            radius: 12,
+            width: 48,
+            height: 48,
+            color: '#fff000',
+            alpha: 0.7,
+            zIndex: 30,
+          },
+        ],
+        allowedDrag: { fromRole: 'lowerLightning', toRole: 'earth' },
+      },
+    };
+
+    renderFrame(renderer, state, hudState(), 0);
+
+    expect(renderer.calls).not.toContain(`image:${AssetIds.ui.hudBanner}:0,${HUD_BAND_TOP_Y},${LOGICAL_WIDTH},150`);
+    expect(renderer.calls).not.toContain('text:Level 1');
+    expect(renderer.calls).not.toContain(
+      `clip:${BOARD_RECT.x},${BOARD_RECT.y},${BOARD_RECT.width},${BOARD_RECT.height}`,
+    );
+    expect(renderer.calls.filter((call) => call === `image:${AssetIds.tiles.lightning}`)).toHaveLength(3);
+    expect(renderer.calls.filter((call) => call === `image:${AssetIds.tiles.earth}`)).toHaveLength(1);
+    expect(renderer.calls).toContain(`mask:${AssetIds.tiles.lightning}:#ffffff`);
+    expect(renderer.calls).toContain(`tintedImage:${AssetIds.powerUps.orb}`);
+  });
+
   it('falls back to the flat board fill when the board background image is unavailable', () => {
     const renderer = new FakeRenderer(new Set(['tile.fire']));
 

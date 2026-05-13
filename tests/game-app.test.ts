@@ -7,8 +7,10 @@ import { findStandardMatchHints } from '../src/board/BoardHints';
 import { findValidMoves, validateSwap } from '../src/board/BoardRules';
 import {
   GAME_OVER_TRY_AGAIN_BUTTON_RECT,
+  HERO_STAGE_HEIGHT,
   HUD_BGM_TOGGLE_RECT,
   HUD_MUTE_TOGGLE_RECT,
+  LOGICAL_HEIGHT,
   type CellCoord,
 } from '../src/core/Layout';
 import { MagusMatchGameApp } from '../src/core/GameApp';
@@ -20,7 +22,13 @@ import {
   MATCH_HINT_IDLE_DELAY_SEC,
   MATCH_HINT_PAUSE_SEC,
 } from '../src/data/tuning';
-import { KOBOLD_DEFEAT_ANIMATION_SEC, KOBOLD_DEFEAT_FADE_SEC, type TrialRuntimeState } from '../src/generator/TrialRules';
+import {
+  KOBOLD_DEFEAT_ANIMATION_SEC,
+  KOBOLD_DEFEAT_FADE_SEC,
+  TRIAL_MONSTER_BOTTOM_VISUAL_Y_OFFSET,
+  TRIAL_MONSTER_TOP_VISUAL_Y_OFFSET,
+  type TrialRuntimeState,
+} from '../src/generator/TrialRules';
 import { LEVEL_TRANSITION_HOLD_SEC } from '../src/run/RunProgression';
 import { BoardAnimationPresenter } from '../src/render-2d/BoardAnimationPresenter';
 import { HeroStageTemplateIds } from '../src/world-3d/HeroStageTemplates';
@@ -84,20 +92,56 @@ describe('MagusMatchGameApp', () => {
 
     const tutorial = app.getTrialTutorialStateForDebug();
     const runtime = app.getTrialRuntimeForDebug();
+    const boardState = app.getBoardRenderState();
     expect(tutorial).toMatchObject({ phase: 'active' });
-    expect(app.getBoardRenderState().tutorialLock).toMatchObject({
-      allowedSwap: tutorial?.allowedSwap,
-      flashCells: tutorial?.flashCells,
-      movingCell: tutorial?.movingCell,
-      direction: tutorial?.direction,
+    expect(boardState.tutorialPresentation).toMatchObject({
+      mode: 'tutorialFullHero',
+      heroHeight: LOGICAL_HEIGHT,
+      sceneScale: 1.5,
+      hideHud: true,
+      hideBoard: true,
     });
-    expect(app.getBoardRenderState().matchHint).toBeNull();
+    expect(boardState.tutorialPresentation?.floatingMatch?.tiles.map((tile) => tile.rect.x)).toEqual([
+      228,
+      368,
+      508,
+      368,
+    ]);
+    expect(boardState.tutorialPresentation?.floatingMatch?.tiles.map((tile) => tile.rect.y)).toEqual([
+      1428,
+      1428,
+      1428,
+      1568,
+    ]);
+    expect(boardState.tutorialPresentation?.floatingMatch?.tiles.map((tile) => tile.tileType)).toEqual([
+      'LIGHTNING',
+      'EARTH',
+      'LIGHTNING',
+      'LIGHTNING',
+    ]);
+    expect(boardState.tutorialPresentation?.floatingMatch?.tiles.map((tile) => tile.role)).toEqual([
+      'topLeftLightning',
+      'earth',
+      'topRightLightning',
+      'lowerLightning',
+    ]);
+    const earthHint = boardState.tutorialPresentation?.floatingMatch?.tiles.find((tile) => tile.role === 'earth');
+    const lowerHint = boardState.tutorialPresentation?.floatingMatch?.tiles.find((tile) => tile.role === 'lowerLightning');
+    expect(earthHint?.flash).toBeGreaterThan(0);
+    expect(earthHint?.scale).toBeGreaterThan(1);
+    expect(lowerHint?.flash).toBeGreaterThan(0);
+    expect(boardState.tutorialLock).toBeNull();
+    expect(boardState.matchHint).toBeNull();
     expect(runtime?.monsters).toHaveLength(3);
     expect(runtime?.monsters.every((monster) => monster.kind === 'kobold')).toBe(true);
     expect(runtime?.monsters.every((monster) => monster.walkSpeed === 0)).toBe(true);
     expect(runtime?.monsters.every((monster) => monster.hp / monster.maxHp <= 0.11)).toBe(true);
-    expect(runtime?.monsters.map((monster) => monster.x)).toEqual([-0.15, 2.25, 4.65]);
-    expect(runtime?.monsters.map((monster) => monster.visualYOffset)).toEqual([0.24, 0, -0.24]);
+    expect(runtime?.monsters.map((monster) => monster.x)).toEqual([-1.25, 0.1, 1.45]);
+    expect(runtime?.monsters.map((monster) => monster.visualYOffset)).toEqual([
+      TRIAL_MONSTER_TOP_VISUAL_Y_OFFSET,
+      TRIAL_MONSTER_BOTTOM_VISUAL_Y_OFFSET,
+      TRIAL_MONSTER_TOP_VISUAL_Y_OFFSET,
+    ]);
     const tutorialKoboldObjects = app
       .getHeroWorldState()
       .objects.filter(
@@ -118,6 +162,15 @@ describe('MagusMatchGameApp', () => {
     expect(debugSeedSession.getTrialTutorialStateForDebug()).toBeNull();
     expect(forcedTrial.getTrialRuntimeForDebug()?.monsters).toHaveLength(1);
     expect(debugSeedSession.getTrialRuntimeForDebug()?.monsters).toHaveLength(1);
+    expect(forcedTrial.getBoardRenderState().tutorialPresentation).toMatchObject({
+      mode: 'standard',
+      heroHeight: HERO_STAGE_HEIGHT,
+      sceneScale: 1,
+      hideHud: false,
+      hideBoard: false,
+      floatingMatch: null,
+    });
+    expect(debugSeedSession.getBoardRenderState().tutorialPresentation?.floatingMatch).toBeNull();
   });
 
   it('can still start level 1 as Journey through an override', () => {
@@ -190,28 +243,90 @@ describe('MagusMatchGameApp', () => {
     expect(app.getBoardRenderState().matchHint).toBeNull();
   });
 
-  it('only accepts the tutorial lightning swap while the tutorial is active', () => {
+  it('only accepts the floating tutorial lightning drag while the tutorial is active', () => {
     const app = new MagusMatchGameApp(777);
-    const tutorial = app.getTrialTutorialStateForDebug();
-    if (tutorial == null) {
+    if (app.getTrialTutorialStateForDebug() == null) {
       throw new Error('Expected active tutorial.');
     }
     const beforeBoard = boardTileSignature(app.getBoardForDebug());
     const beforeStats = app.getLevelStatsForDebug();
 
     app.update(0, [{ type: 'swap', from: { col: 0, row: 0 }, to: { col: 1, row: 0 } }]);
+    dragFloatingTutorialTile(app, 'topLeftLightning', 'earth');
 
     expect(app.getTrialTutorialStateForDebug()?.phase).toBe('active');
     expect(boardTileSignature(app.getBoardForDebug())).toBe(beforeBoard);
     expect(app.getLevelStatsForDebug()).toEqual(beforeStats);
 
-    app.update(0, [{ type: 'swap', from: tutorial.allowedSwap.from, to: tutorial.allowedSwap.to }]);
+    dragFloatingTutorialTile(app, 'lowerLightning', 'earth');
 
     expect(app.getTrialTutorialStateForDebug()?.phase).toBe('resolving');
     expect(app.getBoardRenderState().animationTrace?.kind).toBe('resolution');
     expect(app.getHeroWorldState().activeProjectiles.some((projectile) => projectile.schoolId === 'lightning')).toBe(true);
+    expect(app.getBoardRenderState().tutorialPresentation).toMatchObject({
+      mode: 'tutorialFullHero',
+      heroHeight: LOGICAL_HEIGHT,
+      sceneScale: 1.5,
+      hideHud: true,
+      hideBoard: true,
+      floatingMatch: {
+        phase: 'resolving',
+      },
+    });
+    app.update(0.8, []);
+    expect(app.getBoardRenderState().tutorialPresentation).toMatchObject({
+      mode: 'tutorialFullHero',
+      heroHeight: LOGICAL_HEIGHT,
+      sceneScale: 1.5,
+      hideHud: true,
+      hideBoard: true,
+      floatingMatch: null,
+    });
     expect(app.getLevelStatsForDebug()).toEqual(beforeStats);
     expect(app.getRunStateForDebug().score).toBe(0);
+  });
+
+  it('returns to the standard layout after the floating tutorial zoom-out', () => {
+    const app = new MagusMatchGameApp(779);
+
+    dragFloatingTutorialTile(app, 'earth', 'lowerLightning');
+    expect(app.getBoardRenderState().tutorialPresentation).toMatchObject({
+      mode: 'tutorialFullHero',
+      heroHeight: LOGICAL_HEIGHT,
+      sceneScale: 1.5,
+      floatingMatch: {
+        phase: 'resolving',
+      },
+    });
+    app.update(0.8, []);
+    expect(app.getBoardRenderState().tutorialPresentation).toMatchObject({
+      mode: 'tutorialFullHero',
+      heroHeight: LOGICAL_HEIGHT,
+      sceneScale: 1.5,
+      floatingMatch: null,
+    });
+    for (let tick = 0; tick < 80 && app.getBoardRenderState().tutorialPresentation?.mode !== 'tutorialZoomOut'; tick += 1) {
+      app.update(0.1, []);
+    }
+    expect(app.getBoardRenderState().tutorialPresentation?.mode).toBe('tutorialZoomOut');
+
+    app.update(0.325, []);
+    const halfwayHeight = app.getBoardRenderState().tutorialPresentation?.heroHeight ?? 0;
+    const halfwayScale = app.getBoardRenderState().tutorialPresentation?.sceneScale ?? 0;
+    expect(halfwayHeight).toBeLessThan(LOGICAL_HEIGHT);
+    expect(halfwayHeight).toBeGreaterThan(HERO_STAGE_HEIGHT);
+    expect(halfwayScale).toBeLessThan(1.5);
+    expect(halfwayScale).toBeGreaterThan(1);
+
+    app.update(0.325, []);
+    expect(app.getBoardRenderState().tutorialPresentation).toMatchObject({
+      mode: 'standard',
+      heroHeight: HERO_STAGE_HEIGHT,
+      sceneScale: 1,
+      hideHud: false,
+      hideBoard: false,
+      floatingMatch: null,
+    });
   });
 
   it('clears the tutorial overlay and resumes normal Trial level 1 after tutorial kobolds die', () => {
@@ -221,7 +336,7 @@ describe('MagusMatchGameApp', () => {
       throw new Error('Expected active tutorial.');
     }
 
-    app.update(0, [{ type: 'swap', from: tutorial.allowedSwap.to, to: tutorial.allowedSwap.from }]);
+    dragFloatingTutorialTile(app, 'earth', 'lowerLightning');
     for (let tick = 0; tick < 80 && app.getTrialTutorialStateForDebug() != null; tick += 1) {
       app.update(0.1, []);
     }
@@ -229,13 +344,16 @@ describe('MagusMatchGameApp', () => {
     const runtime = app.getTrialRuntimeForDebug();
     expect(app.getTrialTutorialStateForDebug()).toBeNull();
     expect(app.getBoardRenderState().tutorialLock).toBeNull();
+    expect(app.getBoardRenderState().tutorialPresentation?.mode).toBe('tutorialZoomOut');
+    expect(app.getElapsedSecForDebug()).toBe(0);
+    app.update(0.65, []);
+    expect(app.getBoardRenderState().tutorialPresentation?.mode).toBe('standard');
     expect(runtime?.result).toBe('playing');
     expect(runtime?.totalMonsters).toBe(3);
     expect(runtime?.monsters).toHaveLength(1);
     expect(runtime?.monsters[0]?.monsterId.startsWith('tutorial-')).toBe(false);
     expect(app.getRunStateForDebug().score).toBe(0);
     expect(app.getLevelStatsForDebug()).toEqual({ matchCount: 0, validSwapCount: 0 });
-    expect(app.getElapsedSecForDebug()).toBe(0);
   });
 
   it('continues Trial projectile visual timers during win transitions', () => {
@@ -690,6 +808,26 @@ describe('MagusMatchGameApp', () => {
     expect(screen.buttonRects.bgm).toEqual(HUD_BGM_TOGGLE_RECT);
   });
 });
+
+type FloatingTutorialRole = 'topLeftLightning' | 'earth' | 'topRightLightning' | 'lowerLightning';
+
+function dragFloatingTutorialTile(
+  app: MagusMatchGameApp,
+  fromRole: FloatingTutorialRole,
+  toRole: FloatingTutorialRole,
+): void {
+  const floatingMatch = app.getBoardRenderState().tutorialPresentation?.floatingMatch;
+  const from = floatingMatch?.tiles.find((tile) => tile.role === fromRole);
+  const to = floatingMatch?.tiles.find((tile) => tile.role === toRole);
+  if (from == null || to == null) {
+    throw new Error(`Expected floating tutorial tiles ${fromRole} and ${toRole}.`);
+  }
+
+  app.update(0, [
+    { type: 'dragStart', x: from.rect.x + from.rect.width / 2, y: from.rect.y + from.rect.height / 2 },
+    { type: 'dragEnd', x: to.rect.x + to.rect.width / 2, y: to.rect.y + to.rect.height / 2 },
+  ]);
+}
 
 function tap(app: MagusMatchGameApp, rect: { x: number; y: number; width: number; height: number }): void {
   app.update(0, [{ type: 'tap', x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }]);

@@ -356,17 +356,20 @@ describe('ThreeHeroStage material overrides', () => {
       color: '#8a6a42',
       opacity: 1,
       transparent: false,
+      depthTest: true,
     });
 
-    applyMaterialOverrides(material, '#38d5ff', 0.5);
+    applyMaterialOverrides(material, '#38d5ff', 0.5, false);
     expect(material.color.getHexString()).toBe('38d5ff');
     expect(material.opacity).toBeCloseTo(0.5);
     expect(material.transparent).toBe(true);
+    expect(material.depthTest).toBe(false);
 
     applyMaterialOverrides(material);
     expect(material.color.getHexString()).toBe('8a6a42');
     expect(material.opacity).toBe(1);
     expect(material.transparent).toBe(false);
+    expect(material.depthTest).toBe(true);
   });
 });
 

@@ -28,6 +28,7 @@ const originalMaterialState = new WeakMap<OverrideableMaterial, {
   color: THREE.Color;
   opacity: number;
   transparent: boolean;
+  depthTest: boolean;
 }>();
 
 export class ThreeHeroStage {
@@ -596,7 +597,7 @@ function applyWorldObjectState(object: THREE.Object3D, objectState: WorldObjectS
       if (objectState.templateId === HeroStageTemplateIds.earthImpact) {
         applyEarthImpactSpriteFrame(child.material, objectState.animationTimeSec ?? elapsedSec);
       }
-      applyMaterialOverrides(child.material, objectState.tintHex, objectState.opacity);
+      applyMaterialOverrides(child.material, objectState.tintHex, objectState.opacity, objectState.materialDepthTest);
     }
   });
 }
@@ -697,6 +698,7 @@ export function applyMaterialOverrides(
   material: THREE.Material | THREE.Material[],
   tintHex?: string,
   opacity?: number,
+  depthTest?: boolean,
 ): void {
   const materials = Array.isArray(material) ? material : [material];
   for (const item of materials) {
@@ -714,6 +716,7 @@ export function applyMaterialOverrides(
         item.opacity = original.opacity;
         item.transparent = original.transparent;
       }
+      item.depthTest = depthTest ?? original.depthTest;
     }
   }
 }
@@ -722,6 +725,7 @@ function originalStateForMaterial(material: OverrideableMaterial): {
   color: THREE.Color;
   opacity: number;
   transparent: boolean;
+  depthTest: boolean;
 } {
   const existing = originalMaterialState.get(material);
   if (existing != null) {
@@ -732,6 +736,7 @@ function originalStateForMaterial(material: OverrideableMaterial): {
     color: material.color.clone(),
     opacity: material.opacity,
     transparent: material.transparent,
+    depthTest: material.depthTest,
   };
   originalMaterialState.set(material, original);
   return original;

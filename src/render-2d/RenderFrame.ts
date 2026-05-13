@@ -89,14 +89,22 @@ export function renderFrame(
   heartLossWobble?: HeartLossWobbleState,
 ): void {
   renderer.clear();
-  drawCanvasBands(renderer);
-  drawLevelTitlePanel(renderer, hudState);
-  drawHud(renderer, hudState, heartLossWobble);
-  drawBoard(renderer, boardState, elapsedSec);
+  const presentation = boardState.tutorialPresentation;
+  if (presentation?.hideHud !== true) {
+    drawCanvasBands(renderer);
+    drawLevelTitlePanel(renderer, hudState);
+    drawHud(renderer, hudState, heartLossWobble);
+  }
+  if (presentation?.hideBoard !== true) {
+    drawBoard(renderer, boardState, elapsedSec);
+  }
+  drawFloatingTutorialMatch(renderer, boardState);
   if (screenState != null) {
     drawScreenOverlay(renderer, screenState);
   }
-  drawHudBgmToggle(renderer, hudState);
+  if (presentation?.hideHud !== true) {
+    drawHudBgmToggle(renderer, hudState);
+  }
 }
 
 export function buildBoardCellVisuals(boardState: BoardRenderState, elapsedSec: number): BoardCellVisual[] {
@@ -499,6 +507,42 @@ function drawCell(renderer: GameRenderer, visual: BoardCellVisual): void {
   renderer.pop();
 }
 
+function drawFloatingTutorialMatch(renderer: GameRenderer, boardState: BoardRenderState): void {
+  const floatingMatch = boardState.tutorialPresentation?.floatingMatch ?? null;
+  if (floatingMatch == null) {
+    return;
+  }
+
+  const tiles = [...floatingMatch.tiles].sort((first, second) => first.zIndex - second.zIndex);
+  for (const tile of tiles) {
+    if (tile.alpha <= 0 || tile.scale <= 0) {
+      continue;
+    }
+
+    const imageRef = { id: tile.assetId };
+    if (!renderer.hasImage(imageRef)) {
+      continue;
+    }
+
+    const inset = 8;
+    const drawWidth = (tile.rect.width - inset * 2) * tile.scale;
+    const drawHeight = (tile.rect.height - inset * 2) * tile.scale;
+    const centerX = tile.rect.x + tile.rect.width / 2;
+    const centerY = tile.rect.y + tile.rect.height / 2;
+    const drawX = centerX - drawWidth / 2;
+    const drawY = centerY - drawHeight / 2;
+
+    renderer.pushAlpha(tile.alpha);
+    renderer.drawImage(imageRef, drawX, drawY, drawWidth, drawHeight);
+    if (tile.flash > 0) {
+      renderer.drawImageAlphaMaskFill(imageRef, '#ffffff', drawX, drawY, drawWidth, drawHeight, tile.flash);
+    }
+    renderer.pop();
+  }
+
+  drawMatchEnergyStreamList(renderer, floatingMatch.matchEnergyStreams ?? []);
+}
+
 function drawParticles(renderer: GameRenderer, boardState: BoardRenderState): void {
   const particles = [...(boardState.particles ?? [])].sort((first, second) => first.zIndex - second.zIndex);
   for (const particle of particles) {
@@ -513,8 +557,15 @@ function drawParticles(renderer: GameRenderer, boardState: BoardRenderState): vo
 }
 
 function drawMatchEnergyStreams(renderer: GameRenderer, boardState: BoardRenderState): void {
-  const streams = [...(boardState.matchEnergyStreams ?? [])].sort((first, second) => first.zIndex - second.zIndex);
-  for (const stream of streams) {
+  drawMatchEnergyStreamList(renderer, boardState.matchEnergyStreams ?? []);
+}
+
+function drawMatchEnergyStreamList(
+  renderer: GameRenderer,
+  streams: readonly NonNullable<BoardRenderState['matchEnergyStreams']>[number][],
+): void {
+  const sortedStreams = [...streams].sort((first, second) => first.zIndex - second.zIndex);
+  for (const stream of sortedStreams) {
     if (stream.alpha <= 0 || stream.width <= 0 || stream.height <= 0) {
       continue;
     }

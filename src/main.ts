@@ -104,6 +104,8 @@ let audioPreloadStarted = false;
 
 const input = new BrowserInputAdapter(gameShell);
 let fullscreenRequestAttempted = false;
+let activeHeroHeight = HERO_STAGE_HEIGHT;
+let activeHeroSceneScale = 1;
 
 void loadBrowserImages().then((images) => {
   renderer.setImages(images);
@@ -151,11 +153,15 @@ gameShell.addEventListener('pointerdown', (e) => updateOverlayPrimaryButtonPress
 gameShell.addEventListener('pointerup', (e) => updateOverlayPrimaryButtonPressed(e, false), { passive: true });
 gameShell.addEventListener('pointercancel', (e) => updateOverlayPrimaryButtonPressed(e, false), { passive: true });
 
-function resizeLogicalStage(): void {
+function resizeLogicalStage(nextHeroHeight = activeHeroHeight, nextHeroSceneScale = activeHeroSceneScale): void {
+  activeHeroHeight = nextHeroHeight;
+  activeHeroSceneScale = nextHeroSceneScale;
   const rect = gameShell.getBoundingClientRect();
   const scale = Math.min(rect.width / LOGICAL_WIDTH, rect.height / LOGICAL_HEIGHT);
   stageElement.style.transform = `scale(${scale})`;
-  heroStage.resize(LOGICAL_WIDTH, HERO_STAGE_HEIGHT);
+  heroStageElement.style.height = `${activeHeroHeight}px`;
+  heroStageElement.style.setProperty('--hero-scene-scale', `${activeHeroSceneScale}`);
+  heroStage.resize(LOGICAL_WIDTH, activeHeroHeight);
 }
 
 function requestGameFullscreen(): void {
@@ -220,11 +226,16 @@ function tick(timeMs: number): void {
   audio?.setBackgroundMusicMuted(hudState.bgmMuted);
   audio?.syncTrialWalkLoops(app.getTrialWalkingMonsterIds());
   renderHud(hudState);
+  const boardState = app.getBoardRenderState();
+  resizeLogicalStage(
+    boardState.tutorialPresentation?.heroHeight ?? HERO_STAGE_HEIGHT,
+    boardState.tutorialPresentation?.sceneScale ?? 1,
+  );
   heroStage.render(app.getHeroWorldState(), dtSec);
-  const matchEnergyTarget = heroStage.getMageParticleSourceLogicalPosition(LOGICAL_WIDTH, HERO_STAGE_HEIGHT) ?? undefined;
+  const matchEnergyTarget = heroStage.getMageParticleSourceLogicalPosition(LOGICAL_WIDTH, activeHeroHeight) ?? undefined;
   renderFrame(
     renderer,
-    boardAnimationPresenter.present(app.getBoardRenderState(), timeMs / 1000, { matchEnergyTarget }),
+    boardAnimationPresenter.present(boardState, timeMs / 1000, { matchEnergyTarget }),
     hudState,
     timeMs / 1000,
     screenState,
@@ -235,17 +246,22 @@ function tick(timeMs: number): void {
 
 resizeLogicalStage();
 renderHud();
+const initialBoardState = app.getBoardRenderState();
+resizeLogicalStage(
+  initialBoardState.tutorialPresentation?.heroHeight ?? HERO_STAGE_HEIGHT,
+  initialBoardState.tutorialPresentation?.sceneScale ?? 1,
+);
 heroStage.render(app.getHeroWorldState(), 0);
 renderFrame(
   renderer,
-  boardAnimationPresenter.present(app.getBoardRenderState(), 0, {
-    matchEnergyTarget: heroStage.getMageParticleSourceLogicalPosition(LOGICAL_WIDTH, HERO_STAGE_HEIGHT) ?? undefined,
+  boardAnimationPresenter.present(initialBoardState, 0, {
+    matchEnergyTarget: heroStage.getMageParticleSourceLogicalPosition(LOGICAL_WIDTH, activeHeroHeight) ?? undefined,
   }),
   getBrowserHudState(),
   0,
   getBrowserScreenState(),
 );
-window.addEventListener('resize', resizeLogicalStage);
+window.addEventListener('resize', () => resizeLogicalStage());
 document.addEventListener('fullscreenchange', handleFullscreenChange);
 window.addEventListener('beforeunload', () => {
   heroStage.dispose();

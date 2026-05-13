@@ -47,7 +47,14 @@ export type SpellSchoolId = 'fire' | 'ice' | 'lightning' | 'earth';
 const TRIAL_DEFEAT_TIMER_EPSILON_SEC = 0.000001;
 const TRIAL_HIT_SHAKE_DURATION_SEC = 0.18;
 export const TRIAL_NEXT_MONSTER_SPAWN_PROGRESS_RATIO = 0.4;
-export const TRIAL_MONSTER_RANDOM_Y_OFFSET_AMPLITUDE = 0.16;
+export const TRIAL_MONSTER_TOP_VISUAL_Y_OFFSET = 0.16;
+export const TRIAL_MONSTER_BOTTOM_VISUAL_Y_OFFSET = -1.41;
+export const TRIAL_KOBOLD_VISUAL_WORLD_Y_OFFSET = -1.49;
+export const TRIAL_TALL_KOBOLD_VISUAL_WORLD_Y_OFFSET = -1.63;
+export const TRIAL_MINI_BOSS_VISUAL_WORLD_Y_OFFSET = -2.28;
+export const TRIAL_KOBOLD_SPELL_HIT_WORLD_Y_OFFSET = 1.74;
+export const TRIAL_TALL_KOBOLD_SPELL_HIT_WORLD_Y_OFFSET = 1.74;
+export const TRIAL_MINI_BOSS_SPELL_HIT_WORLD_Y_OFFSET = 3.045;
 export const SPELL_CAST_WINDUP_SEC = 0.5;
 export const KOBOLD_DEFEAT_ANIMATION_SEC = 1.0;
 export const KOBOLD_DEFEAT_FADE_SEC = 0.15;
@@ -518,6 +525,54 @@ export function getTrialMonsterWorldPosition(
   };
 }
 
+export function trialMonsterVisualWorldYOffset(kind: TrialMonsterKind): number {
+  switch (kind) {
+    case 'kobold':
+      return TRIAL_KOBOLD_VISUAL_WORLD_Y_OFFSET;
+    case 'tallKobold':
+      return TRIAL_TALL_KOBOLD_VISUAL_WORLD_Y_OFFSET;
+    case 'miniBoss':
+      return TRIAL_MINI_BOSS_VISUAL_WORLD_Y_OFFSET;
+  }
+}
+
+export function trialMonsterSpellHitWorldYOffset(kind: TrialMonsterKind): number {
+  switch (kind) {
+    case 'kobold':
+      return TRIAL_KOBOLD_SPELL_HIT_WORLD_Y_OFFSET;
+    case 'tallKobold':
+      return TRIAL_TALL_KOBOLD_SPELL_HIT_WORLD_Y_OFFSET;
+    case 'miniBoss':
+      return TRIAL_MINI_BOSS_SPELL_HIT_WORLD_Y_OFFSET;
+  }
+}
+
+export function trialMonsterLightningHitWorldYOffset(kind: TrialMonsterKind): number {
+  return trialMonsterSpellHitWorldYOffset(kind);
+}
+
+export function getTrialMonsterSpellHitWorldPosition(
+  level: GeneratedTrialLevel,
+  monster: ActiveTrialMonster,
+): Vec3Data {
+  const basePosition = getTrialMonsterWorldPosition(level, monster);
+  return {
+    ...basePosition,
+    y:
+      basePosition.y +
+      trialMonsterVisualWorldYOffset(monster.kind) +
+      trialMonsterSpellHitWorldYOffset(monster.kind) +
+      (monster.visualYOffset ?? 0),
+  };
+}
+
+export function getTrialMonsterLightningHitWorldPosition(
+  level: GeneratedTrialLevel,
+  monster: ActiveTrialMonster,
+): Vec3Data {
+  return getTrialMonsterSpellHitWorldPosition(level, monster);
+}
+
 export function getTrialMageWorldPosition(level: GeneratedTrialLevel): Vec3Data {
   return {
     x: level.trial.mageX,
@@ -589,7 +644,7 @@ function applyDamageSources(
             from:
               previousTarget == null
                 ? getTrialSpellOriginWorldPosition(level)
-                : getTrialMonsterWorldPosition(level, previousTarget),
+                : getTrialMonsterSpellHitWorldPosition(level, previousTarget),
             castActivationDelaySec: source.castActivationDelaySec + chainDelaySec,
             activationDelaySec: projectileActivationDelaySec,
             chargeDurationSec: previousTarget == null ? SPELL_CAST_WINDUP_SEC : 0,
@@ -773,7 +828,7 @@ function createEarthImpactVfx(
     vfxId: `earth-impact-${impactVfxIndex}`,
     schoolId: 'earth',
     targetMonsterId: target.monsterId,
-    hitWorldPosition: getTrialMonsterWorldPosition(level, target),
+    hitWorldPosition: getTrialMonsterSpellHitWorldPosition(level, target),
     activationDelaySec: Math.max(0, activationDelaySec),
     remainingSec: EARTH_IMPACT_VFX_DURATION_SEC,
     durationSec: EARTH_IMPACT_VFX_DURATION_SEC,
@@ -890,6 +945,7 @@ function advancePendingAttacks(
     pendingAttacks: [],
   };
   let futureAttacks: TrialPendingAttackRuntimeState[] = [];
+  const resolvedLightningChainOrigins = new Map<string, { monsterId: string; position: Vec3Data }>();
   let scoreDelta = 0;
   const damageEvents: TrialDamageEvent[] = [];
   const advancedAttacks = runtime.pendingAttacks
@@ -900,23 +956,31 @@ function advancePendingAttacks(
     .sort(comparePendingAttacks);
 
   for (const attack of advancedAttacks) {
-    if (attack.impactDelaySec > TRIAL_DEFEAT_TIMER_EPSILON_SEC) {
-      workingRuntime = { ...workingRuntime, pendingAttacks: futureAttacks };
-      const futureTarget = resolveTargetForPendingAttack(workingRuntime, level, attack);
+    workingRuntime = { ...workingRuntime, pendingAttacks: futureAttacks };
+    const chainOriginResult = applyResolvedLightningChainOriginToPendingAttack(
+      workingRuntime,
+      attack,
+      resolvedLightningChainOrigins,
+    );
+    workingRuntime = chainOriginResult.runtime;
+    const chainAwareAttack = chainOriginResult.attack;
+
+    if (chainAwareAttack.impactDelaySec > TRIAL_DEFEAT_TIMER_EPSILON_SEC) {
+      const futureTarget = resolveTargetForPendingAttack(workingRuntime, level, chainAwareAttack);
       if (futureTarget == null) {
-        workingRuntime = removePendingAttackProjectile(workingRuntime, attack);
+        workingRuntime = removePendingAttackProjectile(workingRuntime, chainAwareAttack);
         futureAttacks = [...workingRuntime.pendingAttacks];
         continue;
       }
 
       const futureAttack =
-        futureTarget.monsterId === attack.targetMonsterId
-          ? attack
+        futureTarget.monsterId === chainAwareAttack.targetMonsterId
+          ? chainAwareAttack
           : {
-              ...attack,
+              ...chainAwareAttack,
               targetMonsterId: futureTarget.monsterId,
             };
-      if (futureTarget.monsterId !== attack.targetMonsterId) {
+      if (futureTarget.monsterId !== chainAwareAttack.targetMonsterId) {
         workingRuntime = retargetPendingAttackProjectile(workingRuntime, level, futureAttack, futureTarget);
       }
 
@@ -925,22 +989,21 @@ function advancePendingAttacks(
       continue;
     }
 
-    workingRuntime = { ...workingRuntime, pendingAttacks: futureAttacks };
-    const target = resolveTargetForPendingAttack(workingRuntime, level, attack);
+    const target = resolveTargetForPendingAttack(workingRuntime, level, chainAwareAttack);
     if (target == null) {
-      workingRuntime = removePendingAttackProjectile(workingRuntime, attack);
+      workingRuntime = removePendingAttackProjectile(workingRuntime, chainAwareAttack);
       futureAttacks = [...workingRuntime.pendingAttacks];
       continue;
     }
 
     const resolvedAttack =
-      target.monsterId === attack.targetMonsterId
-        ? attack
+      target.monsterId === chainAwareAttack.targetMonsterId
+        ? chainAwareAttack
         : {
-            ...attack,
+            ...chainAwareAttack,
             targetMonsterId: target.monsterId,
           };
-    if (target.monsterId !== attack.targetMonsterId) {
+    if (target.monsterId !== chainAwareAttack.targetMonsterId) {
       workingRuntime = retargetPendingAttackProjectile(workingRuntime, level, resolvedAttack, target);
     }
 
@@ -949,6 +1012,12 @@ function advancePendingAttacks(
     scoreDelta += attackResult.scoreDelta;
     damageEvents.push(attackResult.damageEvent);
 
+    if (resolvedAttack.chainId != null) {
+      resolvedLightningChainOrigins.set(resolvedAttack.attackId, {
+        monsterId: target.monsterId,
+        position: getTrialMonsterSpellHitWorldPosition(level, target),
+      });
+    }
     workingRuntime = updateFutureLightningChainAttacks(workingRuntime, level, resolvedAttack, target);
     if (attackResult.damageEvent.defeated) {
       workingRuntime = retargetOrCancelPendingAttacksForDeadTargets(workingRuntime, level);
@@ -1113,7 +1182,7 @@ function updateFutureLightningChainAttacks(
     return runtime;
   }
 
-  const actualTargetPosition = getTrialMonsterWorldPosition(level, actualTarget);
+  const actualTargetPosition = getTrialMonsterSpellHitWorldPosition(level, actualTarget);
   let nextRuntime = runtime;
   const nextPendingAttacks = runtime.pendingAttacks.map((attack) => {
     if (attack.chainId !== resolvedAttack.chainId) {
@@ -1144,6 +1213,30 @@ function addUniqueMonsterId(monsterIds: readonly string[], monsterId: string): r
   return monsterIds.includes(monsterId) ? monsterIds : [...monsterIds, monsterId];
 }
 
+function applyResolvedLightningChainOriginToPendingAttack(
+  runtime: TrialRuntimeState,
+  attack: TrialPendingAttackRuntimeState,
+  resolvedOrigins: ReadonlyMap<string, { monsterId: string; position: Vec3Data }>,
+): { runtime: TrialRuntimeState; attack: TrialPendingAttackRuntimeState } {
+  if (attack.originAttackId == null) {
+    return { runtime, attack };
+  }
+
+  const resolvedOrigin = resolvedOrigins.get(attack.originAttackId);
+  if (resolvedOrigin == null) {
+    return { runtime, attack };
+  }
+
+  const nextAttack = {
+    ...attack,
+    excludedMonsterIds: addUniqueMonsterId(attack.excludedMonsterIds ?? [], resolvedOrigin.monsterId),
+  };
+  return {
+    runtime: setPendingAttackProjectileFrom(runtime, nextAttack, resolvedOrigin.position),
+    attack: nextAttack,
+  };
+}
+
 function retargetPendingAttackProjectile(
   runtime: TrialRuntimeState,
   level: GeneratedTrialLevel,
@@ -1154,7 +1247,7 @@ function retargetPendingAttackProjectile(
     return runtime;
   }
 
-  const targetPosition = getTrialMonsterWorldPosition(level, target);
+  const targetPosition = getTrialMonsterSpellHitWorldPosition(level, target);
   return {
     ...runtime,
     projectiles: runtime.projectiles.map((projectile) =>
@@ -1302,7 +1395,7 @@ function createProjectile(
     effectKind: source.effectKind,
     originKind: options.originKind,
     from: options.from,
-    to: getTrialMonsterWorldPosition(level, target),
+    to: getTrialMonsterSpellHitWorldPosition(level, target),
     castActivationDelaySec: options.castActivationDelaySec,
     activationDelaySec: options.activationDelaySec,
     chargeDurationSec: options.chargeDurationSec,
@@ -1435,7 +1528,7 @@ function spawnDueMonsters(runtime: TrialRuntimeState, level: GeneratedTrialLevel
     level.trial.waveManifest[nextSpawnIndex].spawnTimeMs <= runtime.elapsedMs &&
     canSpawnMonsterInLane(level, monsters, level.trial.waveManifest[nextSpawnIndex].laneId)
   ) {
-    monsters.push(createActiveMonster(level, level.trial.waveManifest[nextSpawnIndex]));
+    monsters.push(createActiveMonster(level, level.trial.waveManifest[nextSpawnIndex], nextSpawnIndex));
     nextSpawnIndex += 1;
   }
 
@@ -1449,6 +1542,7 @@ function spawnDueMonsters(runtime: TrialRuntimeState, level: GeneratedTrialLevel
 function createActiveMonster(
   level: GeneratedTrialLevel,
   manifestEntry: TrialMonsterManifestEntry,
+  spawnIndex: number,
 ): ActiveTrialMonster {
   return {
     monsterId: manifestEntry.monsterId,
@@ -1460,7 +1554,7 @@ function createActiveMonster(
     spawnTimeMs: manifestEntry.spawnTimeMs,
     walkSpeed: manifestEntry.walkSpeed,
     scoreValue: manifestEntry.scoreValue,
-    visualYOffset: visualYOffsetForMonster(level, manifestEntry.monsterId),
+    visualYOffset: visualYOffsetForSpawnIndex(spawnIndex),
     modelVariant: koboldModelVariantForMonster(level.seed, manifestEntry.monsterId),
   };
 }
@@ -1483,12 +1577,10 @@ function canSpawnMonsterInLane(
   });
 }
 
-export function visualYOffsetForMonster(
-  level: Pick<GeneratedTrialLevel, 'seed'>,
-  monsterId: string,
-): number {
-  const normalized = stableUnitHash(`${level.seed}:${monsterId}`);
-  return (normalized * 2 - 1) * TRIAL_MONSTER_RANDOM_Y_OFFSET_AMPLITUDE;
+export function visualYOffsetForSpawnIndex(spawnIndex: number): number {
+  return spawnIndex % 2 === 0
+    ? TRIAL_MONSTER_TOP_VISUAL_Y_OFFSET
+    : TRIAL_MONSTER_BOTTOM_VISUAL_Y_OFFSET;
 }
 
 export function koboldModelVariantForMonster(

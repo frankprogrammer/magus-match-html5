@@ -41,6 +41,7 @@ import type {
   BoardRenderState,
   BoardRocketCloudSpriteVisualState,
   BoardTntExplosionSpriteVisualState,
+  FloatingTutorialMatchVisualState,
 } from './BoardRenderState';
 
 const MATCH_PARTICLES_PER_TILE = 12;
@@ -150,9 +151,24 @@ export class BoardAnimationPresenter {
     const lightballStreams = sampleTraceLightballStreams(trace, stepTimings, elapsedMs);
     const tntExplosionSprites = sampleTraceTntExplosionSprites(trace, stepTimings, elapsedMs);
     const rocketCloudSprites = sampleTraceRocketCloudSprites(trace, stepTimings, elapsedMs);
+    const floatingMatch = sampleFloatingTutorialMatch(
+      authoritativeState.tutorialPresentation?.floatingMatch ?? null,
+      trace,
+      stepTimings,
+      elapsedMs,
+      boardCells,
+      options.matchEnergyTarget,
+    );
 
     return {
       ...authoritativeState,
+      tutorialPresentation:
+        authoritativeState.tutorialPresentation == null
+          ? undefined
+          : {
+              ...authoritativeState.tutorialPresentation,
+              floatingMatch,
+            },
       boardCells,
       particles,
       matchEnergyStreams,
@@ -228,6 +244,158 @@ function sampleTraceMatchEnergyStreams(
     }
 
     return timing.step.clearedTiles.flatMap((tile) => sampleClearedTileEnergyStreams(tile, stepElapsedMs, target));
+  });
+}
+
+function sampleFloatingTutorialMatch(
+  floatingMatch: FloatingTutorialMatchVisualState | null,
+  trace: BoardAnimationTrace,
+  stepTimings: readonly BoardAnimationStepTiming[],
+  elapsedMs: number,
+  sampledBoardCells: readonly BoardCellVisualState[],
+  target?: { x: number; y: number },
+): FloatingTutorialMatchVisualState | null {
+  if (floatingMatch == null || floatingMatch.phase !== 'resolving') {
+    return floatingMatch;
+  }
+
+  const geometry = floatingTutorialGeometry(floatingMatch);
+  if (geometry == null) {
+    return floatingMatch;
+  }
+
+  const preSwapCellsByCoord = new Map(trace.preSwapSnapshot.cells.map((cell) => [coordKey(cell.coord), cell]));
+  const sampledCellsByTileId = new Map(sampledBoardCells.map((cell) => [cell.tileId, cell]));
+  const tiles = floatingMatch.tiles.map((tile) => {
+    const preSwapCell = preSwapCellsByCoord.get(coordKey(tile.sourceCoord));
+    const sampledCell = preSwapCell == null ? null : sampledCellsByTileId.get(preSwapCell.tileId);
+    if (sampledCell == null) {
+      return tile;
+    }
+
+    const defaultPosition = coordToRender(sampledCell.coord);
+    const mapped = mapBoardTopLeftToFloating(
+      sampledCell.renderX ?? defaultPosition.renderX,
+      sampledCell.renderY ?? defaultPosition.renderY,
+      geometry,
+    );
+    return {
+      ...tile,
+      rect: {
+        ...tile.rect,
+        x: mapped.x,
+        y: mapped.y,
+      },
+      alpha: tile.alpha * sampledCell.alpha,
+      scale: tile.scale * (sampledCell.scale ?? 1),
+    };
+  });
+
+  return {
+    ...floatingMatch,
+    tiles,
+    matchEnergyStreams: sampleFloatingTutorialMatchEnergyStreams(
+      floatingMatch,
+      trace,
+      stepTimings,
+      elapsedMs,
+      geometry,
+      target,
+    ),
+  };
+}
+
+interface FloatingTutorialGeometry {
+  boardBaseX: number;
+  boardBaseY: number;
+  floatingBaseX: number;
+  floatingBaseY: number;
+  floatingStepX: number;
+  floatingStepY: number;
+  floatingTileWidth: number;
+  floatingTileHeight: number;
+}
+
+function floatingTutorialGeometry(
+  floatingMatch: FloatingTutorialMatchVisualState,
+): FloatingTutorialGeometry | null {
+  if (floatingMatch.tiles.length === 0) {
+    return null;
+  }
+
+  const minCol = Math.min(...floatingMatch.tiles.map((tile) => tile.sourceCoord.col));
+  const minRow = Math.min(...floatingMatch.tiles.map((tile) => tile.sourceCoord.row));
+  const baseTile = floatingMatch.tiles.find(
+    (tile) => tile.sourceCoord.col === minCol && tile.sourceCoord.row === minRow,
+  );
+  const topCenterTile = floatingMatch.tiles.find(
+    (tile) => tile.sourceCoord.col === minCol + 1 && tile.sourceCoord.row === minRow,
+  );
+  const lowerCenterTile = floatingMatch.tiles.find(
+    (tile) => tile.sourceCoord.col === minCol + 1 && tile.sourceCoord.row === minRow + 1,
+  );
+  if (baseTile == null || topCenterTile == null || lowerCenterTile == null) {
+    return null;
+  }
+
+  return {
+    boardBaseX: BOARD_RECT.x + minCol * BOARD_RECT.cellSize,
+    boardBaseY: BOARD_RECT.y + minRow * BOARD_RECT.cellSize,
+    floatingBaseX: baseTile.rect.x,
+    floatingBaseY: baseTile.rect.y,
+    floatingStepX: topCenterTile.rect.x - baseTile.rect.x,
+    floatingStepY: lowerCenterTile.rect.y - topCenterTile.rect.y,
+    floatingTileWidth: baseTile.rect.width,
+    floatingTileHeight: baseTile.rect.height,
+  };
+}
+
+function mapBoardTopLeftToFloating(
+  renderX: number,
+  renderY: number,
+  geometry: FloatingTutorialGeometry,
+): { x: number; y: number } {
+  return {
+    x: geometry.floatingBaseX + ((renderX - geometry.boardBaseX) / BOARD_RECT.cellSize) * geometry.floatingStepX,
+    y: geometry.floatingBaseY + ((renderY - geometry.boardBaseY) / BOARD_RECT.cellSize) * geometry.floatingStepY,
+  };
+}
+
+function floatingCenterForCoord(
+  coord: CellCoord,
+  geometry: FloatingTutorialGeometry,
+): { x: number; y: number } {
+  const topLeft = mapBoardTopLeftToFloating(coordToRender(coord).renderX, coordToRender(coord).renderY, geometry);
+  return {
+    x: topLeft.x + geometry.floatingTileWidth / 2,
+    y: topLeft.y + geometry.floatingTileHeight / 2,
+  };
+}
+
+function sampleFloatingTutorialMatchEnergyStreams(
+  floatingMatch: FloatingTutorialMatchVisualState,
+  trace: BoardAnimationTrace,
+  stepTimings: readonly BoardAnimationStepTiming[],
+  elapsedMs: number,
+  geometry: FloatingTutorialGeometry,
+  target?: { x: number; y: number },
+): BoardMatchEnergyStreamVisualState[] {
+  if (trace.kind === 'levelIntro' || trace.kind === 'invalidSwap') {
+    return [];
+  }
+
+  const floatingCoords = new Set(floatingMatch.tiles.map((tile) => coordKey(tile.sourceCoord)));
+  return stepTimings.flatMap((timing) => {
+    const stepElapsedMs = elapsedMs - timing.popStartMs;
+    if (stepElapsedMs < 0) {
+      return [];
+    }
+
+    return timing.step.clearedTiles
+      .filter((tile) => floatingCoords.has(coordKey(tile.coord)))
+      .flatMap((tile) =>
+        sampleClearedTileEnergyStreams(tile, stepElapsedMs, target, floatingCenterForCoord(tile.coord, geometry)),
+      );
   });
 }
 
@@ -412,6 +580,7 @@ function sampleClearedTileEnergyStreams(
   tile: BoardAnimationCascadeStep['clearedTiles'][number],
   stepElapsedMs: number,
   targetOverride?: { x: number; y: number },
+  startOverride?: { x: number; y: number },
 ): BoardMatchEnergyStreamVisualState[] {
   const color = matchEnergyOrbColorForTileType(tile.tileType);
   if (color == null) {
@@ -424,7 +593,7 @@ function sampleClearedTileEnergyStreams(
   }
 
   const progress = clamp01(localElapsedMs / MATCH_ENERGY_STREAM_DURATION_MS);
-  const start = cellCenter(tile.coord);
+  const start = startOverride ?? cellCenter(tile.coord);
   const target = targetOverride ?? {
     x: MATCH_ENERGY_STREAM_TARGET_X_PX,
     y: MATCH_ENERGY_STREAM_TARGET_Y_PX,
@@ -949,6 +1118,10 @@ function assetIdForTileType(type: TileType): string {
     case 'LIGHTBALL':
       return AssetIds.powerUps.lightball;
   }
+}
+
+function coordKey(coord: CellCoord): string {
+  return `${coord.col},${coord.row}`;
 }
 
 function particleColorForTileType(type: TileType): string | null {

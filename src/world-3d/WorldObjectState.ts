@@ -19,6 +19,7 @@ export interface WorldObjectState {
   replication: WorldObjectReplication;
   renderLayer?: string;
   renderOrder?: number;
+  materialDepthTest?: boolean;
   tintHex?: string;
   opacity?: number;
   animationId?: string;

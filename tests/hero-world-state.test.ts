@@ -7,17 +7,21 @@ import {
   healthBarTintForRatio,
   MagusMatchGameApp,
   MAGE_WORLD_SCALE,
+  MAGE_WORLD_Y_OFFSET,
   MINI_BOSS_WORLD_SCALE,
   phaseToCinematicState,
   trialMonsterHitShakeOffset,
 } from '../src/core/GameApp';
 import {
   getTrialMageWorldPosition,
+  getTrialMonsterSpellHitWorldPosition,
   getTrialMonsterWorldPosition,
   KOBOLD_CLUB_NODE_NAMES,
   KOBOLD_DEFEAT_FADE_SEC,
   KOBOLD_HEAD_NODE_NAMES,
   koboldModelVariantForMonster,
+  TRIAL_MONSTER_BOTTOM_VISUAL_Y_OFFSET,
+  TRIAL_MONSTER_TOP_VISUAL_Y_OFFSET,
 } from '../src/generator/TrialRules';
 import { HeroStageTemplateIds } from '../src/world-3d/HeroStageTemplates';
 
@@ -279,7 +283,7 @@ describe('HeroWorldState', () => {
       ...runtime.monsters[0],
       hp: 15,
       maxHp: 30,
-      visualYOffset: 0.16,
+      visualYOffset: TRIAL_MONSTER_TOP_VISUAL_Y_OFFSET,
     };
     setTrialRuntimeForDebug(app, {
       ...runtime,
@@ -289,7 +293,7 @@ describe('HeroWorldState', () => {
 
     setTrialRuntimeForDebug(app, {
       ...runtime,
-      monsters: [{ ...monster, visualYOffset: -0.16 }],
+      monsters: [{ ...monster, visualYOffset: TRIAL_MONSTER_BOTTOM_VISUAL_Y_OFFSET }],
     });
     const loweredState = app.getHeroWorldState();
 
@@ -298,8 +302,9 @@ describe('HeroWorldState', () => {
     const loweredMonster = loweredState.objects.find((object) => object.objectId === `trial-monster-${monster.monsterId}`);
     const loweredTrack = loweredState.objects.find((object) => object.objectId === `trial-monster-${monster.monsterId}-health-track`);
 
-    expect((raisedMonster?.transform.position.y ?? 0) - (loweredMonster?.transform.position.y ?? 0)).toBeCloseTo(0.32);
-    expect((raisedTrack?.transform.position.y ?? 0) - (loweredTrack?.transform.position.y ?? 0)).toBeCloseTo(0.32);
+    const expectedOffsetDelta = TRIAL_MONSTER_TOP_VISUAL_Y_OFFSET - TRIAL_MONSTER_BOTTOM_VISUAL_Y_OFFSET;
+    expect((raisedMonster?.transform.position.y ?? 0) - (loweredMonster?.transform.position.y ?? 0)).toBeCloseTo(expectedOffsetDelta);
+    expect((raisedTrack?.transform.position.y ?? 0) - (loweredTrack?.transform.position.y ?? 0)).toBeCloseTo(expectedOffsetDelta);
   });
 
   it('omits health bar objects for defeated monsters', () => {
@@ -353,7 +358,7 @@ describe('HeroWorldState', () => {
     const journeyMage = new MagusMatchGameApp(123, { debugLevelType: 'JOURNEY' })
       .getHeroWorldState()
       .objects.find((object) => object.templateId === HeroStageTemplateIds.mage);
-    const trialApp = new MagusMatchGameApp(123);
+    const trialApp = new MagusMatchGameApp(123, { debugLevelType: 'TRIAL' });
     const trialMage = trialApp
       .getHeroWorldState()
       .objects.find((object) => object.templateId === HeroStageTemplateIds.mage);
@@ -363,8 +368,9 @@ describe('HeroWorldState', () => {
     expect(journeyMage?.transform.scale).toEqual(MAGE_WORLD_SCALE);
     expect(trialMage?.transform.scale).toEqual(MAGE_WORLD_SCALE);
     expect(MAGE_WORLD_SCALE).toEqual({ x: 3, y: 3, z: 3 });
+    expect(MAGE_WORLD_Y_OFFSET).toBeCloseTo(-2.095);
     expect(journeyMage?.transform.position.y).toBeLessThan(1.6);
-    expect(trialMage?.transform.position.y).toBeLessThan(-0.85);
+    expect(trialMage?.transform.position.y).toBeCloseTo((baseTrialMagePosition?.y ?? 0) + MAGE_WORLD_Y_OFFSET);
     expect(trialMage?.transform.position.x).toBeCloseTo(baseTrialMagePosition?.x ?? 0);
   });
 
@@ -395,6 +401,37 @@ describe('HeroWorldState', () => {
     expect(monster?.tintHex).toBeUndefined();
     expect(monster?.animationPaused).toBeUndefined();
     expect(monster?.transform.position.y).toBeCloseTo((baseMonsterPosition?.y ?? -0.85) - 1.49 + visualYOffset);
+  });
+
+  it('orders Trial enemies so right-side and newer monsters draw above older left-side monsters', () => {
+    const app = new MagusMatchGameApp(789, { debugLevelType: 'TRIAL' });
+    const runtime = app.getTrialRuntimeForDebug();
+    if (runtime == null || runtime.monsters[0] == null) {
+      throw new Error('Expected Trial runtime.');
+    }
+
+    const baseMonster = runtime.monsters[0];
+    setTrialRuntimeForDebug(app, {
+      ...runtime,
+      monsters: [
+        { ...baseMonster, monsterId: 'left-old', x: -1, spawnTimeMs: 0 },
+        { ...baseMonster, monsterId: 'left-new', x: -1, spawnTimeMs: 1000 },
+        { ...baseMonster, monsterId: 'right-newest', x: 2, spawnTimeMs: 2000 },
+      ],
+      totalMonsters: 3,
+    });
+
+    const objects = app.getHeroWorldState().objects;
+    const leftOld = objects.find((object) => object.objectId === 'trial-monster-left-old');
+    const leftNew = objects.find((object) => object.objectId === 'trial-monster-left-new');
+    const rightNewest = objects.find((object) => object.objectId === 'trial-monster-right-newest');
+
+    expect(leftOld?.renderOrder).toBeLessThan(leftNew?.renderOrder ?? 0);
+    expect(leftNew?.renderOrder).toBeLessThan(rightNewest?.renderOrder ?? 0);
+    expect(leftOld?.materialDepthTest).toBe(false);
+    expect(leftNew?.materialDepthTest).toBe(false);
+    expect(rightNewest?.materialDepthTest).toBe(false);
+    expect(rightNewest?.renderOrder).toBeLessThan(5);
   });
 
   it('emits a pulsing cyan tint for frozen Trial enemies without tinting health bars', () => {
@@ -659,7 +696,7 @@ describe('HeroWorldState', () => {
       throw new Error('Expected Trial runtime.');
     }
 
-    const hitWorldPosition = getTrialMonsterWorldPosition(level, runtime.monsters[0]);
+    const hitWorldPosition = getTrialMonsterSpellHitWorldPosition(level, runtime.monsters[0]);
     setTrialRuntimeForDebug(app, {
       ...runtime,
       impactVfx: [

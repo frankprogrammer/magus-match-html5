@@ -856,7 +856,7 @@ describe('HeroWorldState', () => {
       replication: 'localCosmetic',
       animationTimeSec: 1 / 3 - 0.25,
       transform: {
-        scale: { x: 2.4, y: 2.4, z: 1 },
+        scale: { x: 3.5, y: 3.5, z: 1 },
       },
     });
     expect(earthImpact?.transform.position.x).toBeCloseTo(monster?.transform.position.x ?? 0);

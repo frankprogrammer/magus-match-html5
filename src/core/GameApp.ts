@@ -2095,6 +2095,7 @@ export class MagusMatchGameApp implements GameApp {
         scale: MAGE_WORLD_SCALE,
         renderOrder: 4,
         animationId: phaseToMageAnimation(this.phase),
+        animationPaused: actorAnimationsPausedForPhase(this.phase),
       }),
       createWorldObject("actor-prince-cage", HeroStageTemplateIds.princeCage, {
         position: heroPositionForCell(this.currentLevel.journey.goalCell, 0.55),
@@ -2125,6 +2126,7 @@ export class MagusMatchGameApp implements GameApp {
         scale: MAGE_WORLD_SCALE,
         renderOrder: 5,
         animationId: phaseToMageAnimation(this.phase),
+        animationPaused: actorAnimationsPausedForPhase(this.phase),
       }),
       createWorldObject("trial-fail-line", HeroStageTemplateIds.pathMarker, {
         position: {
@@ -2167,7 +2169,7 @@ export class MagusMatchGameApp implements GameApp {
             animationId: animationForTrialMonster(monster, this.phase),
             opacity: opacityForTrialMonster(monster),
             tintHex: tintForTrialMonster(monster, this.trialRuntime.elapsedMs / 1000),
-            animationPaused: animationPausedForTrialMonster(monster),
+            animationPaused: animationPausedForTrialMonster(monster, this.phase),
             animationTimeSec: animationTimeSecForTrialMonster(monster),
             nodeVisibility:
               monster.kind === "miniBoss"
@@ -2387,6 +2389,10 @@ function phaseToPrinceAnimation(phase: GamePhase): string {
   return "cower";
 }
 
+function actorAnimationsPausedForPhase(phase: GamePhase): boolean | undefined {
+  return phase === "GAME_OVER" ? true : undefined;
+}
+
 function scaleForTrialMonster(kind: ActiveTrialMonster["kind"]): TransformState["scale"] {
   return kind === "miniBoss" ? MINI_BOSS_WORLD_SCALE : MAGE_WORLD_SCALE;
 }
@@ -2436,8 +2442,9 @@ function opacityForTrialMonster(monster: ActiveTrialMonster): number | undefined
   return Math.max(0, Math.min(1, fadeRemainingSec / fadeDurationSec));
 }
 
-function animationPausedForTrialMonster(monster: ActiveTrialMonster): boolean | undefined {
-  return monster.hp > 0 && ((monster.iceFreezeRemainingSec ?? 0) > 0 || isTutorialTrialMonster(monster))
+function animationPausedForTrialMonster(monster: ActiveTrialMonster, phase: GamePhase): boolean | undefined {
+  return phase === "GAME_OVER" ||
+    (monster.hp > 0 && ((monster.iceFreezeRemainingSec ?? 0) > 0 || isTutorialTrialMonster(monster)))
     ? true
     : undefined;
 }

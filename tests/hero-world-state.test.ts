@@ -615,6 +615,47 @@ describe('HeroWorldState', () => {
     expect(pendingMonster?.animationId).toBe('walk');
   });
 
+  it('pauses Trial mage, kobold, tall kobold, and mini-boss actor animations on Game Over', () => {
+    const app = new MagusMatchGameApp(789, { debugLevelType: 'TRIAL' });
+    const runtime = app.getTrialRuntimeForDebug();
+    if (runtime == null || runtime.monsters[0] == null) {
+      throw new Error('Expected Trial runtime.');
+    }
+
+    for (let loss = 0; loss < 3; loss += 1) {
+      finishTrialEntrance(app);
+      beginLevelResultForDebug(app, 'loss');
+      app.update(1.2, []);
+    }
+
+    const baseMonster = runtime.monsters[0];
+    setTrialRuntimeForDebug(app, {
+      ...runtime,
+      monsters: [
+        { ...baseMonster, monsterId: 'game-over-kobold', kind: 'kobold', hp: 10, maxHp: 10 },
+        { ...baseMonster, monsterId: 'game-over-tall', kind: 'tallKobold', hp: 10, maxHp: 10 },
+        { ...baseMonster, monsterId: 'game-over-boss', kind: 'miniBoss', hp: 40, maxHp: 40 },
+      ],
+      totalMonsters: 3,
+      nextSpawnIndex: 3,
+    });
+
+    const state = app.getHeroWorldState();
+    const mage = state.objects.find((object) => object.objectId === 'actor-mage');
+    const kobold = state.objects.find((object) => object.objectId === 'trial-monster-game-over-kobold');
+    const tallKobold = state.objects.find((object) => object.objectId === 'trial-monster-game-over-tall');
+    const miniBoss = state.objects.find((object) => object.objectId === 'trial-monster-game-over-boss');
+
+    expect(app.getHudState().phase).toBe('GAME_OVER');
+    expect(mage?.animationPaused).toBe(true);
+    expect(kobold?.templateId).toBe(HeroStageTemplateIds.monsterPlaceholder);
+    expect(tallKobold?.templateId).toBe(HeroStageTemplateIds.monsterPlaceholder);
+    expect(miniBoss?.templateId).toBe(HeroStageTemplateIds.miniBoss);
+    expect(kobold?.animationPaused).toBe(true);
+    expect(tallKobold?.animationPaused).toBe(true);
+    expect(miniBoss?.animationPaused).toBe(true);
+  });
+
   it('uses defeat animation for Trial monsters during the kobold defeat timer', () => {
     const app = new MagusMatchGameApp(789);
     const runtime = app.getTrialRuntimeForDebug();

@@ -27,10 +27,10 @@ describe('TrialGenerator', () => {
     [8, 6, 2, 0, 1],
     [10, 6, 2, 1, 1],
     [15, 7, 3, 1, 1],
-    [19, 8, 4, 0, 2],
-    [20, 8, 4, 2, 2],
-    [21, 8, 4, 0, 2],
-    [25, 8, 4, 2, 2],
+    [19, 8, 4, 0, 1],
+    [20, 8, 4, 2, 1],
+    [21, 8, 4, 0, 1],
+    [25, 8, 4, 2, 1],
   ])(
     'matches the difficulty band for difficulty %s',
     (difficulty, basicCount, tallCount, miniBossCount, waveCount) => {

@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import { HERO_STAGE_HEIGHT, LOGICAL_WIDTH } from '../core/Layout';
-import type { HeroWorldState, ProjectileState } from '../world-3d/HeroWorldState';
-import { HeroStageTemplateIds } from '../world-3d/HeroStageTemplates';
+import type { HeroWorldState, ProjectileState } from '../presentation/HeroWorldState';
+import { HeroStageTemplateIds } from '../presentation/HeroStageTemplates';
 import type {
-  WorldObjectNodeVisibility,
   WorldObjectState,
   WorldObjectTextureCrop,
-} from '../world-3d/WorldObjectState';
+  WorldObjectVisualVariant,
+} from '../presentation/WorldObjectState';
 import {
   HERO_STAGE_ORTHO_VIEW_WIDTH,
   type OrthographicAnchor,
@@ -653,7 +653,7 @@ function applyWorldObjectState(object: THREE.Object3D, objectState: WorldObjectS
   );
   object.scale.set(transform.scale.x, transform.scale.y, transform.scale.z);
   object.visible = objectState.visible;
-  applyNodeVisibilityOverrides(object, objectState.nodeVisibility);
+  applyVisualVariant(object, objectState.visualVariant);
 
   if (objectState.animationId === 'victory') {
     object.position.y += Math.sin(elapsedSec * 8) * 0.08;
@@ -677,26 +677,38 @@ function applyWorldObjectState(object: THREE.Object3D, objectState: WorldObjectS
         applyEarthImpactSpriteFrame(child.material, objectState.animationTimeSec ?? elapsedSec);
       }
       applyTextureCrop(child.material, objectState.textureCrop);
-      applyMaterialOverrides(child.material, objectState.tintHex, objectState.opacity, objectState.materialDepthTest);
+      applyMaterialOverrides(
+        child.material,
+        objectState.tintHex,
+        objectState.opacity,
+        depthTestForDepthMode(objectState.depthMode),
+      );
     }
   });
 }
 
-export function applyNodeVisibilityOverrides(
+export function applyVisualVariant(
   object: THREE.Object3D,
-  nodeVisibility?: WorldObjectNodeVisibility,
+  visualVariant?: WorldObjectVisualVariant,
 ): void {
-  if (nodeVisibility == null) {
+  if (visualVariant == null) {
     return;
   }
 
-  for (const nodeName of nodeVisibility.hiddenNodeNames ?? []) {
-    setMatchingNodeVisibility(object, nodeName, false);
+  for (const partId of visualVariant.hiddenPartIds ?? []) {
+    setMatchingNodeVisibility(object, partId, false);
   }
 
-  for (const nodeName of nodeVisibility.visibleNodeNames ?? []) {
-    setMatchingNodeVisibility(object, nodeName, true);
+  for (const partId of visualVariant.visiblePartIds ?? []) {
+    setMatchingNodeVisibility(object, partId, true);
   }
+}
+
+function depthTestForDepthMode(depthMode?: WorldObjectState['depthMode']): boolean | undefined {
+  if (depthMode === 'alwaysOnTop') {
+    return false;
+  }
+  return undefined;
 }
 
 function setMatchingNodeVisibility(

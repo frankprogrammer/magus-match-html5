@@ -4,7 +4,7 @@ import { AssetIds } from "../assets/AssetIds";
 import { getAssetManifestEntry } from "../assets/AssetManifest";
 import { HERO_STAGE_HEIGHT, LOGICAL_WIDTH } from "../core/Layout";
 import { resolveBrowserAssetUrl } from "../platform-browser/BrowserAssetUrl";
-import { HeroStageTemplateIds } from "../world-3d/HeroStageTemplates";
+import { HeroStageTemplateIds } from "../presentation/HeroStageTemplates";
 import {
   addBoneProxyRig,
   applyMageTextureToMeshes,

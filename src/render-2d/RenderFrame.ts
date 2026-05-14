@@ -43,10 +43,10 @@ import {
 import type { CellCoord } from '../core/Layout';
 import type { TileType } from '../board/TileTypes';
 import { MATCH_HINT_BOUNCE_DISTANCE_PX } from '../data/tuning';
-import type { HudRenderState } from './HudRenderState';
-import type { BoardRenderState } from './BoardRenderState';
+import type { HudRenderState } from '../presentation/HudRenderState';
+import type { BoardRenderState } from '../presentation/BoardRenderState';
 import type { DrawImageRef, GameRenderer } from './GameRenderer';
-import type { ScreenRenderState } from './ScreenRenderState';
+import type { ScreenRenderState } from '../presentation/ScreenRenderState';
 
 const HUD_TEXT_COLOR = '#ffffff';
 

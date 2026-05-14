@@ -79,9 +79,10 @@ import type {
   FloatingTutorialTileVisualState,
   BoardVisualCueKind,
   BoardVisualCueState,
-} from "../render-2d/BoardRenderState";
-import type { HudRenderState } from "../render-2d/HudRenderState";
-import type { ScreenRenderState } from "../render-2d/ScreenRenderState";
+} from "../presentation/BoardRenderState";
+import type { HudRenderState } from "../presentation/HudRenderState";
+import type { ScreenRenderState } from "../presentation/ScreenRenderState";
+import type { AudioState } from "../presentation/AudioState";
 import type { LeaderboardEntry } from "../run/Leaderboard";
 import { getHighScore } from "../run/Leaderboard";
 import {
@@ -108,16 +109,17 @@ import {
   MATCH_HINT_PAUSE_SEC,
   TILE_SWAP_RETARGET_MS,
 } from "../data/tuning";
-import { HeroStageTemplateIds } from "../world-3d/HeroStageTemplates";
-import type { HeroWorldState, ProjectileState } from "../world-3d/HeroWorldState";
-import type { TransformState } from "../world-3d/TransformState";
-import type { WorldObjectState } from "../world-3d/WorldObjectState";
+import { HeroStageTemplateIds } from "../presentation/HeroStageTemplates";
+import type { HeroWorldState, ProjectileState } from "../presentation/HeroWorldState";
+import type { TransformState } from "../presentation/TransformState";
+import type { WorldObjectState } from "../presentation/WorldObjectState";
 
 export interface GameApp {
   update(dtSec: number, commands: readonly GameInputCommand[]): void;
   getBoardRenderState(): BoardRenderState;
   getHeroWorldState(): HeroWorldState;
   getHudState(): HudRenderState;
+  getAudioState(): AudioState;
   getScreenState(
     leaderboardRows?: readonly LeaderboardEntry[],
     highlightedRank?: number | null,
@@ -155,6 +157,7 @@ export interface TrialTutorialState extends TrialTutorialBoardSetup {
 
 const HERO_STAGE_WORLD_WIDTH = 10.8;
 const HERO_WORLD_UNITS_PER_LOGICAL_PIXEL = HERO_STAGE_WORLD_WIDTH / LOGICAL_WIDTH;
+const MAGE_MATCH_ENERGY_SOURCE_WORLD_OFFSET: TransformState["position"] = { x: 0.7, y: 0.24, z: 0 };
 export const MAGE_WORLD_Y_OFFSET = -1.47 - 50 * HERO_WORLD_UNITS_PER_LOGICAL_PIXEL;
 export const TRIAL_ACTOR_ENTRANCE_ENEMY_DURATION_SEC = 0.45;
 export const TRIAL_ACTOR_ENTRANCE_MAGE_DURATION_SEC = 0.35;
@@ -428,6 +431,7 @@ export class MagusMatchGameApp implements GameApp {
       animationTrace: this.latestBoardAnimationTrace,
       matchHint: this.getMatchHintVisualState(),
       tutorialLock: tutorialPresentation.hideBoard ? null : this.getTrialTutorialVisualState(),
+      matchEnergyTarget: this.getMatchEnergyTargetLogicalPosition(tutorialPresentation),
     };
   }
 
@@ -461,6 +465,43 @@ export class MagusMatchGameApp implements GameApp {
     return this.trialRuntime.projectiles.map((projectile) => translateProjectileY(projectile, yOffset));
   }
 
+  private getMatchEnergyTargetLogicalPosition(
+    tutorialPresentation: NonNullable<BoardRenderState["tutorialPresentation"]>,
+  ): { x: number; y: number } | undefined {
+    const position = this.getMageMatchEnergyWorldPosition();
+    if (position == null) {
+      return undefined;
+    }
+
+    const projected = projectHeroStageWorldPositionToLogical(position);
+    return {
+      x: (tutorialPresentation.sceneOffsetX ?? 0) + projected.x * tutorialPresentation.foregroundSceneScale,
+      y: (tutorialPresentation.sceneOffsetY ?? 0) + projected.y * tutorialPresentation.foregroundSceneScale,
+    };
+  }
+
+  private getMageMatchEnergyWorldPosition(): TransformState["position"] | null {
+    let magePosition: TransformState["position"] | null = null;
+    if (this.currentLevel?.type === "TRIAL" && this.trialRuntime != null) {
+      magePosition = this.getTrialMageRenderPosition();
+    } else if (this.currentLevel?.type === "JOURNEY" && this.journeyRuntime != null) {
+      magePosition = translateY(
+        heroPositionForCell(this.journeyRuntime.mageCell, 0.35),
+        MAGE_WORLD_Y_OFFSET,
+      );
+    }
+
+    if (magePosition == null) {
+      return null;
+    }
+
+    return {
+      x: magePosition.x + MAGE_MATCH_ENERGY_SOURCE_WORLD_OFFSET.x,
+      y: magePosition.y + MAGE_MATCH_ENERGY_SOURCE_WORLD_OFFSET.y,
+      z: magePosition.z + MAGE_MATCH_ENERGY_SOURCE_WORLD_OFFSET.z,
+    };
+  }
+
   getHudState(): HudRenderState {
     return {
       phase: this.phase,
@@ -472,6 +513,14 @@ export class MagusMatchGameApp implements GameApp {
       muted: this.muted,
       bgmMuted: this.bgmMuted,
       debugText: `Seed ${this.run.seed}`,
+    };
+  }
+
+  getAudioState(): AudioState {
+    return {
+      muted: this.muted,
+      bgmMuted: this.bgmMuted,
+      trialWalkingMonsterIds: this.getTrialWalkingMonsterIds(),
     };
   }
 
@@ -692,7 +741,7 @@ export class MagusMatchGameApp implements GameApp {
     return this.latestBoardAnimationEndsAtSec;
   }
 
-  getTrialWalkingMonsterIds(): readonly string[] {
+  private getTrialWalkingMonsterIds(): readonly string[] {
     if (this.phase !== "IDLE") {
       return [];
     }
@@ -2364,16 +2413,16 @@ export class MagusMatchGameApp implements GameApp {
             position: monsterPosition,
             scale: scaleForTrialMonster(monster.kind),
             renderOrder: trialMonsterRenderOrder(monster, monsterRenderRanks),
-            materialDepthTest: false,
+            depthMode: "alwaysOnTop",
             animationId: animationForTrialMonster(monster, this.phase),
             opacity: opacityForTrialMonster(monster),
             tintHex: tintForTrialMonster(monster, this.trialRuntime.elapsedMs / 1000),
             animationPaused: animationPausedForTrialMonster(monster, this.phase),
             animationTimeSec: animationTimeSecForTrialMonster(monster),
-            nodeVisibility:
+            visualVariant:
               monster.kind === "miniBoss"
                 ? undefined
-                : koboldNodeVisibilityForMonster(this.currentLevel.seed, monster),
+                : koboldVisualVariantForMonster(this.currentLevel.seed, monster),
           },
         ),
         ...createTrialMonsterFireBurnObjects(monster, monsterPosition, this.trialRuntime.elapsedMs / 1000),
@@ -2937,7 +2986,7 @@ function createWorldObject(
     scale: TransformState["scale"];
     backdropTextureId?: string;
     renderOrder?: number;
-    materialDepthTest?: boolean;
+    depthMode?: WorldObjectState["depthMode"];
     replication?: WorldObjectState["replication"];
     animationId?: string;
     animationPaused?: boolean;
@@ -2945,7 +2994,7 @@ function createWorldObject(
     opacity?: number;
     textureCrop?: WorldObjectState["textureCrop"];
     animationTimeSec?: number;
-    nodeVisibility?: WorldObjectState["nodeVisibility"];
+    visualVariant?: WorldObjectState["visualVariant"];
   },
 ): WorldObjectState {
   return {
@@ -2962,25 +3011,25 @@ function createWorldObject(
     replication: options.replication ?? "sharedGameplay",
     renderLayer: "heroStage",
     renderOrder: options.renderOrder,
-    materialDepthTest: options.materialDepthTest,
+    depthMode: options.depthMode,
     tintHex: options.tintHex,
     opacity: options.opacity,
     textureCrop: options.textureCrop,
     animationId: options.animationId,
     animationTimeSec: options.animationTimeSec,
     animationPaused: options.animationPaused,
-    nodeVisibility: options.nodeVisibility,
+    visualVariant: options.visualVariant,
   };
 }
 
-function koboldNodeVisibilityForMonster(
+function koboldVisualVariantForMonster(
   levelSeed: number,
   monster: ActiveTrialMonster,
-): WorldObjectState["nodeVisibility"] {
+): WorldObjectState["visualVariant"] {
   const variant = monster.modelVariant ?? koboldModelVariantForMonster(levelSeed, monster.monsterId);
   return {
-    visibleNodeNames: [variant.headNodeName, variant.clubNodeName],
-    hiddenNodeNames: [
+    visiblePartIds: [variant.headNodeName, variant.clubNodeName],
+    hiddenPartIds: [
       ...KOBOLD_HEAD_NODE_NAMES.filter((nodeName) => nodeName !== variant.headNodeName),
       ...KOBOLD_CLUB_NODE_NAMES.filter((nodeName) => nodeName !== variant.clubNodeName),
     ],
@@ -3004,6 +3053,15 @@ function translateY(
   offsetY: number,
 ): TransformState["position"] {
   return translate(position, 0, offsetY);
+}
+
+function projectHeroStageWorldPositionToLogical(
+  position: TransformState["position"],
+): { x: number; y: number } {
+  return {
+    x: LOGICAL_WIDTH / 2 + position.x / HERO_WORLD_UNITS_PER_LOGICAL_PIXEL,
+    y: HERO_STAGE_HEIGHT / 2 - position.y / HERO_WORLD_UNITS_PER_LOGICAL_PIXEL,
+  };
 }
 
 function clamp01(value: number): number {

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { CameraState } from '../world-3d/HeroWorldState';
+import type { CameraState } from '../presentation/HeroWorldState';
 
 export const HERO_STAGE_ORTHO_VIEW_WIDTH = 10.8;
 

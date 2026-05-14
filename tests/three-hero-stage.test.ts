@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { HERO_STAGE_HEIGHT, LOGICAL_WIDTH } from '../src/core/Layout';
 import { orthographicBoundsForAspect } from '../src/render-three/ThreeCameraController';
 import {
-  applyNodeVisibilityOverrides,
+  applyVisualVariant,
   applyMaterialOverrides,
   createMageAnimationController,
   earthImpactSpriteFrameIndex,
@@ -330,13 +330,13 @@ describe('ThreeHeroStage projectile VFX', () => {
   });
 });
 
-describe('ThreeHeroStage node visibility overrides', () => {
+describe('ThreeHeroStage visual variant overrides', () => {
   it('shows the selected kobold head and club while hiding the unselected nodes', () => {
     const kobold = createNamedKoboldVariantObject();
 
-    applyNodeVisibilityOverrides(kobold, {
-      visibleNodeNames: ['k.head-2', 'k.club-3'],
-      hiddenNodeNames: ['k.head-1', 'k.head-3', 'k.club-1', 'k.club-2'],
+    applyVisualVariant(kobold, {
+      visiblePartIds: ['k.head-2', 'k.club-3'],
+      hiddenPartIds: ['k.head-1', 'k.head-3', 'k.club-1', 'k.club-2'],
     });
 
     expect(kobold.getObjectByName('k.head-2')?.visible).toBe(true);
@@ -350,9 +350,9 @@ describe('ThreeHeroStage node visibility overrides', () => {
   it('matches sanitized FBX runtime node names and updates every matching node', () => {
     const kobold = createNamedObject(['khead-1', 'khead-1', 'kclub-2']);
 
-    applyNodeVisibilityOverrides(kobold, {
-      visibleNodeNames: ['k.club-2'],
-      hiddenNodeNames: ['k.head-1', 'k.club-2'],
+    applyVisualVariant(kobold, {
+      visiblePartIds: ['k.club-2'],
+      hiddenPartIds: ['k.head-1', 'k.club-2'],
     });
 
     expect(nodesByName(kobold, 'khead-1').map((node) => node.visible)).toEqual([false, false]);
@@ -362,13 +362,13 @@ describe('ThreeHeroStage node visibility overrides', () => {
   it('ignores missing node names and can apply a different variant later', () => {
     const kobold = createNamedKoboldVariantObject();
 
-    applyNodeVisibilityOverrides(kobold, {
-      visibleNodeNames: ['k.head-2', 'k.club-3'],
-      hiddenNodeNames: ['k.head-1', 'missing-head', 'k.head-3', 'k.club-1', 'k.club-2'],
+    applyVisualVariant(kobold, {
+      visiblePartIds: ['k.head-2', 'k.club-3'],
+      hiddenPartIds: ['k.head-1', 'missing-head', 'k.head-3', 'k.club-1', 'k.club-2'],
     });
-    applyNodeVisibilityOverrides(kobold, {
-      visibleNodeNames: ['k.head-1', 'k.club-1'],
-      hiddenNodeNames: ['k.head-2', 'k.head-3', 'k.club-2', 'missing-club', 'k.club-3'],
+    applyVisualVariant(kobold, {
+      visiblePartIds: ['k.head-1', 'k.club-1'],
+      hiddenPartIds: ['k.head-2', 'k.head-3', 'k.club-2', 'missing-club', 'k.club-3'],
     });
 
     expect(kobold.getObjectByName('k.head-1')?.visible).toBe(true);

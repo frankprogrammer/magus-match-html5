@@ -85,7 +85,7 @@ describe('HeroWorldState', () => {
     expect(state.objects.some((object) => object.templateId === HeroStageTemplateIds.monsterPlaceholder)).toBe(true);
   });
 
-  it('emits node visibility overrides for Trial kobold head and club variants', () => {
+  it('emits visual variant overrides for Trial kobold head and club variants', () => {
     const app = new MagusMatchGameApp(789);
     const runtime = app.getTrialRuntimeForDebug();
     const monster = runtime?.monsters[0];
@@ -98,11 +98,11 @@ describe('HeroWorldState', () => {
       .objects.find((object) => object.objectId === `trial-monster-${monster.monsterId}`);
     const variant = monster.modelVariant ?? koboldModelVariantForMonster(789, monster.monsterId);
 
-    expect(monsterObject?.nodeVisibility?.visibleNodeNames).toEqual([
+    expect(monsterObject?.visualVariant?.visiblePartIds).toEqual([
       variant.headNodeName,
       variant.clubNodeName,
     ]);
-    expect(monsterObject?.nodeVisibility?.hiddenNodeNames).toEqual([
+    expect(monsterObject?.visualVariant?.hiddenPartIds).toEqual([
       ...KOBOLD_HEAD_NODE_NAMES.filter((nodeName) => nodeName !== variant.headNodeName),
       ...KOBOLD_CLUB_NODE_NAMES.filter((nodeName) => nodeName !== variant.clubNodeName),
     ]);
@@ -145,14 +145,14 @@ describe('HeroWorldState', () => {
     expect(boss?.templateId).toBe(HeroStageTemplateIds.miniBoss);
     expect(boss?.transform.scale).toEqual(MINI_BOSS_WORLD_SCALE);
     expect(boss?.transform.position.y).toBeCloseTo(baseMonsterPosition.y - 2.28 + visualYOffset);
-    expect(boss?.nodeVisibility).toBeUndefined();
+    expect(boss?.visualVariant).toBeUndefined();
     expect((bossTrack?.transform.position.y ?? 0) - (boss?.transform.position.y ?? 0)).toBeCloseTo(5.8);
     expect(bossTrack?.transform.scale.x).toBeCloseTo(1.84);
     expect(bossTrack?.transform.scale.y).toBeCloseTo(0.36);
     expect(bossFill?.transform.scale.y).toBeCloseTo(0.36 * TRIAL_FILLBAR_FILL_HEIGHT_FRAC);
   });
 
-  it('emits node visibility overrides for tutorial kobolds', () => {
+  it('emits visual variant overrides for tutorial kobolds', () => {
     const app = new MagusMatchGameApp(555);
 
     const runtime = app.getTrialRuntimeForDebug();
@@ -166,11 +166,11 @@ describe('HeroWorldState', () => {
     expect(tutorialMonster?.modelVariant).toEqual(
       koboldModelVariantForMonster(level?.seed ?? 0, 'tutorial-kobold-0'),
     );
-    expect(tutorialObject?.nodeVisibility?.visibleNodeNames).toEqual([
+    expect(tutorialObject?.visualVariant?.visiblePartIds).toEqual([
       tutorialMonster?.modelVariant?.headNodeName,
       tutorialMonster?.modelVariant?.clubNodeName,
     ]);
-    expect(tutorialObject?.nodeVisibility?.hiddenNodeNames).toHaveLength(4);
+    expect(tutorialObject?.visualVariant?.hiddenPartIds).toHaveLength(4);
   });
 
   it('includes stable Trial enemy health bar objects above alive monsters', () => {
@@ -615,9 +615,9 @@ describe('HeroWorldState', () => {
 
     expect(leftOld?.renderOrder).toBeLessThan(leftNew?.renderOrder ?? 0);
     expect(leftNew?.renderOrder).toBeLessThan(rightNewest?.renderOrder ?? 0);
-    expect(leftOld?.materialDepthTest).toBe(false);
-    expect(leftNew?.materialDepthTest).toBe(false);
-    expect(rightNewest?.materialDepthTest).toBe(false);
+    expect(leftOld?.depthMode).toBe('alwaysOnTop');
+    expect(leftNew?.depthMode).toBe('alwaysOnTop');
+    expect(rightNewest?.depthMode).toBe('alwaysOnTop');
     expect(rightNewest?.renderOrder).toBeLessThan(5);
   });
 

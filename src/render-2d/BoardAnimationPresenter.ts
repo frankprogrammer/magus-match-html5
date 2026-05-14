@@ -43,7 +43,7 @@ import type {
   BoardRocketCloudSpriteVisualState,
   BoardTntExplosionSpriteVisualState,
   FloatingTutorialMatchVisualState,
-} from './BoardRenderState';
+} from '../presentation/BoardRenderState';
 
 const MATCH_PARTICLES_PER_TILE = 12;
 const MATCH_PARTICLE_DURATION_MS = 260;

@@ -1,14 +1,1 @@
-export const HeroStageTemplateIds = {
-  backdropForest: 'stage.backdrop.forest',
-  mage: 'actor.mage',
-  princeCage: 'actor.princeCage',
-  goalFlag: 'prop.goalFlag',
-  pathMarker: 'prop.pathMarker',
-  monsterPlaceholder: 'actor.monster.placeholder',
-  miniBoss: 'actor.monster.miniBoss',
-  projectilePlaceholder: 'vfx.projectile.placeholder',
-  fireBurn: 'vfx.fireBurn',
-  earthImpact: 'vfx.earthImpact',
-  healthBarTrack: 'ui.healthBar.track',
-  healthBarFill: 'ui.healthBar.fill',
-} as const;
+export * from '../presentation/HeroStageTemplates';

@@ -30,6 +30,20 @@ export type CollisionShape =
   | "capsule"
   | "mesh"
   | "custom";
+export type MhsStaticRefKind = "TextureAsset" | "TemplateAsset" | "SoundComponent";
+export type MhsTemplateKind =
+  | "texture"
+  | "uiTexture"
+  | "actorTemplate"
+  | "propTemplate"
+  | "materialTexture"
+  | "sound";
+
+export interface MhsCorrectiveRotationDeg {
+  x: number;
+  y: number;
+  z: number;
+}
 
 export interface AssetManifestEntry {
   id: string;
@@ -43,6 +57,11 @@ export interface AssetManifestEntry {
   upAxis?: "+Y" | "+Z";
   pivot?: Pivot;
   collision?: CollisionShape;
+  mhsStaticRefKind?: MhsStaticRefKind;
+  mhsTemplateKind?: MhsTemplateKind;
+  correctiveRotationDeg?: MhsCorrectiveRotationDeg;
+  actorTargetHeight?: number;
+  browserOnly?: boolean;
   artPromptId?: ArtPromptId;
   notes?: string;
 }
@@ -579,6 +598,8 @@ function texture(
     unitScale: 1,
     pivot: "center",
     collision: "none",
+    mhsStaticRefKind: "TextureAsset",
+    mhsTemplateKind: "texture",
     artPromptId,
     notes,
   };
@@ -601,6 +622,8 @@ function prop(
     unitScale: 1,
     pivot: "center",
     collision: "none",
+    mhsStaticRefKind: "TextureAsset",
+    mhsTemplateKind: "propTemplate",
     artPromptId,
     notes,
   };
@@ -627,6 +650,10 @@ function rig(
     upAxis: "+Y",
     pivot: "bottomCenter",
     collision: "capsule",
+    mhsStaticRefKind: "TemplateAsset",
+    mhsTemplateKind: "actorTemplate",
+    correctiveRotationDeg: { x: 0, y: 0, z: 0 },
+    actorTargetHeight: actorTargetHeightForRig(id),
     artPromptId,
     notes,
   };
@@ -649,6 +676,8 @@ function ui(
     unitScale: 1,
     pivot: "center",
     collision: "none",
+    mhsStaticRefKind: "TextureAsset",
+    mhsTemplateKind: "uiTexture",
     notes,
   };
 }
@@ -670,6 +699,8 @@ function material(
     unitScale: 1,
     pivot: "center",
     collision: "none",
+    mhsStaticRefKind: "TextureAsset",
+    mhsTemplateKind: "materialTexture",
     artPromptId,
     notes,
   };
@@ -686,6 +717,25 @@ function audio(entry: SoundManifestEntry): AssetManifestEntry {
     unitScale: 1,
     pivot: "center",
     collision: "none",
+    mhsStaticRefKind: "SoundComponent",
+    mhsTemplateKind: "sound",
     notes: `${entry.notes} MHS mapping: ${entry.scope === "global" ? "global SoundComponent" : "template-local SoundComponent"}.`,
   };
+}
+
+function actorTargetHeightForRig(id: string): number | undefined {
+  switch (id) {
+    case AssetIds.rigs.mage:
+      return 1.45;
+    case AssetIds.rigs.kobold:
+      return 1.16;
+    case AssetIds.rigs.boss:
+      return 1.16;
+    case AssetIds.rigs.tallKobold:
+      return 1.6;
+    case AssetIds.rigs.prince:
+      return 1.15;
+    default:
+      return undefined;
+  }
 }

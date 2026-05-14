@@ -1,62 +1,18 @@
 import './styles.css';
 import { MagusMatchGameApp } from './core/GameApp';
 import {
-  GAME_OVER_TRY_AGAIN_BUTTON_RECT,
-  HERO_STAGE_HEIGHT,
-  LOGICAL_HEIGHT,
-  LOGICAL_WIDTH,
-  pointInRect,
-} from './core/Layout';
-import {
   BrowserInputAdapter,
-  clientToLogicalPoint,
   parseDebugLevelNumber,
   parseDebugLevelType,
   parseDebugSeed,
   parseOneLifeDoubleSpeedFlag,
 } from './platform-browser/BrowserInputAdapter';
-import {
-  canRequestElementFullscreen,
-  getActiveFullscreenElement,
-  isMobileFullscreenTarget,
-  requestElementFullscreen,
-  shouldRequestGameFullscreen,
-  type FullscreenCapableDocument,
-  type FullscreenCapableElement,
-} from './platform-browser/FullscreenPolicy';
-import { loadBrowserImages } from './platform-browser/BrowserImageLoader';
-import { LocalLeaderboardStore } from './platform-browser/LocalLeaderboardStore';
-import { BoardAnimationPresenter } from './render-2d/BoardAnimationPresenter';
-import { Canvas2DRenderer } from './render-2d/Canvas2DRenderer';
-import { renderFrame, type HeartLossWobbleState } from './render-2d/RenderFrame';
-import { ThreeHeroStage } from './render-three/ThreeHeroStage';
-import type { GameEvent } from './core/GameEvents';
-import type { HudRenderState } from './render-2d/HudRenderState';
-import type { ScreenRenderState } from './render-2d/ScreenRenderState';
-import {
-  getSoundManifestEntriesForBrowserPreload,
-  type SoundManifestEntry,
-} from './audio/SoundManifest';
-import {
-  createLeaderboardEntry,
-  insertLeaderboardEntry,
-  type LeaderboardEntry,
-} from './run/Leaderboard';
-import { INITIAL_LIVES } from './run/RunProgression';
+import { BrowserAudioHost } from './platform-browser/BrowserAudioHost';
+import { BrowserGameLoop } from './platform-browser/BrowserGameLoop';
+import { BrowserPersistenceHost } from './platform-browser/BrowserPersistenceHost';
+import { BrowserPresentationHost } from './platform-browser/BrowserPresentationHost';
 
 const ENABLE_BROWSER_AUDIO = true;
-
-type SoundRequestEvent = Extract<GameEvent, { type: 'soundRequested' }>;
-interface BrowserAudio {
-  setMuted(muted: boolean): void;
-  setBackgroundMusicMuted(bgmMuted: boolean): void;
-  preload(entries?: readonly SoundManifestEntry[]): Promise<void>;
-  resume(): Promise<void>;
-  play(event: SoundRequestEvent): Promise<boolean>;
-  syncTrialWalkLoops(activeMonsterIds: readonly string[]): void;
-  stopTrialWalkLoop(): void;
-  stopBackgroundMusic(): void;
-}
 
 const root = document.querySelector<HTMLDivElement>('#app');
 
@@ -75,301 +31,23 @@ const app = new MagusMatchGameApp(debugSeed, {
   skipTutorial: debugSeed != null || debugLevelType != null || debugStartLevel != null,
 });
 
-root.innerHTML = `
-  <main class="game-shell" aria-label="Magus Match prototype shell">
-    <section class="logical-stage">
-      <canvas class="game-canvas" width="${LOGICAL_WIDTH}" height="${LOGICAL_HEIGHT}" aria-label="Magus Match board and HUD"></canvas>
-      <div class="hero-stage" data-hero-stage aria-label="Magus Match hero stage"></div>
-    </section>
-    <div class="debug-panel" data-debug></div>
-  </main>
-`;
-
-const shell = root.querySelector<HTMLElement>('.game-shell');
-const logicalStage = root.querySelector<HTMLElement>('.logical-stage');
-
-if (shell == null || logicalStage == null) {
-  throw new Error('Failed to create game shell.');
-}
-
-const gameShell = shell;
-const stageElement = logicalStage;
-const debugPanel = mustQuery(root, '[data-debug]');
-const canvas = mustQuery(root, '.game-canvas') as HTMLCanvasElement;
-const heroStageElement = mustQuery(root, '[data-hero-stage]');
-const ctx = canvas.getContext('2d');
-
-if (ctx == null) {
-  throw new Error('Unable to create 2D canvas context.');
-}
-
-const renderer = new Canvas2DRenderer(ctx, {}, LOGICAL_WIDTH, LOGICAL_HEIGHT);
-const heroStage = new ThreeHeroStage(heroStageElement);
-const boardAnimationPresenter = new BoardAnimationPresenter();
-let audio: BrowserAudio | null = null;
-const leaderboardStore = new LocalLeaderboardStore();
-let leaderboardRows: readonly LeaderboardEntry[] = leaderboardStore.load();
-let highlightedRank: number | null = null;
-let overlayPrimaryButtonPressed = false;
-let audioPreloadStarted = false;
-
-const input = new BrowserInputAdapter(gameShell);
-let fullscreenRequestAttempted = false;
-let activeHeroHeight = HERO_STAGE_HEIGHT;
-let activeHeroRenderHeight = HERO_STAGE_HEIGHT;
-let activeHeroBackgroundSceneScale = 1;
-let activeHeroForegroundSceneScale = 1;
-let activeHeroSceneOffsetX = 0;
-let activeHeroSceneOffsetY = 0;
-
-void loadBrowserImages().then((images) => {
-  renderer.setImages(images);
+const presentation = new BrowserPresentationHost(root);
+const input = new BrowserInputAdapter(presentation.gameShell);
+const audio = new BrowserAudioHost(ENABLE_BROWSER_AUDIO);
+const persistence = new BrowserPersistenceHost();
+const gameLoop = new BrowserGameLoop({
+  app,
+  input,
+  presentation,
+  audio,
+  persistence,
 });
 
-if (ENABLE_BROWSER_AUDIO) {
-  void import('./platform-browser/BrowserAudioAdapter').then(({ BrowserAudioAdapter }) => {
-    audio = new BrowserAudioAdapter();
-  });
-
-  gameShell.addEventListener('pointerdown', () => {
-    unlockBrowserAudio();
-  });
-}
-
-gameShell.addEventListener('pointerdown', requestGameFullscreen, { passive: true });
-
-function unlockBrowserAudio(): void {
-  if (!ENABLE_BROWSER_AUDIO || audio == null) {
-    return;
-  }
-
-  void audio.resume();
-  if (audioPreloadStarted) {
-    return;
-  }
-
-  audioPreloadStarted = true;
-  void audio.preload(getSoundManifestEntriesForBrowserPreload());
-}
-
-function updateOverlayPrimaryButtonPressed(event: PointerEvent, down: boolean): void {
-  if (!down) {
-    overlayPrimaryButtonPressed = false;
-    return;
-  }
-  const logical = clientToLogicalPoint(event, gameShell.getBoundingClientRect());
-  const phase = app.getScreenState(leaderboardRows, highlightedRank).phase;
-  if (phase === 'GAME_OVER' && pointInRect(logical, GAME_OVER_TRY_AGAIN_BUTTON_RECT)) {
-    overlayPrimaryButtonPressed = true;
-  }
-}
-
-gameShell.addEventListener('pointerdown', (e) => updateOverlayPrimaryButtonPressed(e, true), { passive: true });
-gameShell.addEventListener('pointerup', (e) => updateOverlayPrimaryButtonPressed(e, false), { passive: true });
-gameShell.addEventListener('pointercancel', (e) => updateOverlayPrimaryButtonPressed(e, false), { passive: true });
-
-function resizeLogicalStage(
-  nextHeroHeight = activeHeroHeight,
-  nextHeroBackgroundSceneScale = activeHeroBackgroundSceneScale,
-  nextHeroForegroundSceneScale = activeHeroForegroundSceneScale,
-  nextHeroRenderHeight = activeHeroRenderHeight,
-  nextHeroSceneOffsetX = activeHeroSceneOffsetX,
-  nextHeroSceneOffsetY = activeHeroSceneOffsetY,
-): void {
-  activeHeroHeight = nextHeroHeight;
-  activeHeroBackgroundSceneScale = nextHeroBackgroundSceneScale;
-  activeHeroForegroundSceneScale = nextHeroForegroundSceneScale;
-  activeHeroRenderHeight = nextHeroRenderHeight;
-  activeHeroSceneOffsetX = nextHeroSceneOffsetX;
-  activeHeroSceneOffsetY = nextHeroSceneOffsetY;
-  const rect = gameShell.getBoundingClientRect();
-  const scale = Math.min(rect.width / LOGICAL_WIDTH, rect.height / LOGICAL_HEIGHT);
-  stageElement.style.transform = `scale(${scale})`;
-  heroStageElement.style.height = `${activeHeroHeight}px`;
-  heroStageElement.style.setProperty('--hero-background-scene-scale', `${activeHeroBackgroundSceneScale}`);
-  heroStageElement.style.setProperty('--hero-foreground-scene-scale', `${activeHeroForegroundSceneScale}`);
-  heroStageElement.style.setProperty('--hero-scene-offset-x', `${activeHeroSceneOffsetX}px`);
-  heroStageElement.style.setProperty('--hero-scene-offset-y', `${activeHeroSceneOffsetY}px`);
-  heroStage.resize(LOGICAL_WIDTH, activeHeroRenderHeight);
-}
-
-function heroRenderHeightForTutorialMode(_mode: string | undefined): number {
-  return HERO_STAGE_HEIGHT;
-}
-
-function getMatchEnergyTarget(): { x: number; y: number } | undefined {
-  const projected = heroStage.getMageParticleSourceLogicalPosition(LOGICAL_WIDTH, activeHeroRenderHeight);
-  if (projected == null) {
-    return undefined;
-  }
-
-  return {
-    x: activeHeroSceneOffsetX + projected.x * activeHeroForegroundSceneScale,
-    y: activeHeroSceneOffsetY + projected.y * activeHeroForegroundSceneScale,
-  };
-}
-
-function requestGameFullscreen(): void {
-  if (!shouldRequestGameFullscreen({
-    requestAttempted: fullscreenRequestAttempted,
-    fullscreenElement: getActiveFullscreenElement(document as FullscreenCapableDocument),
-    canRequestFullscreen: canRequestElementFullscreen(gameShell as FullscreenCapableElement),
-    isMobileFullscreenTarget: isMobileFullscreenTarget(window.matchMedia.bind(window)),
-  })) {
-    return;
-  }
-
-  fullscreenRequestAttempted = true;
-  void requestElementFullscreen(gameShell as FullscreenCapableElement).catch(() => {
-    fullscreenRequestAttempted = false;
-  });
-}
-
-function handleFullscreenChange(): void {
-  if (getActiveFullscreenElement(document as FullscreenCapableDocument) == null) {
-    fullscreenRequestAttempted = false;
-  }
-  resizeLogicalStage();
-}
-
-function renderHud(hud = getBrowserHudState()): void {
-  debugPanel.textContent = `${hud.phase} | ${hud.debugText ?? ''}`;
-}
-
-let lastTimeMs = 0;
-let lastHudLives = INITIAL_LIVES;
-let heartLossAnim: { slotIndex: number; startedAtSec: number } | null = null;
-const HEART_LOSS_WOBBLE_SEC = 0.45;
-
-function tick(timeMs: number): void {
-  const dtSec = lastTimeMs === 0 ? 0 : Math.min((timeMs - lastTimeMs) / 1000, 1 / 30);
-  lastTimeMs = timeMs;
-  app.update(dtSec, input.drainCommands());
-  const hudState = getBrowserHudState();
-  const screenState = getBrowserScreenState();
-  const nowSec = timeMs / 1000;
-  const prevLives = lastHudLives;
-  if (hudState.lives < prevLives) {
-    heartLossAnim = { slotIndex: prevLives - 1, startedAtSec: nowSec };
-  }
-  if (hudState.lives > prevLives) {
-    heartLossAnim = null;
-  }
-  lastHudLives = hudState.lives;
-
-  let heartLossWobble: HeartLossWobbleState | undefined;
-  if (heartLossAnim != null) {
-    const progress01 = Math.min(1, (nowSec - heartLossAnim.startedAtSec) / HEART_LOSS_WOBBLE_SEC);
-    heartLossWobble = { slotIndex: heartLossAnim.slotIndex, progress01 };
-    if (progress01 >= 1) {
-      heartLossAnim = null;
-    }
-  }
-
-  handleEvents(app.drainEvents());
-  audio?.setMuted(hudState.muted);
-  audio?.setBackgroundMusicMuted(hudState.bgmMuted);
-  audio?.syncTrialWalkLoops(app.getTrialWalkingMonsterIds());
-  renderHud(hudState);
-  const boardState = app.getBoardRenderState();
-  const tutorialPresentation = boardState.tutorialPresentation;
-  resizeLogicalStage(
-    tutorialPresentation?.heroHeight ?? HERO_STAGE_HEIGHT,
-    tutorialPresentation?.backgroundSceneScale ?? tutorialPresentation?.sceneScale ?? 1,
-    tutorialPresentation?.foregroundSceneScale ?? tutorialPresentation?.sceneScale ?? 1,
-    heroRenderHeightForTutorialMode(tutorialPresentation?.mode),
-    tutorialPresentation?.sceneOffsetX ?? 0,
-    tutorialPresentation?.sceneOffsetY ?? 0,
-  );
-  heroStage.render(app.getHeroWorldState(), dtSec);
-  renderFrame(
-    renderer,
-    boardAnimationPresenter.present(boardState, timeMs / 1000, { matchEnergyTarget: getMatchEnergyTarget() }),
-    hudState,
-    timeMs / 1000,
-    screenState,
-    heartLossWobble,
-  );
-  requestAnimationFrame(tick);
-}
-
-resizeLogicalStage();
-renderHud();
-const initialBoardState = app.getBoardRenderState();
-const initialTutorialPresentation = initialBoardState.tutorialPresentation;
-resizeLogicalStage(
-  initialTutorialPresentation?.heroHeight ?? HERO_STAGE_HEIGHT,
-  initialTutorialPresentation?.backgroundSceneScale ?? initialTutorialPresentation?.sceneScale ?? 1,
-  initialTutorialPresentation?.foregroundSceneScale ?? initialTutorialPresentation?.sceneScale ?? 1,
-  heroRenderHeightForTutorialMode(initialTutorialPresentation?.mode),
-  initialTutorialPresentation?.sceneOffsetX ?? 0,
-  initialTutorialPresentation?.sceneOffsetY ?? 0,
-);
-heroStage.render(app.getHeroWorldState(), 0);
-renderFrame(
-  renderer,
-  boardAnimationPresenter.present(initialBoardState, 0, {
-    matchEnergyTarget: getMatchEnergyTarget(),
-  }),
-  getBrowserHudState(),
-  0,
-  getBrowserScreenState(),
-);
-window.addEventListener('resize', () => resizeLogicalStage());
-document.addEventListener('fullscreenchange', handleFullscreenChange);
-document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+window.addEventListener('resize', () => presentation.resizeLogicalStage());
+document.addEventListener('fullscreenchange', () => presentation.handleFullscreenChange());
+document.addEventListener('webkitfullscreenchange', () => presentation.handleFullscreenChange());
 window.addEventListener('beforeunload', () => {
-  heroStage.dispose();
-  audio?.stopTrialWalkLoop();
-  audio?.stopBackgroundMusic();
+  gameLoop.dispose();
 });
-requestAnimationFrame(tick);
 
-function handleEvents(events: readonly GameEvent[]): void {
-  for (const event of events) {
-    if (event.type === 'soundRequested') {
-      if (ENABLE_BROWSER_AUDIO && audio != null) {
-        void audio.play(event);
-      }
-      continue;
-    }
-
-    if (event.type === 'levelStarted') {
-      highlightedRank = null;
-      continue;
-    }
-
-    if (event.type === 'runEnded') {
-      const entry = createLeaderboardEntry(
-        event.finalScore,
-        event.levelsCleared,
-        app.getRunStateForDebug().seed,
-        Date.now(),
-      );
-      const result = insertLeaderboardEntry(leaderboardRows, entry);
-      leaderboardRows = result.entries;
-      highlightedRank = result.qualifiedRank;
-      leaderboardStore.save(leaderboardRows);
-    }
-  }
-}
-
-function getBrowserHudState(): HudRenderState {
-  const hud = app.getHudState();
-  return ENABLE_BROWSER_AUDIO ? hud : { ...hud, muted: true };
-}
-
-function getBrowserScreenState(): ScreenRenderState {
-  const screen = app.getScreenState(leaderboardRows, highlightedRank);
-  const base = ENABLE_BROWSER_AUDIO ? screen : { ...screen, muted: true };
-  return { ...base, overlayPrimaryButtonPressed };
-}
-
-function mustQuery(parent: ParentNode, selector: string): HTMLElement {
-  const element = parent.querySelector<HTMLElement>(selector);
-  if (element == null) {
-    throw new Error(`Missing required element: ${selector}`);
-  }
-
-  return element;
-}
+gameLoop.start();

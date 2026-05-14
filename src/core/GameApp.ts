@@ -130,6 +130,7 @@ export interface MagusMatchGameAppOptions {
   debugLevelType?: LevelType;
   debugStartLevel?: number;
   skipTutorial?: boolean;
+  oneLifeDoubleSpeed?: boolean;
 }
 
 export const MAGE_WORLD_SCALE: TransformState["scale"] = { x: 3, y: 3, z: 3 };
@@ -138,6 +139,14 @@ export const MINI_BOSS_WORLD_SCALE: TransformState["scale"] = { x: 5.25, y: 5.25
 interface RuntimeBoardVisualCue extends Omit<BoardVisualCueState, "value"> {
   remainingSec: number;
   durationSec: number;
+}
+
+interface RunGameOverStats {
+  koboldsDefeated: number;
+  levelsCompleted: number;
+  matchesCompleted: number;
+  powerUpsUsed: number;
+  score: number;
 }
 
 export interface TrialTutorialState extends TrialTutorialBoardSetup {
@@ -178,6 +187,11 @@ const TRIAL_TUTORIAL_KOBOLD_COUNT = 3;
 const TRIAL_TUTORIAL_HP_RATIO = 0.1;
 const TRIAL_TUTORIAL_MONSTER_X_POSITIONS = [-1.25, 0.1, 1.45] as const;
 const TRIAL_TUTORIAL_MAGE_X_OFFSET = -0.35;
+const GAME_OVER_METRIC_TOTAL_ANIMATION_SEC = 1.5;
+const GAME_OVER_METRIC_SEGMENT_COUNT = 5;
+const GAME_OVER_METRIC_SEGMENT_SEC =
+  GAME_OVER_METRIC_TOTAL_ANIMATION_SEC / GAME_OVER_METRIC_SEGMENT_COUNT;
+const GAME_OVER_METRIC_EPSILON_SEC = 0.000001;
 const TUTORIAL_FULL_HERO_HEIGHT = LOGICAL_HEIGHT;
 const TUTORIAL_FULL_HERO_SCENE_SCALE = 1.5;
 const TUTORIAL_FULL_HERO_BACKGROUND_SCENE_SCALE = 1.75;
@@ -264,6 +278,11 @@ export class MagusMatchGameApp implements GameApp {
   private pendingClearScore = 0;
   private levelMatchCount = 0;
   private levelValidSwapCount = 0;
+  private runKoboldsDefeated = 0;
+  private runMatchesCompleted = 0;
+  private runPowerUpsUsed = 0;
+  private gameOverElapsedSec = 0;
+  private gameOverStats: RunGameOverStats = createEmptyGameOverStats();
   private finalScore = 0;
   private readonly debugSeed?: number;
   private visualCues: RuntimeBoardVisualCue[] = [];
@@ -338,6 +357,10 @@ export class MagusMatchGameApp implements GameApp {
       this.updateMatchHintTimer(clampedDtSec);
       const trialStageDtSec = this.updateTrialActorEntrance(clampedDtSec);
       this.updateTrialStage(trialStageDtSec);
+    }
+
+    if (this.phase === "GAME_OVER") {
+      this.gameOverElapsedSec += clampedDtSec;
     }
 
     if (this.phase === "WIN" || this.phase === "LOSE") {
@@ -460,6 +483,7 @@ export class MagusMatchGameApp implements GameApp {
       screen: screenForPhase(this.phase),
       phase: this.phase,
       finalScore: this.phase === "GAME_OVER" ? this.finalScore : this.run.score,
+      gameOverMetrics: this.getGameOverMetrics(),
       highScore: getHighScore(leaderboardRows),
       leaderboardRows,
       highlightedRank,
@@ -474,6 +498,48 @@ export class MagusMatchGameApp implements GameApp {
     };
   }
 
+  private getGameOverMetrics(): ScreenRenderState["gameOverMetrics"] {
+    const stats = this.phase === "GAME_OVER"
+      ? this.gameOverStats
+      : {
+          koboldsDefeated: this.runKoboldsDefeated,
+          levelsCompleted: this.run.levelsCleared,
+          matchesCompleted: this.runMatchesCompleted,
+          powerUpsUsed: this.runPowerUpsUsed,
+          score: this.run.score,
+        };
+    const values = [
+      { label: "Kobolds Defeated", targetValue: stats.koboldsDefeated },
+      { label: "Levels Completed", targetValue: stats.levelsCompleted },
+      { label: "Matches Completed", targetValue: stats.matchesCompleted },
+      { label: "Power-Ups Used", targetValue: stats.powerUpsUsed },
+      { label: "Score", targetValue: stats.score },
+    ];
+
+    return values.map((metric, index) => ({
+      ...metric,
+      displayValue: this.sampleGameOverMetricValue(metric.targetValue, index),
+    }));
+  }
+
+  private sampleGameOverMetricValue(targetValue: number, metricIndex: number): number | null {
+    if (this.phase !== "GAME_OVER") {
+      return targetValue;
+    }
+
+    const segmentStartSec = metricIndex * GAME_OVER_METRIC_SEGMENT_SEC;
+    if (this.gameOverElapsedSec + GAME_OVER_METRIC_EPSILON_SEC < segmentStartSec) {
+      return null;
+    }
+
+    const progress = clamp01((this.gameOverElapsedSec - segmentStartSec) / GAME_OVER_METRIC_SEGMENT_SEC);
+    if (this.gameOverElapsedSec + GAME_OVER_METRIC_EPSILON_SEC >= segmentStartSec + GAME_OVER_METRIC_SEGMENT_SEC) {
+      return targetValue;
+    }
+
+    return Math.floor(Math.max(0, targetValue) * progress);
+  }
+
   drainEvents(): GameEvent[] {
     const drained = this.events;
     this.events = [];
@@ -483,6 +549,9 @@ export class MagusMatchGameApp implements GameApp {
   reset(seed = createRandomSeed()): void {
     this.rng = new SeededRng(seed);
     this.run = createInitialRunState(seed);
+    if (this.options.oneLifeDoubleSpeed === true) {
+      this.run = { ...this.run, lives: 1 };
+    }
     if (
       this.options.debugStartLevel != null &&
       this.options.debugStartLevel > 1
@@ -501,6 +570,11 @@ export class MagusMatchGameApp implements GameApp {
     this.pendingLevelResult = null;
     this.pendingClearScore = 0;
     this.finalScore = 0;
+    this.runKoboldsDefeated = 0;
+    this.runMatchesCompleted = 0;
+    this.runPowerUpsUsed = 0;
+    this.gameOverElapsedSec = 0;
+    this.gameOverStats = createEmptyGameOverStats();
     this.visualCues = [];
     this.shakeTimerSec = 0;
     this.shakeAmplitudePixels = 0;
@@ -570,6 +644,16 @@ export class MagusMatchGameApp implements GameApp {
     return {
       matchCount: this.levelMatchCount,
       validSwapCount: this.levelValidSwapCount,
+    };
+  }
+
+  getRunStatsForDebug(): RunGameOverStats {
+    return {
+      koboldsDefeated: this.runKoboldsDefeated,
+      levelsCompleted: this.run.levelsCleared,
+      matchesCompleted: this.runMatchesCompleted,
+      powerUpsUsed: this.runPowerUpsUsed,
+      score: this.run.score,
     };
   }
 
@@ -856,6 +940,7 @@ export class MagusMatchGameApp implements GameApp {
       this.trialRuntime,
       this.currentLevel,
       dtSec,
+      { monsterWalkSpeedMultiplier: this.options.oneLifeDoubleSpeed === true ? 2 : 1 },
     );
     const nextRuntime = updateResult.runtime;
     this.trialRuntime = nextRuntime;
@@ -868,6 +953,7 @@ export class MagusMatchGameApp implements GameApp {
     for (const damageEvent of updateResult.damageEvents) {
       this.emitTrialMonsterHitSounds(damageEvent);
     }
+    this.recordTrialDamageEvents(updateResult.damageEvents);
     if (tutorialPhase != null) {
       if (tutorialPhase === "resolving" && nextRuntime.result === "won") {
         this.completeTrialTutorial();
@@ -1070,6 +1156,14 @@ export class MagusMatchGameApp implements GameApp {
     this.run = advanceRunAfterLoss(this.run);
     if (this.run.lives <= 0) {
       this.finalScore = this.run.score;
+      this.gameOverElapsedSec = 0;
+      this.gameOverStats = {
+        koboldsDefeated: this.runKoboldsDefeated,
+        levelsCompleted: this.run.levelsCleared,
+        matchesCompleted: this.runMatchesCompleted,
+        powerUpsUsed: this.runPowerUpsUsed,
+        score: this.run.score,
+      };
       this.phase = "GAME_OVER";
       this.pendingLevelResult = null;
       this.transitionTimerSec = 0;
@@ -1164,6 +1258,8 @@ export class MagusMatchGameApp implements GameApp {
     this.journeyRuntime = result.runtime;
     this.levelMatchCount += result.scoringStats.matchCount;
     this.levelValidSwapCount += result.scoringStats.validSwapCount;
+    this.runMatchesCompleted += result.scoringStats.matchCount;
+    this.runPowerUpsUsed += result.powerUpsUsed;
     this.captureBoardAnimationTrace(result.animationTrace);
     this.emitPowerUpActivationSound(journeySwapPowerUpType);
     this.triggerHeroActivationOverlay(journeySwapLightballTarget);
@@ -1211,6 +1307,8 @@ export class MagusMatchGameApp implements GameApp {
     this.journeyRuntime = result.runtime;
     this.levelMatchCount += result.scoringStats.matchCount;
     this.levelValidSwapCount += result.scoringStats.validSwapCount;
+    this.runMatchesCompleted += result.scoringStats.matchCount;
+    this.runPowerUpsUsed += result.powerUpsUsed;
     this.captureBoardAnimationTrace(result.animationTrace);
     this.emitPowerUpActivationSound(journeyTapPowerUpType);
     this.triggerHeroActivationOverlay(journeyTapLightballTarget);
@@ -1265,6 +1363,8 @@ export class MagusMatchGameApp implements GameApp {
     this.maybeEmitTrialPlayerDefeatSfx(previousTrialResult, result.runtime.result);
     this.levelMatchCount += result.scoringStats.matchCount;
     this.levelValidSwapCount += result.scoringStats.validSwapCount;
+    this.runMatchesCompleted += result.scoringStats.matchCount;
+    this.runPowerUpsUsed += result.powerUpsUsed;
     this.captureBoardAnimationTrace(result.animationTrace);
     this.emitPowerUpActivationSound(trialSwapPowerUpType);
     this.triggerHeroActivationOverlay(trialSwapLightballTarget);
@@ -1280,6 +1380,7 @@ export class MagusMatchGameApp implements GameApp {
     for (const damageEvent of result.damageEvents) {
       this.emitTrialMonsterHitSounds(damageEvent);
     }
+    this.recordTrialDamageEvents(result.damageEvents);
 
     if (result.runtime.result === "won") {
       this.beginLevelResult("win");
@@ -1322,11 +1423,14 @@ export class MagusMatchGameApp implements GameApp {
     };
     this.floatingTutorialResolveElapsedSec = 0;
     this.captureBoardAnimationTrace(result.animationTrace);
+    this.runMatchesCompleted += result.scoringStats.matchCount;
+    this.runPowerUpsUsed += result.powerUpsUsed;
     this.emitMatchAudioAndJuice(result.scoringStats, to);
     this.emitTrialAudioAndJuice(result.queuedAttackEvents, to);
     for (const damageEvent of result.damageEvents) {
       this.emitTrialMonsterHitSounds(damageEvent);
     }
+    this.recordTrialDamageEvents(result.damageEvents);
   }
 
   private handleTrialPowerUpTap(origin: CellCoord): void {
@@ -1354,6 +1458,8 @@ export class MagusMatchGameApp implements GameApp {
     this.maybeEmitTrialPlayerDefeatSfx(previousTrialResult, result.runtime.result);
     this.levelMatchCount += result.scoringStats.matchCount;
     this.levelValidSwapCount += result.scoringStats.validSwapCount;
+    this.runMatchesCompleted += result.scoringStats.matchCount;
+    this.runPowerUpsUsed += result.powerUpsUsed;
     this.captureBoardAnimationTrace(result.animationTrace);
     this.emitPowerUpActivationSound(trialTapPowerUpType);
     this.triggerHeroActivationOverlay(trialTapLightballTarget);
@@ -1369,6 +1475,7 @@ export class MagusMatchGameApp implements GameApp {
     for (const damageEvent of result.damageEvents) {
       this.emitTrialMonsterHitSounds(damageEvent);
     }
+    this.recordTrialDamageEvents(result.damageEvents);
 
     if (result.runtime.result === "won") {
       this.beginLevelResult("win");
@@ -1601,6 +1708,10 @@ export class MagusMatchGameApp implements GameApp {
         delaySec: damageEvent.impactDelaySec,
       });
     }
+  }
+
+  private recordTrialDamageEvents(damageEvents: readonly TrialDamageEvent[]): void {
+    this.runKoboldsDefeated += damageEvents.filter((event) => event.defeated).length;
   }
 
   private maybeEmitTrialPlayerDefeatSfx(
@@ -2801,6 +2912,16 @@ function screenForPhase(phase: GamePhase): ScreenRenderState["screen"] {
   }
 
   return "play";
+}
+
+function createEmptyGameOverStats(): RunGameOverStats {
+  return {
+    koboldsDefeated: 0,
+    levelsCompleted: 0,
+    matchesCompleted: 0,
+    powerUpsUsed: 0,
+    score: 0,
+  };
 }
 
 function transitionTextForPhase(phase: GamePhase): string | null {

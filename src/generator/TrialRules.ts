@@ -204,6 +204,7 @@ export interface TrialSwapResult {
   damageEvents: readonly TrialDamageEvent[];
   queuedAttackEvents: readonly TrialQueuedAttackEvent[];
   scoringStats: SwapScoringStats;
+  powerUpsUsed: number;
   animationTrace?: BoardAnimationTrace;
 }
 
@@ -211,6 +212,10 @@ export interface TrialRuntimeUpdateResult {
   runtime: TrialRuntimeState;
   scoreDelta: number;
   damageEvents: readonly TrialDamageEvent[];
+}
+
+export interface TrialRuntimeUpdateOptions {
+  monsterWalkSpeedMultiplier?: number;
 }
 
 interface TrialDamageSource {
@@ -259,14 +264,16 @@ export function updateTrialRuntime(
   runtime: TrialRuntimeState,
   level: GeneratedTrialLevel,
   dtSec: number,
+  options: TrialRuntimeUpdateOptions = {},
 ): TrialRuntimeState {
-  return updateTrialRuntimeWithEvents(runtime, level, dtSec).runtime;
+  return updateTrialRuntimeWithEvents(runtime, level, dtSec, options).runtime;
 }
 
 export function updateTrialRuntimeWithEvents(
   runtime: TrialRuntimeState,
   level: GeneratedTrialLevel,
   dtSec: number,
+  options: TrialRuntimeUpdateOptions = {},
 ): TrialRuntimeUpdateResult {
   if (runtime.result !== 'playing') {
     return {
@@ -278,6 +285,7 @@ export function updateTrialRuntimeWithEvents(
 
   const elapsedMs = runtime.elapsedMs + Math.max(0, dtSec) * 1000;
   const elapsedSec = Math.max(0, dtSec);
+  const monsterWalkSpeedMultiplier = Math.max(0, options.monsterWalkSpeedMultiplier ?? 1);
   const visualRuntime = expireProjectiles(runtime, elapsedSec);
   const burnResult = advanceFireBurns(visualRuntime, elapsedSec);
   const burnCleanupRuntime = retargetOrCancelPendingAttacksForDeadTargets(burnResult.runtime, level);
@@ -299,7 +307,8 @@ export function updateTrialRuntimeWithEvents(
                 movementElapsedSecForTrialMonster(
                   healthBarRuntime.monsters.find((candidate) => candidate.monsterId === monster.monsterId) ?? monster,
                   elapsedSec,
-                ),
+                ) *
+                  monsterWalkSpeedMultiplier,
           }
         : monster,
     ),
@@ -363,6 +372,7 @@ export function processTrialSwap(
 
   const nextTileId = createBoardScopedTileIdFactory(swappedBoard, 'trial-cascade-tile');
   const damageSources: TrialDamageSource[] = [];
+  let powerUpsUsed = 0;
   let cascadeResult: CascadeResult;
   let animationTrace: BoardAnimationTrace | undefined;
 
@@ -380,6 +390,7 @@ export function processTrialSwap(
       },
       powerUpActivation.targetType,
     );
+    powerUpsUsed = powerUpResolution.detonations.length;
     const chainStepPopStartSec = getTraceStepPopStartSec(powerUpResolution.animationTrace, 0);
     damageSources.push(
       ...powerUpResolution.detonations.map((entry, index) =>
@@ -415,6 +426,7 @@ export function processTrialSwap(
     damageEvents: damageApplication.damageEvents,
     queuedAttackEvents: damageApplication.queuedAttackEvents,
     scoringStats: createSwapScoringStats(matchCount, powerUpsCreated),
+    powerUpsUsed,
     animationTrace,
   };
 }
@@ -460,6 +472,7 @@ export function processTrialPowerUpActivation(
     damageEvents: damageApplication.damageEvents,
     queuedAttackEvents: damageApplication.queuedAttackEvents,
     scoringStats: createSwapScoringStats(matchCount, powerUpsCreated),
+    powerUpsUsed: powerUpResolution.detonations.length,
     animationTrace: powerUpResolution.animationTrace,
   };
 }
@@ -2073,6 +2086,7 @@ function invalidTrialSwap(
     damageEvents: [],
     queuedAttackEvents: [],
     scoringStats: EMPTY_SWAP_SCORING_STATS,
+    powerUpsUsed: 0,
     animationTrace,
   };
 }

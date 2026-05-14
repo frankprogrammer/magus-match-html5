@@ -53,6 +53,7 @@ export interface JourneySwapResult {
   convertedPathCells: readonly CellCoord[];
   clearedStandardCells: readonly CellCoord[];
   scoringStats: SwapScoringStats;
+  powerUpsUsed: number;
   animationTrace?: BoardAnimationTrace;
 }
 
@@ -170,6 +171,7 @@ function finishJourneyAction(
     convertedPathCells: resolution.convertedPathCells,
     clearedStandardCells: resolution.clearedStandardCells,
     scoringStats: createSwapScoringStats(Math.max(minimumMatchCount, resolution.matchCount), resolution.powerUpsCreated),
+    powerUpsUsed: resolution.powerUpsUsed,
     animationTrace: resolution.animationTrace,
   };
 }
@@ -180,6 +182,7 @@ export interface JourneyBoardResolution {
   clearedStandardCells: readonly CellCoord[];
   matchCount: number;
   powerUpsCreated: number;
+  powerUpsUsed: number;
   animationTrace?: BoardAnimationTrace;
 }
 
@@ -216,6 +219,7 @@ export function resolveJourneyBoard(
         clearedStandardCells: uniqueCoords(clearedStandardCells),
         matchCount,
         powerUpsCreated,
+        powerUpsUsed: 0,
         animationTrace:
           options.animation == null
             ? undefined
@@ -303,6 +307,7 @@ function resolveJourneyPowerUpActivation(
     ]),
     matchCount: 1 + cascadeResolution.matchCount,
     powerUpsCreated: cascadeResolution.powerUpsCreated,
+    powerUpsUsed: chain.detonations.length + cascadeResolution.powerUpsUsed,
     animationTrace: createBoardAnimationTrace(
       animation,
       [
@@ -484,6 +489,7 @@ function invalidJourneySwap(
     convertedPathCells: [],
     clearedStandardCells: [],
     scoringStats: EMPTY_SWAP_SCORING_STATS,
+    powerUpsUsed: 0,
     animationTrace,
   };
 }

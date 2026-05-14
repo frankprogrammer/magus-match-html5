@@ -65,6 +65,37 @@ describe('MagusMatchGameApp', () => {
     expect(app.getElapsedSecForDebug()).toBe(0);
   });
 
+  it('can start one-life double-speed sessions from an option', () => {
+    const app = new MagusMatchGameApp(111, { debugLevelType: 'TRIAL', oneLifeDoubleSpeed: true });
+    expect(app.getRunStateForDebug().lives).toBe(1);
+
+    app.reset(222);
+    expect(app.getRunStateForDebug()).toMatchObject({ seed: 222, lives: 1 });
+  });
+
+  it('doubles Trial monster walk movement for one-life double-speed sessions only', () => {
+    const normal = new MagusMatchGameApp(777, { debugLevelType: 'TRIAL' });
+    const fast = new MagusMatchGameApp(777, { debugLevelType: 'TRIAL', oneLifeDoubleSpeed: true });
+    const normalStart = normal.getTrialRuntimeForDebug()?.monsters[0];
+    const fastStart = fast.getTrialRuntimeForDebug()?.monsters[0];
+    if (normalStart == null || fastStart == null) {
+      throw new Error('Expected Trial monsters.');
+    }
+
+    normal.update(TRIAL_ACTOR_ENTRANCE_TOTAL_DURATION_SEC + 0.25, []);
+    fast.update(TRIAL_ACTOR_ENTRANCE_TOTAL_DURATION_SEC + 0.25, []);
+
+    const normalMonster = normal.getTrialRuntimeForDebug()?.monsters[0];
+    const fastMonster = fast.getTrialRuntimeForDebug()?.monsters[0];
+    if (normalMonster == null || fastMonster == null) {
+      throw new Error('Expected Trial monsters after update.');
+    }
+
+    const normalDistance = normalStart.x - normalMonster.x;
+    const fastDistance = fastStart.x - fastMonster.x;
+    expect(fastDistance).toBeCloseTo(normalDistance * 2);
+  });
+
   it('emits startup events during reset', () => {
     const app = new MagusMatchGameApp(111);
 
@@ -1332,6 +1363,49 @@ describe('MagusMatchGameApp', () => {
     expect(screen.buttonRects.tryAgain).toEqual(GAME_OVER_TRY_AGAIN_BUTTON_RECT);
     expect(screen.buttonRects.bgm).toEqual(HUD_BGM_TOGGLE_RECT);
   });
+
+  it('animates Game Over run metrics sequentially before the final score', () => {
+    const app = new MagusMatchGameApp(1234, { debugLevelType: 'TRIAL' });
+    setRunForDebug(app, {
+      ...app.getRunStateForDebug(),
+      lives: 1,
+      levelsCleared: 3,
+      score: 500,
+    });
+    setRunStatsForDebug(app, {
+      runKoboldsDefeated: 9,
+      runMatchesCompleted: 24,
+      runPowerUpsUsed: 5,
+    });
+
+    beginLevelResultForDebug(app, 'loss');
+    app.update(LEVEL_CLEAR_OVERLAY_TOTAL_SEC, []);
+
+    expect(app.getScreenState().gameOverMetrics).toEqual([
+      { label: 'Kobolds Defeated', targetValue: 9, displayValue: 0 },
+      { label: 'Levels Completed', targetValue: 3, displayValue: null },
+      { label: 'Matches Completed', targetValue: 24, displayValue: null },
+      { label: 'Power-Ups Used', targetValue: 5, displayValue: null },
+      { label: 'Score', targetValue: 500, displayValue: null },
+    ]);
+
+    app.update(0.3, []);
+    expect(app.getScreenState().gameOverMetrics?.map((metric) => metric.displayValue)).toEqual([9, 0, null, null, null]);
+
+    app.update(0.6, []);
+    expect(app.getScreenState().gameOverMetrics?.map((metric) => metric.displayValue)).toEqual([9, 3, 24, 0, null]);
+
+    app.update(0.6, []);
+    expect(app.getScreenState().gameOverMetrics?.map((metric) => metric.displayValue)).toEqual([9, 3, 24, 5, 500]);
+
+    app.update(0, [{ type: 'restart' }]);
+    expect(app.getRunStatsForDebug()).toMatchObject({
+      koboldsDefeated: 0,
+      matchesCompleted: 0,
+      powerUpsUsed: 0,
+      score: 0,
+    });
+  });
 });
 
 type FloatingTutorialRole = 'topLeftLightning' | 'earth' | 'topRightLightning' | 'lowerLightning';
@@ -1404,6 +1478,17 @@ function setTrialRuntimeForDebug(app: MagusMatchGameApp, runtime: TrialRuntimeSt
 
 function setBoardForDebug(app: MagusMatchGameApp, board: Board): void {
   (app as unknown as { board: Board }).board = board;
+}
+
+function setRunForDebug(app: MagusMatchGameApp, run: ReturnType<MagusMatchGameApp['getRunStateForDebug']>): void {
+  (app as unknown as { run: ReturnType<MagusMatchGameApp['getRunStateForDebug']> }).run = run;
+}
+
+function setRunStatsForDebug(
+  app: MagusMatchGameApp,
+  stats: { runKoboldsDefeated: number; runMatchesCompleted: number; runPowerUpsUsed: number },
+): void {
+  Object.assign(app as unknown as typeof stats, stats);
 }
 
 function findNoMatchSwap(board: Board): { from: CellCoord; to: CellCoord } {

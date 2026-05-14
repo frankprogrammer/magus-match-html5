@@ -20,10 +20,17 @@ export interface ScreenImageOverlayState {
   zIndex: number;
 }
 
+export interface GameOverMetricState {
+  label: string;
+  targetValue: number;
+  displayValue: number | null;
+}
+
 export interface ScreenRenderState {
   screen: ScreenKind;
   phase: GamePhase;
   finalScore: number;
+  gameOverMetrics?: readonly GameOverMetricState[];
   highScore: number;
   leaderboardRows: readonly LeaderboardEntry[];
   highlightedRank: number | null;

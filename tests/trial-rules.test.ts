@@ -1296,6 +1296,7 @@ describe('TrialRules', () => {
 
     expect(result.valid).toBe(true);
     expect(result.queuedAttackEvents.length).toBeGreaterThanOrEqual(3);
+    expect(result.powerUpsUsed).toBe(1);
     expect(result.scoringStats.validSwapCount).toBe(1);
     expect(result.animationTrace?.cascadeSteps[0].clearedTiles.some((tile) => (tile.clearDelayMs ?? 0) > 0)).toBe(true);
   });
@@ -1553,6 +1554,7 @@ describe('TrialRules', () => {
 
     expect(result.valid).toBe(true);
     expect(result.scoringStats.validSwapCount).toBe(1);
+    expect(result.powerUpsUsed).toBe(2);
     expect(result.queuedAttackEvents.length).toBeGreaterThanOrEqual(8);
     const firstStepTiles = result.animationTrace?.cascadeSteps[0].clearedTiles ?? [];
     expect(firstStepTiles).toContainEqual(expect.objectContaining({

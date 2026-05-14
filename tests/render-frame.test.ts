@@ -604,6 +604,61 @@ describe('buildBoardCellVisuals', () => {
     );
   });
 
+  it('draws animated Game Over metrics above Score text', () => {
+    const renderer = new FakeRenderer(new Set([AssetIds.tiles.fire]));
+
+    renderFrame(
+      renderer,
+      oneTileState(AssetIds.tiles.fire),
+      hudState(),
+      0,
+      {
+        screen: 'gameOver',
+        phase: 'GAME_OVER',
+        finalScore: 500,
+        gameOverMetrics: [
+          { label: 'Kobolds Defeated', targetValue: 9, displayValue: 9 },
+          { label: 'Levels Completed', targetValue: 3, displayValue: 3 },
+          { label: 'Matches Completed', targetValue: 24, displayValue: 12 },
+          { label: 'Power-Ups Used', targetValue: 5, displayValue: null },
+          { label: 'Score', targetValue: 500, displayValue: null },
+        ],
+        highScore: 800,
+        leaderboardRows: [],
+        highlightedRank: null,
+        buttonRects: {
+          tryAgain: { x: 0, y: 0, width: 0, height: 0 },
+          mute: { x: 0, y: 0, width: 0, height: 0 },
+          bgm: { x: 0, y: 0, width: 0, height: 0 },
+        },
+        muted: false,
+        transitionText: null,
+        transitionImageOverlay: null,
+      },
+    );
+
+    expect(renderer.calls).toContain('text:Kobolds Defeated');
+    expect(renderer.calls).toContain('text:Levels Completed');
+    expect(renderer.calls).toContain('text:Matches Completed');
+    expect(renderer.calls).toContain('text:Power-Ups Used');
+    expect(renderer.calls).toContain('text:Score');
+    expect(renderer.calls).not.toContain('text:Score 0');
+    expect(renderer.textCalls).not.toContainEqual(
+      expect.objectContaining({ text: '0', x: 632, y: 474, width: 160, height: 42 }),
+    );
+    expect(renderer.textCalls).toContainEqual(
+      expect.objectContaining({ text: 'Kobolds Defeated', x: 172, width: 340 }),
+    );
+    expect(renderer.textCalls).toContainEqual(
+      expect.objectContaining({ text: '9', x: 532, width: 160 }),
+    );
+    expect(renderer.calls).not.toContain('text:Final 500');
+    expect(renderer.textCalls.find((call) => call.text === 'Kobolds Defeated')?.y).toBeLessThan(
+      renderer.textCalls.find((call) => call.text === 'Score' && call.y === 570)?.y ?? Number.POSITIVE_INFINITY,
+    );
+    expect(renderer.textCalls.find((call) => call.text === 'GAME OVER')?.style.fontSize).toBe(65);
+  });
+
   it('falls back to the flat board fill when the board background image is unavailable', () => {
     const renderer = new FakeRenderer(new Set(['tile.fire']));
 

@@ -2,11 +2,18 @@ import { describe, expect, it } from 'vitest';
 import {
   BOARD_RECT,
   BrowserInputAdapter,
+  parseOneLifeDoubleSpeedFlag,
   SWAP_DRAG_THRESHOLD_PX,
 } from '../src/platform-browser/BrowserInputAdapter';
 import { LOGICAL_HEIGHT, LOGICAL_WIDTH } from '../src/core/Layout';
 
 describe('BrowserInputAdapter', () => {
+  it('parses the one-life double-speed URL flag by presence', () => {
+    expect(parseOneLifeDoubleSpeedFlag('?oneLifeDoubleSpeed')).toBe(true);
+    expect(parseOneLifeDoubleSpeedFlag('?seed=123&oneLifeDoubleSpeed=0')).toBe(true);
+    expect(parseOneLifeDoubleSpeedFlag('?seed=123')).toBe(false);
+  });
+
   it('emits one horizontal swap when a drag crosses the directional threshold', () => {
     const stage = new FakeStageElement();
     const adapter = new BrowserInputAdapter(stage.asElement());

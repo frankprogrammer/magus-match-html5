@@ -815,32 +815,70 @@ function drawGameOverScreen(renderer: GameRenderer, screenState: ScreenRenderSta
   }
 
   renderer.drawText('GAME OVER', titleBanner.x, titleBanner.y, titleBanner.width, titleBanner.height, {
-    fontSize: 72,
+    fontSize: 65,
     fontWeight: 'bold',
     color: '#f5e9c9',
     align: 'center',
   });
-  const finalScoreRect = centeredScreenRect(800, 320, 70);
-  renderer.drawText(`Final ${screenState.finalScore}`, finalScoreRect.x, finalScoreRect.y, finalScoreRect.width, finalScoreRect.height, {
+
+  drawGameOverMetrics(renderer, screenState);
+
+  const finalScoreRect = centeredScreenRect(800, 570, 70);
+  const scoreMetric = screenState.gameOverMetrics?.find((metric) => metric.label === 'Score');
+  const scoreText =
+    scoreMetric == null
+      ? `Score ${screenState.finalScore}`
+      : scoreMetric.displayValue == null
+        ? 'Score'
+        : `Score ${scoreMetric.displayValue}`;
+  renderer.drawText(scoreText, finalScoreRect.x, finalScoreRect.y, finalScoreRect.width, finalScoreRect.height, {
     fontSize: 42,
     fontWeight: 'bold',
     color: '#c8a24b',
     align: 'center',
   });
-  const highScoreRect = centeredScreenRect(800, 390, 54);
+  const highScoreRect = centeredScreenRect(800, 640, 54);
   renderer.drawText(`High ${screenState.highScore}`, highScoreRect.x, highScoreRect.y, highScoreRect.width, highScoreRect.height, {
     fontSize: 30,
     fontWeight: 'bold',
     color: '#f5e9c9',
     align: 'center',
   });
-  drawLeaderboardPreview(renderer, screenState, 520, 10);
+  drawLeaderboardPreview(renderer, screenState, 760, 10);
   drawButton(
     renderer,
     screenState.buttonRects.tryAgain,
     'TRY AGAIN',
     screenState.overlayPrimaryButtonPressed === true,
   );
+}
+
+function drawGameOverMetrics(renderer: GameRenderer, screenState: ScreenRenderState): void {
+  const metrics = (screenState.gameOverMetrics ?? []).filter((metric) => metric.label !== 'Score').slice(0, 4);
+  const rect = centeredScreenRect(720, 330, 192);
+  const labelX = rect.x + 100;
+  const labelWidth = 340;
+  const valueWidth = 160;
+  const valueX = rect.x + rect.width - valueWidth - 100;
+  const rowHeight = 42;
+  const rowGap = 6;
+  for (const [index, metric] of metrics.entries()) {
+    const y = rect.y + index * (rowHeight + rowGap);
+    renderer.drawText(metric.label, labelX, y, labelWidth, rowHeight, {
+      fontSize: 30,
+      fontWeight: 'bold',
+      color: '#c8a24b',
+      align: 'left',
+    });
+    if (metric.displayValue != null) {
+      renderer.drawText(`${metric.displayValue}`, valueX, y, valueWidth, rowHeight, {
+        fontSize: 32,
+        fontWeight: 'bold',
+        color: '#ffffff',
+        align: 'right',
+      });
+    }
+  }
 }
 
 function drawTransitionOverlay(renderer: GameRenderer, screenState: ScreenRenderState): void {

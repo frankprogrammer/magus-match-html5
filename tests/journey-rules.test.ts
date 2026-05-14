@@ -191,6 +191,7 @@ describe('Journey rules', () => {
     expect(result.runtime.movesRemaining).toBe(19);
     expect(result.convertedPathCells).toContainEqual({ col: 0, row: 1 });
     expect(result.clearedStandardCells.length).toBeGreaterThan(0);
+    expect(result.powerUpsUsed).toBe(1);
     expect(result.animationTrace?.cascadeSteps[0].clearedTiles.find((tile) => tile.clearDelayMs === 0)?.coord).toEqual({
       col: 1,
       row: 1,
@@ -266,6 +267,7 @@ describe('Journey rules', () => {
     const result = processJourneyPowerUpActivation(board, runtime, level, { col: 0, row: 0 }, new SeededRng(21));
 
     expect(result.valid).toBe(true);
+    expect(result.powerUpsUsed).toBe(2);
     expect(result.runtime.movesRemaining).toBe(19);
     expect(result.convertedPathCells).toContainEqual({ col: 1, row: 1 });
     const firstStepTiles = result.animationTrace?.cascadeSteps[0].clearedTiles ?? [];

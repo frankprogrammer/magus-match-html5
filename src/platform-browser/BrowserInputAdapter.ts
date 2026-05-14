@@ -77,6 +77,10 @@ export function parseDebugLevelNumber(search: string): number | undefined {
   return level >= 1 ? level : undefined;
 }
 
+export function parseOneLifeDoubleSpeedFlag(search: string): boolean {
+  return new URLSearchParams(search).has('oneLifeDoubleSpeed');
+}
+
 export class BrowserInputAdapter {
   private commands: GameInputCommand[] = [];
   private dragStartCell: CellCoord | null = null;

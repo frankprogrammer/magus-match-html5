@@ -241,6 +241,90 @@ describe('buildBoardCellVisuals', () => {
     expect(renderer.calls.some((call) => call.startsWith('rect:rgba(255, 255, 255'))).toBe(false);
   });
 
+  it('rotates animated board cells around their center before drawing tile art and masks', () => {
+    const renderer = new FakeRenderer(new Set(['tile.fire']));
+    const state = oneTileState('tile.fire');
+    state.boardCells = [
+      {
+        ...state.boardCells[0],
+        rotationDegrees: 45,
+      },
+    ];
+    state.visualCues = [{ kind: 'matchFlash', coord: { col: 0, row: 0 }, value: 0.8 }];
+
+    renderFrame(renderer, state, hudState(), 0);
+
+    const centerX = BOARD_RECT.x + BOARD_RECT.cellSize / 2;
+    const centerY = BOARD_RECT.y + BOARD_RECT.cellSize / 2;
+    const rotateIndex = renderer.calls.indexOf(`pushRotate:45,${centerX},${centerY}`);
+    const imageIndex = renderer.calls.indexOf('image:tile.fire');
+    const maskIndex = renderer.calls.indexOf('mask:tile.fire:#ffffff');
+    const rotatePopIndex = renderer.calls.indexOf('pop', maskIndex);
+
+    expect(rotateIndex).toBeGreaterThan(-1);
+    expect(imageIndex).toBeGreaterThan(rotateIndex);
+    expect(maskIndex).toBeGreaterThan(imageIndex);
+    expect(rotatePopIndex).toBeGreaterThan(maskIndex);
+
+    const unrotatedRenderer = new FakeRenderer(new Set(['tile.fire']));
+    renderFrame(unrotatedRenderer, oneTileState('tile.fire'), hudState(), 0);
+    expect(unrotatedRenderer.calls.some((call) => call.startsWith('pushRotate:'))).toBe(false);
+  });
+
+  it('draws collecting Lightball tiles above their collection rays', () => {
+    const renderer = new FakeRenderer(new Set([AssetIds.powerUps.lightball, AssetIds.powerUps.lightballStream]));
+    const state = oneTileState(AssetIds.powerUps.lightball);
+    state.boardCells = [
+      {
+        tileId: 'lightball',
+        coord: { col: 0, row: 0 },
+        assetId: AssetIds.powerUps.lightball,
+        tileType: 'LIGHTBALL',
+        isPath: false,
+        alpha: 1,
+        scale: 2,
+        rotationDegrees: 180,
+        zIndex: 20,
+      },
+      {
+        tileId: 'fire',
+        coord: { col: 1, row: 0 },
+        assetId: 'tile.fire',
+        tileType: 'FIRE',
+        isPath: false,
+        alpha: 1,
+        zIndex: 0,
+      },
+    ];
+    state.lightballStreams = [
+      {
+        streamId: 'lightball-stream-0',
+        assetId: AssetIds.powerUps.lightballStream,
+        startX: BOARD_RECT.x + 40,
+        startY: BOARD_RECT.y + 40,
+        length: 150,
+        thickness: 64,
+        angleDeg: 0,
+        color: '#ff7000',
+        alpha: 0.94,
+        textureOffsetX: 20,
+        tileWidth: 100,
+        tileHeight: 64,
+        zIndex: 19,
+      },
+    ];
+
+    renderFrame(renderer, state, hudState(), 0);
+
+    const streamIndex = renderer.calls.indexOf(
+      `tintedImage:${AssetIds.powerUps.lightballStream}:#ff7000:${BOARD_RECT.x - 40},${BOARD_RECT.y + 8},100,64`,
+    );
+    const lightballIndex = renderer.calls.indexOf(`image:${AssetIds.powerUps.lightball}`);
+
+    expect(streamIndex).toBeGreaterThan(-1);
+    expect(lightballIndex).toBeGreaterThan(streamIndex);
+  });
+
   it('draws tutorial dimming through the tile image alpha mask', () => {
     const renderer = new FakeRenderer(new Set(['tile.fire']));
     const state = oneTileState('tile.fire');

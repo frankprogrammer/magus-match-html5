@@ -1,6 +1,7 @@
 import { AssetIds } from '../assets/AssetIds';
 import type {
   BoardAnimationCascadeStep,
+  BoardAnimationClearedTile,
   BoardAnimationMovement,
   BoardAnimationRefill,
   BoardAnimationSnapshot,
@@ -81,6 +82,10 @@ const LIGHTBALL_STREAM_TILE_WIDTH_PX = 192;
 const LIGHTBALL_STREAM_TILE_HEIGHT_PX = 64;
 const LIGHTBALL_STREAM_SCROLL_SPEED_PX_PER_MS = 0.55;
 const LIGHTBALL_COLLECTION_STREAM_BUDGET = 32;
+const LIGHTBALL_COLLECTION_SCALE_UP_MS = 160;
+const LIGHTBALL_COLLECTION_ROTATE_MS = 630;
+const LIGHTBALL_COLLECTION_SHRINK_MS = 120;
+const LIGHTBALL_COLLECTION_ROTATION_DEGREES = 720;
 
 interface MatchEnergyOrbSeed {
   arc: number;
@@ -639,16 +644,7 @@ function sampleStepLightballStreams(
   const streams: BoardLightballStreamVisualState[] = [];
   for (const lightball of lightballs) {
     const activationDelayMs = lightball.clearDelayMs ?? 0;
-    const eligibleTargets: Array<BoardAnimationCascadeStep['clearedTiles'][number]> = [];
-    for (const tile of step.clearedTiles) {
-      if (
-        tile.tileId !== lightball.tileId &&
-        matchEnergyOrbColorForTileType(tile.tileType) != null &&
-        (tile.clearDelayMs ?? 0) === activationDelayMs + LIGHTBALL_COLLECTION_WAVE_MS
-      ) {
-        eligibleTargets.push(tile);
-      }
-    }
+    const eligibleTargets = lightballCollectionTargets(step, lightball);
 
     for (const tile of deterministicSpread(eligibleTargets, LIGHTBALL_COLLECTION_STREAM_BUDGET)) {
       const stream = sampleLightballStream(lightball, tile, stepElapsedMs - activationDelayMs);
@@ -1058,18 +1054,28 @@ function sampleInvalidSwapCells(
 
 function samplePopCells(step: BoardAnimationCascadeStep, stepElapsedMs: number): BoardCellVisualState[] {
   const clearedById = new Map(step.clearedTiles.map((tile) => [tile.tileId, tile]));
+  const collectingLightballIds = new Set(
+    step.clearedTiles
+      .filter((tile) => tile.tileType === 'LIGHTBALL' && lightballCollectionTargets(step, tile).length > 0)
+      .map((tile) => tile.tileId),
+  );
 
   return step.beforeClearSnapshot.cells.map((cell) =>
     snapshotCellToRenderCell(cell, clearedById.has(cell.tileId)
-      ? clearedTileOverrides(clearedById.get(cell.tileId)!, stepElapsedMs)
+      ? clearedTileOverrides(clearedById.get(cell.tileId)!, stepElapsedMs, collectingLightballIds.has(cell.tileId))
       : { zIndex: 0 }),
   );
 }
 
 function clearedTileOverrides(
-  tile: { clearDelayMs?: number },
+  tile: BoardAnimationClearedTile,
   stepElapsedMs: number,
-): Partial<Pick<BoardCellVisualState, 'scale' | 'alpha' | 'zIndex'>> {
+  isCollectingLightball = false,
+): Partial<Pick<BoardCellVisualState, 'scale' | 'alpha' | 'rotationDegrees' | 'zIndex'>> {
+  if (isCollectingLightball) {
+    return collectingLightballTileOverrides(tile, stepElapsedMs);
+  }
+
   const popProgress = clamp01((stepElapsedMs - (tile.clearDelayMs ?? 0)) / TILE_MATCH_SCALE_DOWN_MS);
   if (popProgress <= 0) {
     return { scale: 1, alpha: 1, zIndex: 8 };
@@ -1080,6 +1086,46 @@ function clearedTileOverrides(
     alpha: 1 - popProgress,
     zIndex: 8,
   };
+}
+
+function collectingLightballTileOverrides(
+  tile: BoardAnimationClearedTile,
+  stepElapsedMs: number,
+): Partial<Pick<BoardCellVisualState, 'scale' | 'alpha' | 'rotationDegrees' | 'zIndex'>> {
+  const localElapsedMs = stepElapsedMs - (tile.clearDelayMs ?? 0);
+  if (localElapsedMs <= 0) {
+    return { scale: 1, alpha: 1, rotationDegrees: 0, zIndex: 20 };
+  }
+
+  if (localElapsedMs >= LIGHTBALL_COLLECTION_WAVE_MS) {
+    return { scale: 0, alpha: 0, rotationDegrees: LIGHTBALL_COLLECTION_ROTATION_DEGREES, zIndex: 20 };
+  }
+
+  const scaleUpProgress = clamp01(localElapsedMs / LIGHTBALL_COLLECTION_SCALE_UP_MS);
+  const fullScale = lerp(1, 2, easeOutCubic(scaleUpProgress));
+  const shrinkStartMs = LIGHTBALL_COLLECTION_WAVE_MS - LIGHTBALL_COLLECTION_SHRINK_MS;
+  const shrinkProgress = clamp01((localElapsedMs - shrinkStartMs) / LIGHTBALL_COLLECTION_SHRINK_MS);
+  const scale = lerp(fullScale, 0, easeInCubic(shrinkProgress));
+  const rotationProgress = clamp01(localElapsedMs / LIGHTBALL_COLLECTION_ROTATE_MS);
+
+  return {
+    scale,
+    alpha: 1,
+    rotationDegrees: LIGHTBALL_COLLECTION_ROTATION_DEGREES * easeInCubic(rotationProgress),
+    zIndex: 20,
+  };
+}
+
+function lightballCollectionTargets(
+  step: BoardAnimationCascadeStep,
+  lightball: BoardAnimationClearedTile,
+): BoardAnimationClearedTile[] {
+  const activationDelayMs = lightball.clearDelayMs ?? 0;
+  return step.clearedTiles.filter((tile) =>
+    tile.tileId !== lightball.tileId &&
+    matchEnergyOrbColorForTileType(tile.tileType) != null &&
+    (tile.clearDelayMs ?? 0) === activationDelayMs + LIGHTBALL_COLLECTION_WAVE_MS,
+  );
 }
 
 function sampleFallCells(
@@ -1229,7 +1275,7 @@ function snapshotToCells(snapshot: BoardAnimationSnapshot): BoardCellVisualState
 
 function snapshotCellToRenderCell(
   cell: BoardAnimationSnapshotCell,
-  overrides: Partial<Pick<BoardCellVisualState, 'renderX' | 'renderY' | 'scale' | 'alpha' | 'zIndex' | 'isGhost'>> = {},
+  overrides: Partial<Pick<BoardCellVisualState, 'renderX' | 'renderY' | 'scale' | 'rotationDegrees' | 'alpha' | 'zIndex' | 'isGhost'>> = {},
 ): BoardCellVisualState {
   return {
     tileId: cell.tileId,
@@ -1241,6 +1287,7 @@ function snapshotCellToRenderCell(
     renderX: overrides.renderX,
     renderY: overrides.renderY,
     scale: overrides.scale,
+    rotationDegrees: overrides.rotationDegrees,
     zIndex: overrides.zIndex,
     isGhost: overrides.isGhost,
   };

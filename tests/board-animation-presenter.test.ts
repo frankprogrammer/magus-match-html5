@@ -282,13 +282,24 @@ describe('BoardAnimationPresenter', () => {
     const state = boardState(trace);
 
     presenter.present(state, 0);
+    const collectionStart = presenter.present(state, 0.12);
     const early = presenter.present(state, 0.13);
     const travel = presenter.present(state, 0.25);
+    const fullScale = presenter.present(state, 0.29);
     const hold = presenter.present(state, 0.42);
     const laterHold = presenter.present(state, 0.62);
     const repeatedHold = presenter.present(state, 0.62);
+    const nearEnd = presenter.present(state, 0.865);
     const afterTargetClear = presenter.present(state, 0.88);
 
+    const collectionStartLightball = collectionStart.boardCells.find((cell) => cell.tileId === 'lightball');
+    const earlyLightball = early.boardCells.find((cell) => cell.tileId === 'lightball');
+    const travelLightball = travel.boardCells.find((cell) => cell.tileId === 'lightball');
+    const fullScaleLightball = fullScale.boardCells.find((cell) => cell.tileId === 'lightball');
+    const holdLightball = hold.boardCells.find((cell) => cell.tileId === 'lightball');
+    const laterHoldLightball = laterHold.boardCells.find((cell) => cell.tileId === 'lightball');
+    const nearEndLightball = nearEnd.boardCells.find((cell) => cell.tileId === 'lightball');
+    const finishedLightball = afterTargetClear.boardCells.find((cell) => cell.tileId === 'lightball');
     const earlyStream = early.lightballStreams?.[0];
     const travelStream = travel.lightballStreams?.[0];
     const holdStream = hold.lightballStreams?.[0];
@@ -303,6 +314,17 @@ describe('BoardAnimationPresenter', () => {
     };
     const fullLength = distance(origin, target);
 
+    expect(collectionStartLightball).toMatchObject({ scale: 1, alpha: 1, rotationDegrees: 0 });
+    expect(earlyLightball?.scale).toBeGreaterThan(1);
+    expect(fullScaleLightball?.scale).toBeCloseTo(2);
+    expect(holdLightball?.scale).toBeCloseTo(2);
+    expect(earlyLightball?.rotationDegrees).toBeGreaterThan(0);
+    expect(travelLightball?.rotationDegrees).toBeGreaterThan(earlyLightball?.rotationDegrees ?? 0);
+    expect((laterHoldLightball?.rotationDegrees ?? 0) - (travelLightball?.rotationDegrees ?? 0)).toBeGreaterThan(
+      (travelLightball?.rotationDegrees ?? 0) - (earlyLightball?.rotationDegrees ?? 0),
+    );
+    expect(nearEndLightball?.scale).toBeLessThan(holdLightball?.scale ?? 0);
+    expect(finishedLightball).toMatchObject({ scale: 0, alpha: 0, rotationDegrees: 720 });
     expect(early.lightballStreams).toHaveLength(1);
     expect(earlyStream).toMatchObject({
       streamId: 'lightball-lightball-stream-fire',

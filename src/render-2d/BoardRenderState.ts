@@ -12,6 +12,7 @@ export interface BoardCellVisualState {
   renderX?: number;
   renderY?: number;
   scale?: number;
+  rotationDegrees?: number;
   zIndex?: number;
   isGhost?: boolean;
 }

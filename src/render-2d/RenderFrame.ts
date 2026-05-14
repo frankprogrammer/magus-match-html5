@@ -70,6 +70,7 @@ export interface BoardCellVisual {
   hasGoal: boolean;
   alpha: number;
   scale: number;
+  rotationDegrees: number;
   flash: number;
   zIndex: number;
 }
@@ -193,6 +194,7 @@ export function buildBoardCellVisuals(boardState: BoardRenderState, elapsedSec: 
         hasGoal: coordsEqual(boardState.goalCell, coord),
         alpha: state.alpha,
         scale: state.scale ?? Math.max(isJourneyHinted ? 1 + hintPulse * 0.05 : 1, cueScale),
+        rotationDegrees: state.rotationDegrees ?? 0,
         flash: Math.max(
           isJourneyHinted ? 0.35 + hintPulse * 0.45 : 0,
           isMatchHinted ? matchHintFlash : 0,
@@ -424,10 +426,15 @@ function drawBoard(renderer: GameRenderer, boardState: BoardRenderState, elapsed
   for (const emptyCell of boardState.emptyCells ?? []) {
     drawEmptyCell(renderer, emptyCell.coord, emptyCell.assetId);
   }
-  for (const visual of sortedVisuals) {
+  const lightballOverlayVisuals = sortedVisuals.filter(isCollectingLightballVisual);
+  const baseVisuals = sortedVisuals.filter((visual) => !isCollectingLightballVisual(visual));
+  for (const visual of baseVisuals) {
     drawCell(renderer, visual);
   }
   drawLightballStreams(renderer, boardState);
+  for (const visual of lightballOverlayVisuals) {
+    drawCell(renderer, visual);
+  }
   drawTntExplosionSprites(renderer, boardState);
   drawRocketCloudSprites(renderer, boardState);
   drawBurstRings(renderer, boardState);
@@ -438,6 +445,10 @@ function drawBoard(renderer: GameRenderer, boardState: BoardRenderState, elapsed
   drawBoardFrame(renderer);
   drawDamagePopups(renderer, boardState);
   renderer.pop();
+}
+
+function isCollectingLightballVisual(visual: BoardCellVisual): boolean {
+  return visual.tileType === 'LIGHTBALL' && visual.zIndex >= 20;
 }
 
 function drawBoardBackground(renderer: GameRenderer): void {
@@ -476,6 +487,7 @@ function drawCell(renderer: GameRenderer, visual: BoardCellVisual): void {
   const scaledHeight = height * visual.scale;
   const x = visual.centerX - scaledWidth / 2;
   const y = visual.centerY - scaledHeight / 2;
+  const hasRotation = Math.abs(visual.rotationDegrees) > 0.001;
 
   if (visual.alpha <= 0) {
     return;
@@ -495,18 +507,26 @@ function drawCell(renderer: GameRenderer, visual: BoardCellVisual): void {
     return;
   }
 
+  if (hasRotation) {
+    renderer.pushRotate(visual.rotationDegrees, visual.centerX, visual.centerY);
+  }
+
   renderer.drawImage(imageRef, x, y, scaledWidth, scaledHeight);
 
   if (visual.isDimmed) {
     renderer.drawImageAlphaMaskFill(imageRef, '#000000', x, y, scaledWidth, scaledHeight, 0.62);
   }
 
-  if (visual.isPath) {
-    renderer.drawRect('rgba(245, 233, 201, 0.55)', visual.x + 12, visual.y + 12, visual.width - 24, visual.height - 24);
-  }
-
   if (visual.flash > 0) {
     renderer.drawImageAlphaMaskFill(imageRef, '#ffffff', x, y, scaledWidth, scaledHeight, visual.flash);
+  }
+
+  if (hasRotation) {
+    renderer.pop();
+  }
+
+  if (visual.isPath) {
+    renderer.drawRect('rgba(245, 233, 201, 0.55)', visual.x + 12, visual.y + 12, visual.width - 24, visual.height - 24);
   }
 
   if (visual.hasGoal) {

@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { AssetIds } from '../src/assets/AssetIds';
 import {
   createTrialEarthImpactObjects,
   createTrialMonsterFireBurnObjects,
@@ -36,20 +35,6 @@ import {
 import { HeroStageTemplateIds } from '../src/world-3d/HeroStageTemplates';
 
 describe('HeroWorldState', () => {
-  it('includes backdrop, mage, prince cage, goal, and Journey path markers', () => {
-    const app = new MagusMatchGameApp(123, { debugLevelType: 'JOURNEY' });
-    const state = app.getHeroWorldState();
-    const objectsByTemplate = new Map(state.objects.map((object) => [object.templateId, object]));
-
-    expect(state.levelType).toBe('JOURNEY');
-    expect(state.backdropId).toBe(AssetIds.backdrops.castle);
-    expect(objectsByTemplate.has(HeroStageTemplateIds.backdropForest)).toBe(true);
-    expect(objectsByTemplate.has(HeroStageTemplateIds.mage)).toBe(true);
-    expect(objectsByTemplate.has(HeroStageTemplateIds.princeCage)).toBe(true);
-    expect(objectsByTemplate.has(HeroStageTemplateIds.goalFlag)).toBe(true);
-    expect(state.objects.some((object) => object.templateId === HeroStageTemplateIds.pathMarker)).toBe(true);
-  });
-
   it('uses stable object IDs across repeated state reads', () => {
     const app = new MagusMatchGameApp(456);
 
@@ -109,7 +94,7 @@ describe('HeroWorldState', () => {
   });
 
   it('uses the boss template without kobold variation overrides for mini-boss monsters', () => {
-    const app = new MagusMatchGameApp(789, { debugLevelType: 'TRIAL' });
+    const app = new MagusMatchGameApp(789, { skipTutorial: true });
     const runtime = app.getTrialRuntimeForDebug();
     if (runtime == null || runtime.monsters[0] == null) {
       throw new Error('Expected Trial runtime.');
@@ -174,7 +159,7 @@ describe('HeroWorldState', () => {
   });
 
   it('includes stable Trial enemy health bar objects above alive monsters', () => {
-    const app = new MagusMatchGameApp(789, { debugLevelType: 'TRIAL' });
+    const app = new MagusMatchGameApp(789, { skipTutorial: true });
     finishTrialEntrance(app);
     const state = app.getHeroWorldState();
     const monster = state.objects.find((object) => object.templateId === HeroStageTemplateIds.monsterPlaceholder);
@@ -197,8 +182,8 @@ describe('HeroWorldState', () => {
   });
 
   it('renders Trial actor entrance with enemies tweening in before the mage', () => {
-    const startApp = new MagusMatchGameApp(789, { debugLevelType: 'TRIAL' });
-    const finalApp = new MagusMatchGameApp(789, { debugLevelType: 'TRIAL' });
+    const startApp = new MagusMatchGameApp(789, { skipTutorial: true });
+    const finalApp = new MagusMatchGameApp(789, { skipTutorial: true });
     finishTrialEntrance(finalApp);
 
     const runtime = startApp.getTrialRuntimeForDebug();
@@ -224,7 +209,7 @@ describe('HeroWorldState', () => {
     );
     expect(finalTrack.transform.position.x).toBeCloseTo(finalMonster.transform.position.x);
 
-    const midApp = new MagusMatchGameApp(789, { debugLevelType: 'TRIAL' });
+    const midApp = new MagusMatchGameApp(789, { skipTutorial: true });
     midApp.update(TRIAL_ACTOR_ENTRANCE_ENEMY_DURATION_SEC / 2, []);
     const midMonster = getHeroObject(midApp, monsterId);
     const midMage = getHeroObject(midApp, 'actor-mage');
@@ -232,7 +217,7 @@ describe('HeroWorldState', () => {
     expect(midMonster.transform.position.x).toBeLessThan(startMonster.transform.position.x);
     expect(midMage.transform.position.x).toBeCloseTo(startMage.transform.position.x);
 
-    const enemyDoneApp = new MagusMatchGameApp(789, { debugLevelType: 'TRIAL' });
+    const enemyDoneApp = new MagusMatchGameApp(789, { skipTutorial: true });
     enemyDoneApp.update(TRIAL_ACTOR_ENTRANCE_ENEMY_DURATION_SEC, []);
     expect(getHeroObject(enemyDoneApp, monsterId).transform.position.x).toBeCloseTo(
       finalMonster.transform.position.x,
@@ -281,7 +266,7 @@ describe('HeroWorldState', () => {
   });
 
   it('tweens the Trial mage off-screen right on wins without moving enemies', () => {
-    const app = new MagusMatchGameApp(789, { debugLevelType: 'TRIAL' });
+    const app = new MagusMatchGameApp(789, { skipTutorial: true });
     finishTrialEntrance(app);
 
     const runtime = app.getTrialRuntimeForDebug();
@@ -541,10 +526,7 @@ describe('HeroWorldState', () => {
   });
 
   it('uses doubled readable mage world scale for normalized FBX models', () => {
-    const journeyMage = new MagusMatchGameApp(123, { debugLevelType: 'JOURNEY' })
-      .getHeroWorldState()
-      .objects.find((object) => object.templateId === HeroStageTemplateIds.mage);
-    const trialApp = new MagusMatchGameApp(123, { debugLevelType: 'TRIAL' });
+    const trialApp = new MagusMatchGameApp(123, { skipTutorial: true });
     finishTrialEntrance(trialApp);
     const trialMage = trialApp
       .getHeroWorldState()
@@ -552,11 +534,9 @@ describe('HeroWorldState', () => {
     const trialLevel = trialApp.getCurrentLevelForDebug();
     const baseTrialMagePosition = trialLevel?.type === 'TRIAL' ? getTrialMageWorldPosition(trialLevel) : null;
 
-    expect(journeyMage?.transform.scale).toEqual(MAGE_WORLD_SCALE);
     expect(trialMage?.transform.scale).toEqual(MAGE_WORLD_SCALE);
     expect(MAGE_WORLD_SCALE).toEqual({ x: 3, y: 3, z: 3 });
     expect(MAGE_WORLD_Y_OFFSET).toBeCloseTo(-2.095);
-    expect(journeyMage?.transform.position.y).toBeLessThan(1.6);
     expect(trialMage?.transform.position.y).toBeCloseTo((baseTrialMagePosition?.y ?? 0) + MAGE_WORLD_Y_OFFSET);
     expect(trialMage?.transform.position.x).toBeCloseTo(baseTrialMagePosition?.x ?? 0);
   });
@@ -573,7 +553,7 @@ describe('HeroWorldState', () => {
   });
 
   it('uses player scale and FBX material colors for Trial enemies', () => {
-    const app = new MagusMatchGameApp(789, { debugLevelType: 'TRIAL' });
+    const app = new MagusMatchGameApp(789, { skipTutorial: true });
     const state = app.getHeroWorldState();
     const level = app.getCurrentLevelForDebug();
     const runtime = app.getTrialRuntimeForDebug();
@@ -591,7 +571,7 @@ describe('HeroWorldState', () => {
   });
 
   it('orders Trial enemies so right-side and newer monsters draw above older left-side monsters', () => {
-    const app = new MagusMatchGameApp(789, { debugLevelType: 'TRIAL' });
+    const app = new MagusMatchGameApp(789, { skipTutorial: true });
     const runtime = app.getTrialRuntimeForDebug();
     if (runtime == null || runtime.monsters[0] == null) {
       throw new Error('Expected Trial runtime.');
@@ -622,7 +602,7 @@ describe('HeroWorldState', () => {
   });
 
   it('emits a pulsing cyan tint for frozen Trial enemies without tinting health bars', () => {
-    const app = new MagusMatchGameApp(789, { debugLevelType: 'TRIAL' });
+    const app = new MagusMatchGameApp(789, { skipTutorial: true });
     const runtime = app.getTrialRuntimeForDebug();
     if (runtime == null) {
       throw new Error('Expected Trial runtime.');
@@ -670,7 +650,7 @@ describe('HeroWorldState', () => {
   });
 
   it('pauses Trial mage, kobold, tall kobold, and mini-boss actor animations on Game Over', () => {
-    const app = new MagusMatchGameApp(789, { debugLevelType: 'TRIAL' });
+    const app = new MagusMatchGameApp(789, { skipTutorial: true });
     const runtime = app.getTrialRuntimeForDebug();
     if (runtime == null || runtime.monsters[0] == null) {
       throw new Error('Expected Trial runtime.');

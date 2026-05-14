@@ -6,8 +6,7 @@ export type StandardTileType = (typeof STANDARD_TILE_TYPES)[number];
 export const POWER_UP_TILE_TYPES = ['ROCKET_H', 'ROCKET_V', 'TNT', 'LIGHTBALL'] as const;
 export type PowerUpTileType = (typeof POWER_UP_TILE_TYPES)[number];
 
-export type SpecialTileType = 'LAND';
-export type MatchableTileType = StandardTileType | SpecialTileType;
+export type MatchableTileType = StandardTileType;
 export type TileType = MatchableTileType | PowerUpTileType;
 
 export type TileState =
@@ -15,8 +14,7 @@ export type TileState =
   | 'SWAPPING'
   | 'MATCHED'
   | 'FALLING'
-  | 'DETONATING'
-  | 'CONVERTED_TO_PATH';
+  | 'DETONATING';
 
 export type BlockerType = 'LOCK' | 'CURSED' | 'BOX' | 'METAL_PLATE' | 'CHAIN' | 'EGG';
 export type CellModifier = 'frozen' | 'spawned-this-turn';
@@ -41,7 +39,6 @@ export interface Cell {
   blocker: Blocker | null;
   modifier: CellModifier | null;
   isVoid: boolean;
-  isPath: boolean;
 }
 
 export function isStandardTileType(type: TileType): type is StandardTileType {
@@ -53,5 +50,5 @@ export function isPowerUpTileType(type: TileType): type is PowerUpTileType {
 }
 
 export function isMatchableTileType(type: TileType): type is MatchableTileType {
-  return isStandardTileType(type) || type === 'LAND';
+  return isStandardTileType(type);
 }

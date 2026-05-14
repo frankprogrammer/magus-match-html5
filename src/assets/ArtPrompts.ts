@@ -19,13 +19,10 @@ export const GeneralArtPromptRules = [
 
 export type ArtPromptId =
   | 'prompt.tiles.standard'
-  | 'prompt.tiles.journey'
   | 'prompt.powerups.standard'
   | 'prompt.backdrops.hero'
   | 'prompt.rig.mage'
-  | 'prompt.rig.prince'
-  | 'prompt.rig.kobolds'
-  | 'prompt.props.abductor';
+  | 'prompt.rig.kobolds';
 
 export interface ArtPromptBatch {
   id: ArtPromptId;
@@ -57,22 +54,6 @@ export const ArtPrompts: readonly ArtPromptBatch[] = [
       'tile-earth.png',
     ],
     notes: 'Keep original masters at 512x512 or 1024x1024; export game-ready 256x256 PNGs.',
-  },
-  {
-    id: 'prompt.tiles.journey',
-    title: 'Journey land and path chips',
-    outputUse: 'Runtime Journey terrain tile textures at 256x256 transparent PNG.',
-    prompt: withLockedStyle(
-      [
-        'Create a small cohesive set of square terrain chips for a fantasy match-3 board,',
-        'transparent background, no text, same perspective as tile icons.',
-        'Include unbuilt land tile, converted glowing walkable path tile,',
-        'goal-adjacent path variant, and subtle edge transition variant.',
-        'Readable at 100 x 100 px.',
-      ].join(' '),
-    ),
-    expectedFiles: ['tile-land.png', 'tile-path.png'],
-    notes: 'Only land and path are wired in MVP; keep extra variants as source notes until renderer uses them.',
   },
   {
     id: 'prompt.powerups.standard',
@@ -127,21 +108,6 @@ export const ArtPrompts: readonly ArtPromptBatch[] = [
     notes: 'Use one locked style reference and seed family before separating final rig parts.',
   },
   {
-    id: 'prompt.rig.prince',
-    title: 'Prince and cage cutout rig parts',
-    outputUse: 'Transparent PNG character and cage parts for Blender cutout rigging.',
-    prompt: withLockedStyle(
-      [
-        'Create separate transparent PNG body parts for a young prince inside a small fantasy cage,',
-        'cutout puppet rig, consistent lighting and style, no text.',
-        'Expression should support cowering, cheering, and sudden surprise.',
-        'Output prince parts separately from cage parts: head, eyes or face variants, torso, arms, hands, legs, cage frame, cage door, hanging hook.',
-      ].join(' '),
-    ),
-    expectedFiles: ['prince-parts-source.png'],
-    notes: 'Keep cage frame, cage door, and hanging hook separated from prince body pieces.',
-  },
-  {
     id: 'prompt.rig.kobolds',
     title: 'Kobold enemy cutout rig parts',
     outputUse: 'Transparent PNG enemy parts for Blender cutout rigging.',
@@ -155,26 +121,6 @@ export const ArtPrompts: readonly ArtPromptBatch[] = [
     ),
     expectedFiles: ['kobold-parts-source.png', 'tall-kobold-parts-source.png'],
     notes: 'Tall kobold should share rig-friendly proportions with basic kobold where possible.',
-  },
-  {
-    id: 'prompt.props.abductor',
-    title: 'Abductor hint props',
-    outputUse: 'Transparent PNG edge-of-frame prop hints for later cage-yank VFX.',
-    prompt: withLockedStyle(
-      [
-        'Create transparent PNG edge-of-frame prop hints for an unseen comedic abductor in a fantasy puzzle game,',
-        'no full character, no text.',
-        'Props: giant glove hand, curved hook, magical spectral hand, rope loop, claw silhouette, tentacle-like silhouette.',
-        'Each should work as a brief 250ms cage-yank visual from the top or side edge.',
-      ].join(' '),
-    ),
-    expectedFiles: [
-      'prop-abductor-glove.png',
-      'prop-abductor-hook.png',
-      'prop-abductor-hand.png',
-      'prop-abductor-rope.png',
-    ],
-    notes: 'Keep the abductor mysterious; do not make a full character.',
   },
 ];
 

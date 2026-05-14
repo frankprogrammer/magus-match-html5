@@ -63,11 +63,8 @@ export interface BoardCellVisual {
   tileType: TileType;
   fillColor: string;
   glyph: string;
-  isPath: boolean;
   isHinted: boolean;
   isDimmed: boolean;
-  hasMage: boolean;
-  hasGoal: boolean;
   alpha: number;
   scale: number;
   rotationDegrees: number;
@@ -128,7 +125,7 @@ function drawTutorialHeadline(renderer: GameRenderer, boardState: BoardRenderSta
 }
 
 export function buildBoardCellVisuals(boardState: BoardRenderState, elapsedSec: number): BoardCellVisual[] {
-  const hinted = new Set(boardState.hintedCells.map(coordKey));
+  void elapsedSec;
   const activeMatchHint = boardState.tutorialLock ?? boardState.matchHint ?? null;
   const matchHinted = new Set(activeMatchHint?.flashCells.map(coordKey) ?? []);
   const tutorialDimmed = new Set(boardState.tutorialLock?.dimmedCells.map(coordKey) ?? []);
@@ -140,7 +137,6 @@ export function buildBoardCellVisuals(boardState: BoardRenderState, elapsedSec: 
   }
 
   const visuals: BoardCellVisual[] = [];
-  const hintPulse = (Math.sin(elapsedSec * Math.PI * 3) + 1) / 2;
   const matchHintPulse =
     activeMatchHint == null
       ? 0
@@ -155,8 +151,7 @@ export function buildBoardCellVisuals(boardState: BoardRenderState, elapsedSec: 
   for (const state of boardState.boardCells) {
       const coord = state.coord;
       const key = coordKey(coord);
-      const isHinted = hinted.has(key) || matchHinted.has(key);
-      const isJourneyHinted = hinted.has(key);
+      const isHinted = matchHinted.has(key);
       const isMatchHinted = matchHinted.has(key);
       const cueValues = cuesByCoord.get(key) ?? [];
       const cueFlash = cueValues.reduce((highest, cue) => {
@@ -187,16 +182,12 @@ export function buildBoardCellVisuals(boardState: BoardRenderState, elapsedSec: 
         tileType: state.tileType,
         fillColor: colorForTile(state.tileType),
         glyph: glyphForTile(state.tileType),
-        isPath: state.isPath,
         isHinted,
         isDimmed: tutorialDimmed.has(key),
-        hasMage: coordsEqual(boardState.mageCell, coord),
-        hasGoal: coordsEqual(boardState.goalCell, coord),
         alpha: state.alpha,
-        scale: state.scale ?? Math.max(isJourneyHinted ? 1 + hintPulse * 0.05 : 1, cueScale),
+        scale: state.scale ?? cueScale,
         rotationDegrees: state.rotationDegrees ?? 0,
         flash: Math.max(
-          isJourneyHinted ? 0.35 + hintPulse * 0.45 : 0,
           isMatchHinted ? matchHintFlash : 0,
           cueFlash * 0.5,
         ),
@@ -525,29 +516,6 @@ function drawCell(renderer: GameRenderer, visual: BoardCellVisual): void {
     renderer.pop();
   }
 
-  if (visual.isPath) {
-    renderer.drawRect('rgba(245, 233, 201, 0.55)', visual.x + 12, visual.y + 12, visual.width - 24, visual.height - 24);
-  }
-
-  if (visual.hasGoal) {
-    renderer.drawText('G', visual.x + visual.width - 44, visual.y + 10, 34, 34, {
-      fontSize: 28,
-      fontWeight: 'bold',
-      color: '#241832',
-      align: 'center',
-    });
-  }
-
-  if (visual.hasMage) {
-    renderer.drawEllipse('#4b2e83', visual.centerX, visual.centerY, 34, 34);
-    renderer.drawEllipse('#c8a24b', visual.centerX, visual.centerY, 25, 25);
-    renderer.drawText('M', visual.centerX - 24, visual.centerY - 24, 48, 48, {
-      fontSize: 30,
-      fontWeight: 'bold',
-      color: '#241832',
-      align: 'center',
-    });
-  }
   if (alphaPushed) {
     renderer.pop();
   }
@@ -1013,8 +981,6 @@ function colorForTile(tileType: TileType): string {
       return '#f2c94c';
     case 'EARTH':
       return '#27ae60';
-    case 'LAND':
-      return '#8b6f47';
     case 'ROCKET_H':
     case 'ROCKET_V':
     case 'TNT':
@@ -1033,8 +999,6 @@ function glyphForTile(tileType: TileType): string {
       return 'L';
     case 'EARTH':
       return 'E';
-    case 'LAND':
-      return 'P';
     case 'ROCKET_H':
       return 'H';
     case 'ROCKET_V':
@@ -1048,8 +1012,4 @@ function glyphForTile(tileType: TileType): string {
 
 function coordKey(coord: CellCoord): string {
   return `${coord.col},${coord.row}`;
-}
-
-function coordsEqual(first: CellCoord | null, second: CellCoord): boolean {
-  return first != null && first.col === second.col && first.row === second.row;
 }

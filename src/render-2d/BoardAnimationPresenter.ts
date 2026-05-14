@@ -1191,7 +1191,6 @@ function sampleLevelIntroRefillTile(
     coord: refill.to,
     assetId: assetIdForTileType(refill.tileType),
     tileType: refill.tileType,
-    isPath: refill.isPath,
     alpha: progress <= 0 ? 0 : 1,
     renderX: target.renderX,
     renderY: lerp(start.renderY, target.renderY, eased),
@@ -1231,7 +1230,6 @@ function sampleMovingTile(
     coord: movement.to,
     assetId: assetIdForTileType(movement.tileType),
     tileType: movement.tileType,
-    isPath: movement.isPath,
     alpha: (isLevelIntro || movement.from.row < 0) && progress <= 0 ? 0 : 1,
     renderX: isSlide ? lerp(start.renderX, target.renderX, eased) : target.renderX,
     renderY: lerp(start.renderY, target.renderY, eased),
@@ -1282,7 +1280,6 @@ function snapshotCellToRenderCell(
     coord: cell.coord,
     assetId: assetIdForTileType(cell.tileType),
     tileType: cell.tileType,
-    isPath: cell.isPath,
     alpha: overrides.alpha ?? 1,
     renderX: overrides.renderX,
     renderY: overrides.renderY,
@@ -1373,8 +1370,6 @@ function assetIdForTileType(type: TileType): string {
       return AssetIds.tiles.lightning;
     case 'EARTH':
       return AssetIds.tiles.earth;
-    case 'LAND':
-      return AssetIds.tiles.land;
     case 'ROCKET_H':
       return AssetIds.powerUps.rocketH;
     case 'ROCKET_V':
@@ -1400,7 +1395,6 @@ function particleColorForTileType(type: TileType): string | null {
       return '#f2c94c';
     case 'EARTH':
       return '#27ae60';
-    case 'LAND':
     case 'ROCKET_H':
     case 'ROCKET_V':
     case 'TNT':
@@ -1419,7 +1413,6 @@ function matchEnergyOrbColorForTileType(type: TileType): string | null {
       return '#fff000';
     case 'EARTH':
       return '#00ff3f';
-    case 'LAND':
     case 'ROCKET_H':
     case 'ROCKET_V':
     case 'TNT':

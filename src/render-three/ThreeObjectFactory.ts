@@ -66,10 +66,6 @@ export class ThreeObjectFactory {
         return createBackdrop(backdropTextureId ?? AssetIds.backdrops.castle);
       case HeroStageTemplateIds.mage:
         return this.createMage();
-      case HeroStageTemplateIds.princeCage:
-        return createPrinceCage();
-      case HeroStageTemplateIds.goalFlag:
-        return createGoalFlag();
       case HeroStageTemplateIds.pathMarker:
         return createPathMarker();
       case HeroStageTemplateIds.monsterPlaceholder:
@@ -628,45 +624,6 @@ function startBackdropTextureLoad(plane: THREE.Mesh, backdropAssetId: string): v
       );
     },
   );
-}
-
-function createPrinceCage(): THREE.Object3D {
-  const group = new THREE.Group();
-  const cageGeometry = new THREE.BoxGeometry(1, 1.25, 0.7);
-  const edges = new THREE.EdgesGeometry(cageGeometry);
-  const cage = new THREE.LineSegments(
-    edges,
-    new THREE.LineBasicMaterial({ color: "#c8a24b" }),
-  );
-  cage.position.y = 0.45;
-  group.add(cage);
-  group.add(mesh(new THREE.SphereGeometry(0.22, 16, 10), "#f5e9c9", 0, 0.5, 0));
-  group.add(
-    mesh(new THREE.BoxGeometry(0.55, 0.45, 0.25), "#8b6fcb", 0, 0.02, 0),
-  );
-  return group;
-}
-
-function createGoalFlag(): THREE.Object3D {
-  const group = new THREE.Group();
-  group.add(
-    mesh(
-      new THREE.CylinderGeometry(0.035, 0.035, 1.0, 8),
-      "#f5e9c9",
-      0,
-      0.38,
-      0,
-    ),
-  );
-  const flag = mesh(
-    new THREE.PlaneGeometry(0.55, 0.36),
-    "#c8a24b",
-    0.26,
-    0.74,
-    0.02,
-  );
-  group.add(flag);
-  return group;
 }
 
 function createPathMarker(): THREE.Object3D {

@@ -16,10 +16,6 @@ export function difficultyMultiplier(difficulty: number): number {
   return 1 + 0.1 * difficulty;
 }
 
-export function scoreJourneyClear(difficulty: number, movesRemaining: number): number {
-  return Math.round(1000 * difficultyMultiplier(difficulty)) + Math.max(0, movesRemaining) * 50;
-}
-
 export function scoreTrialClear(
   difficulty: number,
   matchCount: number,

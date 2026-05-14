@@ -79,7 +79,7 @@ describe('power-up detonation patterns', () => {
   it('clears a clipped 3x3 TNT blast and delays the outer ring', () => {
     const board = createBoardFromTileTypes([
       ['FIRE', 'ICE', 'EARTH'],
-      ['LAND', 'TNT', 'LIGHTNING'],
+      ['FIRE', 'TNT', 'LIGHTNING'],
       ['ICE', 'EARTH', 'FIRE'],
     ]);
 
@@ -161,7 +161,7 @@ describe('power-up detonation patterns', () => {
     const board = createBoardFromTileTypes([
       [null, 'TNT', null],
       ['FIRE', 'LIGHTBALL', 'ICE'],
-      [null, 'LAND', null],
+      [null, null, null],
     ]);
 
     expect(selectLightballTapTargetType(board, { col: 1, row: 1 })).toBe('FIRE');
@@ -170,7 +170,7 @@ describe('power-up detonation patterns', () => {
   it('returns no Lightball target when no adjacent standard color exists', () => {
     const board = createBoardFromTileTypes([
       [null, 'TNT', null],
-      ['LAND', 'LIGHTBALL', 'ROCKET_H'],
+      ['ROCKET_V', 'LIGHTBALL', 'ROCKET_H'],
       [null, 'LIGHTBALL', null],
     ]);
 

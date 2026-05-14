@@ -144,20 +144,6 @@ export const AssetManifest: Record<string, AssetManifestEntry> = {
     "prompt.tiles.standard",
     TILE_NOTES,
   ),
-  [AssetIds.tiles.land]: texture(
-    AssetIds.tiles.land,
-    "/assets/tiles/tile-land.png",
-    "Assets/Textures/Tiles/tile-land.png",
-    "prompt.tiles.journey",
-    TILE_NOTES,
-  ),
-  [AssetIds.tiles.path]: texture(
-    AssetIds.tiles.path,
-    "/assets/tiles/tile-path.png",
-    "Assets/Textures/Tiles/tile-path.png",
-    "prompt.tiles.journey",
-    TILE_NOTES,
-  ),
   [AssetIds.tiles.empty]: texture(
     AssetIds.tiles.empty,
     "/assets/tiles/empty.png",
@@ -336,12 +322,6 @@ export const AssetManifest: Record<string, AssetManifestEntry> = {
     "One-shot earth impact sprite for Trial monster hit positions, sampled as a normalized 2x2 grid.",
     "1254x1254, 4 frames in a 2x2 grid",
   ),
-  [AssetIds.rigs.prince]: rig(
-    AssetIds.rigs.prince,
-    "/assets/rigs/prince/prince-parts-source.png",
-    "Assets/Rigs/Prince/prince-rig.json",
-    "prompt.rig.prince",
-  ),
   [AssetIds.rigs.kobold]: rig(
     AssetIds.rigs.kobold,
     "/assets/rigs/kobold.fbx",
@@ -379,48 +359,6 @@ export const AssetManifest: Record<string, AssetManifestEntry> = {
     "/assets/rigs/tall-kobold/tall-kobold-parts-source.png",
     "Assets/Rigs/TallKobold/tall-kobold-rig.json",
     "prompt.rig.kobolds",
-  ),
-  [AssetIds.props.princeCage]: prop(
-    AssetIds.props.princeCage,
-    "/assets/props/prop-prince-cage.png",
-    "Assets/Textures/Props/prop-prince-cage.png",
-    "prompt.rig.prince",
-    "Cage frame source until rig export is available.",
-  ),
-  [AssetIds.props.goalFlag]: prop(
-    AssetIds.props.goalFlag,
-    "/assets/props/prop-goal-flag.png",
-    "Assets/Textures/Props/prop-goal-flag.png",
-    "prompt.tiles.journey",
-    "Goal marker prop for Journey staging.",
-  ),
-  [AssetIds.props.abductorGlove]: prop(
-    AssetIds.props.abductorGlove,
-    "/assets/props/prop-abductor-glove.png",
-    "Assets/Textures/Props/prop-abductor-glove.png",
-    "prompt.props.abductor",
-    "Edge-of-frame cage-yank hint prop.",
-  ),
-  [AssetIds.props.abductorHook]: prop(
-    AssetIds.props.abductorHook,
-    "/assets/props/prop-abductor-hook.png",
-    "Assets/Textures/Props/prop-abductor-hook.png",
-    "prompt.props.abductor",
-    "Edge-of-frame cage-yank hint prop.",
-  ),
-  [AssetIds.props.abductorHand]: prop(
-    AssetIds.props.abductorHand,
-    "/assets/props/prop-abductor-hand.png",
-    "Assets/Textures/Props/prop-abductor-hand.png",
-    "prompt.props.abductor",
-    "Edge-of-frame cage-yank hint prop.",
-  ),
-  [AssetIds.props.abductorRope]: prop(
-    AssetIds.props.abductorRope,
-    "/assets/props/prop-abductor-rope.png",
-    "Assets/Textures/Props/prop-abductor-rope.png",
-    "prompt.props.abductor",
-    "Edge-of-frame cage-yank hint prop.",
   ),
   [AssetIds.ui.hudBanner]: ui(
     AssetIds.ui.hudBanner,
@@ -605,30 +543,6 @@ function texture(
   };
 }
 
-function prop(
-  id: string,
-  browserUrl: string,
-  futureMhsPath: string,
-  artPromptId: ArtPromptId,
-  notes: string,
-): AssetManifestEntry {
-  return {
-    id,
-    kind: "texture",
-    browserUrl,
-    futureMhsPath,
-    sourceFormat: "png",
-    runtimeSize: "max 1024px longest side",
-    unitScale: 1,
-    pivot: "center",
-    collision: "none",
-    mhsStaticRefKind: "TextureAsset",
-    mhsTemplateKind: "propTemplate",
-    artPromptId,
-    notes,
-  };
-}
-
 function rig(
   id: string,
   browserUrl: string,
@@ -733,8 +647,6 @@ function actorTargetHeightForRig(id: string): number | undefined {
       return 1.16;
     case AssetIds.rigs.tallKobold:
       return 1.6;
-    case AssetIds.rigs.prince:
-      return 1.15;
     default:
       return undefined;
   }

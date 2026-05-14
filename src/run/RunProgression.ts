@@ -1,4 +1,4 @@
-import type { LevelType, RunState } from '../core/Types';
+import type { RunState } from '../core/Types';
 
 export const INITIAL_LIVES = 3;
 export const LEVEL_TRANSITION_HOLD_SEC = 1.2;
@@ -12,21 +12,6 @@ export function createInitialRunState(seed: number): RunState {
     score: 0,
     levelsCleared: 0,
   };
-}
-
-export function selectLevelTypeForRun(
-  runSeed: number,
-  levelNumber: number,
-  forcedLevelType?: LevelType,
-): LevelType {
-  void runSeed;
-  void levelNumber;
-
-  if (forcedLevelType != null) {
-    return forcedLevelType;
-  }
-
-  return 'TRIAL';
 }
 
 export function deriveLevelSeed(runSeed: number, levelNumber: number): number {

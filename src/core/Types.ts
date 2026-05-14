@@ -1,6 +1,6 @@
 import type { CellCoord } from './Layout';
 
-export type LevelType = 'JOURNEY' | 'TRIAL';
+export type LevelType = 'TRIAL';
 
 export type GamePhase =
   | 'BOOT'

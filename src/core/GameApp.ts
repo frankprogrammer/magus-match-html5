@@ -1,7 +1,6 @@
 import type { GameEvent, SoundEventCategory } from "./GameEvents";
 import type { GameInputCommand } from "./GameInput";
 import {
-  BOARD_SIZE,
   GAME_OVER_TRY_AGAIN_BUTTON_RECT,
   HERO_STAGE_HEIGHT,
   HUD_BGM_TOGGLE_RECT,
@@ -17,7 +16,7 @@ import {
 } from "./Layout";
 import type { CellCoord } from "./Layout";
 import { createRandomSeed, SeededRng } from "./Rng";
-import type { GamePhase, LevelResult, LevelType, RunState } from "./Types";
+import type { GamePhase, LevelResult, RunState } from "./Types";
 import type { Board } from "../board/Board";
 import {
   cloneBoard,
@@ -35,18 +34,11 @@ import { getBoardAnimationTraceDurationMs } from "../board/BoardAnimationTiming"
 import { findStandardMatchHints } from "../board/BoardHints";
 import type { StandardTileType, TileType } from "../board/TileTypes";
 import { isPowerUpTileType, isStandardTileType } from "../board/TileTypes";
-import { isTapActivatablePowerUpTileType, selectLightballTapTargetType } from "../board/PowerUps";
+import { selectLightballTapTargetType } from "../board/PowerUps";
 import { AssetIds } from "../assets/AssetIds";
 import { heroStageBackdropAssetIdForLevel } from "./HeroStageBackdrop";
 import type { GeneratedLevel } from "../generator/LevelGenerator";
 import { generateLevel } from "../generator/LevelGenerator";
-import type { JourneyRuntimeState } from "../generator/JourneyRules";
-import {
-  createJourneyRuntime,
-  getVisibleJourneyHintCells,
-  processJourneyPowerUpActivation,
-  processJourneySwap,
-} from "../generator/JourneyRules";
 import type {
   ActiveTrialMonster,
   SpellSchoolId,
@@ -91,13 +83,8 @@ import {
   advanceRunAfterWin,
   createInitialRunState,
   deriveLevelSeed,
-  selectLevelTypeForRun,
 } from "../run/RunProgression";
-import {
-  scoreJourneyClear,
-  scoreSwapStats,
-  scoreTrialClear,
-} from "../run/Scoring";
+import { scoreSwapStats, scoreTrialClear } from "../run/Scoring";
 import type { SwapScoringStats } from "../run/Scoring";
 import {
   CAMERA_SHAKE_MAX,
@@ -129,7 +116,6 @@ export interface GameApp {
 }
 
 export interface MagusMatchGameAppOptions {
-  debugLevelType?: LevelType;
   debugStartLevel?: number;
   skipTutorial?: boolean;
   oneLifeDoubleSpeed?: boolean;
@@ -271,7 +257,6 @@ export class MagusMatchGameApp implements GameApp {
   private run: RunState = createInitialRunState(createRandomSeed());
   private board: Board = createEmptyBoard();
   private currentLevel: GeneratedLevel | null = null;
-  private journeyRuntime: JourneyRuntimeState | null = null;
   private trialRuntime: TrialRuntimeState | null = null;
   private phase: GamePhase = "IDLE";
   private muted = false;
@@ -399,7 +384,6 @@ export class MagusMatchGameApp implements GameApp {
             coord,
             assetId: assetIdForTileType(tile.type),
             tileType: tile.type,
-            isPath: this.board[coord.row][coord.col].isPath,
             alpha: 1,
           };
         })
@@ -408,22 +392,6 @@ export class MagusMatchGameApp implements GameApp {
         coord,
         assetId: AssetIds.tiles.empty,
       })),
-      pathCells: getAllPlayableCoords(this.board).filter(
-        (coord) => this.board[coord.row][coord.col].isPath,
-      ),
-      mageCell: this.journeyRuntime?.mageCell ?? null,
-      goalCell:
-        this.currentLevel?.type === "JOURNEY"
-          ? this.currentLevel.journey.goalCell
-          : null,
-      hintedCells:
-        this.currentLevel?.type === "JOURNEY" && this.journeyRuntime != null
-          ? getVisibleJourneyHintCells(
-              this.currentLevel,
-              this.journeyRuntime,
-              this.elapsedSec,
-            )
-          : [],
       selectedCell: null,
       queuedSwap: null,
       shakePixels: this.getShakePixels(),
@@ -438,7 +406,7 @@ export class MagusMatchGameApp implements GameApp {
   getHeroWorldState(): HeroWorldState {
     const objects = this.getHeroWorldObjects();
     return {
-      levelType: this.currentLevel?.type ?? "JOURNEY",
+      levelType: "TRIAL",
       backdropId: this.getHeroStageBackdropAssetId(),
       cinematicState: phaseToCinematicState(this.phase),
       objects,
@@ -481,19 +449,11 @@ export class MagusMatchGameApp implements GameApp {
   }
 
   private getMageMatchEnergyWorldPosition(): TransformState["position"] | null {
-    let magePosition: TransformState["position"] | null = null;
-    if (this.currentLevel?.type === "TRIAL" && this.trialRuntime != null) {
-      magePosition = this.getTrialMageRenderPosition();
-    } else if (this.currentLevel?.type === "JOURNEY" && this.journeyRuntime != null) {
-      magePosition = translateY(
-        heroPositionForCell(this.journeyRuntime.mageCell, 0.35),
-        MAGE_WORLD_Y_OFFSET,
-      );
-    }
-
-    if (magePosition == null) {
+    if (this.trialRuntime == null) {
       return null;
     }
+
+    const magePosition = this.getTrialMageRenderPosition();
 
     return {
       x: magePosition.x + MAGE_MATCH_ENERGY_SOURCE_WORLD_OFFSET.x,
@@ -666,10 +626,6 @@ export class MagusMatchGameApp implements GameApp {
     return this.currentLevel;
   }
 
-  getJourneyRuntimeForDebug(): JourneyRuntimeState | null {
-    return this.journeyRuntime == null ? null : { ...this.journeyRuntime };
-  }
-
   getTrialRuntimeForDebug(): TrialRuntimeState | null {
     return this.trialRuntime == null
       ? null
@@ -773,11 +729,6 @@ export class MagusMatchGameApp implements GameApp {
   }
 
   private prepareCurrentLevel(): void {
-    const levelType = selectLevelTypeForRun(
-      this.run.seed,
-      this.run.levelNumber,
-      this.options.debugLevelType,
-    );
     const levelSeed =
       this.run.levelNumber === 1
         ? this.run.seed
@@ -787,17 +738,9 @@ export class MagusMatchGameApp implements GameApp {
       levelNumber: this.run.levelNumber,
       difficulty: this.run.difficulty,
       seed: levelSeed,
-      forcedLevelType: levelType,
     });
     this.board = cloneBoard(this.currentLevel.initialBoard);
-    this.journeyRuntime =
-      this.currentLevel.type === "JOURNEY"
-        ? createJourneyRuntime(this.currentLevel)
-        : null;
-    this.trialRuntime =
-      this.currentLevel.type === "TRIAL"
-        ? createTrialRuntime(this.currentLevel)
-        : null;
+    this.trialRuntime = createTrialRuntime(this.currentLevel);
     this.elapsedSec = 0;
     this.transitionTimerSec = 0;
     this.pendingLevelResult = null;
@@ -843,13 +786,13 @@ export class MagusMatchGameApp implements GameApp {
     this.events.push({
       type: "levelStarted",
       levelNumber: this.run.levelNumber,
-      levelType: this.currentLevel?.type ?? "JOURNEY",
+      levelType: "TRIAL",
       seed: this.currentLevel?.seed ?? this.run.seed,
     });
   }
 
   private startTrialTutorialIfNeeded(): void {
-    if (!this.shouldStartTrialTutorial() || this.currentLevel?.type !== "TRIAL") {
+    if (!this.shouldStartTrialTutorial() || this.currentLevel == null) {
       return;
     }
 
@@ -870,18 +813,13 @@ export class MagusMatchGameApp implements GameApp {
     return (
       this.options.skipTutorial !== true &&
       !this.suppressTrialTutorialForNextLevelStart &&
-      this.options.debugLevelType == null &&
       this.options.debugStartLevel == null &&
-      this.run.levelNumber === 1 &&
-      this.currentLevel?.type === "TRIAL"
+      this.run.levelNumber === 1
     );
   }
 
   private startTrialActorEntranceIfNeeded(): void {
-    this.trialActorEntranceElapsedSec =
-      this.currentLevel?.type === "TRIAL"
-        ? 0
-        : TRIAL_ACTOR_ENTRANCE_TOTAL_DURATION_SEC;
+    this.trialActorEntranceElapsedSec = 0;
   }
 
   private updateTrialActorEntrance(dtSec: number): number {
@@ -904,7 +842,6 @@ export class MagusMatchGameApp implements GameApp {
 
   private isTrialActorEntranceActive(): boolean {
     return (
-      this.currentLevel?.type === "TRIAL" &&
       this.trialActorEntranceElapsedSec < TRIAL_ACTOR_ENTRANCE_TOTAL_DURATION_SEC
     );
   }
@@ -1087,14 +1024,7 @@ export class MagusMatchGameApp implements GameApp {
 
     this.resetMatchHintTimer();
 
-    if (this.currentLevel?.type === "TRIAL") {
-      this.handleTrialPowerUpTap(boardCell);
-      return;
-    }
-
-    if (this.currentLevel?.type === "JOURNEY") {
-      this.handleJourneyPowerUpTap(boardCell);
-    }
+    this.handleTrialPowerUpTap(boardCell);
   }
 
   private handleDragStart(x: number, y: number): void {
@@ -1172,13 +1102,11 @@ export class MagusMatchGameApp implements GameApp {
     this.phase = result === "win" ? "WIN" : "LOSE";
     this.pendingClearScore = result === "win" ? this.getLevelClearScore() : 0;
     this.trialMageExitElapsedSec =
-      result === "win" && this.currentLevel.type === "TRIAL"
-        ? 0
-        : TRIAL_MAGE_EXIT_DURATION_SEC;
+      result === "win" ? 0 : TRIAL_MAGE_EXIT_DURATION_SEC;
     this.events.push({
       type: "levelEnded",
       levelNumber: this.run.levelNumber,
-      levelType: this.currentLevel.type,
+      levelType: "TRIAL",
       result,
     });
   }
@@ -1243,7 +1171,7 @@ export class MagusMatchGameApp implements GameApp {
       return;
     }
 
-    if (this.currentLevel?.type === "TRIAL" && this.isTrialActorEntranceActive()) {
+    if (this.isTrialActorEntranceActive()) {
       return;
     }
 
@@ -1267,112 +1195,8 @@ export class MagusMatchGameApp implements GameApp {
 
     this.resetMatchHintTimer();
 
-    if (this.currentLevel?.type === "TRIAL" && this.trialRuntime != null) {
+    if (this.trialRuntime != null) {
       this.handleTrialSwap(from, to);
-      return;
-    }
-
-    if (this.currentLevel?.type !== "JOURNEY" || this.journeyRuntime == null) {
-      return;
-    }
-
-    const journeySwapPowerUpType = this.peekJourneySwapPowerUpType(from, to);
-    const journeySwapLightballTarget = this.peekLightballSwapTargetType(from, to);
-    const result = processJourneySwap(
-      this.board,
-      this.journeyRuntime,
-      this.currentLevel,
-      from,
-      to,
-      this.rng,
-    );
-
-    if (!result.valid) {
-      this.captureBoardAnimationTrace(result.animationTrace);
-      if (result.animationTrace?.kind === "invalidSwap") {
-        this.requestSound(AssetIds.sounds.boardMoveBack, {
-          category: "match",
-          volume: 0.46,
-        });
-      }
-      return;
-    }
-
-    const previousMageCell = this.journeyRuntime.mageCell;
-    this.requestSound(AssetIds.sounds.boardMove, {
-      category: "match",
-      volume: 0.48,
-    });
-    this.board = result.board;
-    this.journeyRuntime = result.runtime;
-    this.levelMatchCount += result.scoringStats.matchCount;
-    this.levelValidSwapCount += result.scoringStats.validSwapCount;
-    this.runMatchesCompleted += result.scoringStats.matchCount;
-    this.runPowerUpsUsed += result.powerUpsUsed;
-    this.captureBoardAnimationTrace(result.animationTrace);
-    this.emitPowerUpActivationSound(journeySwapPowerUpType);
-    this.triggerHeroActivationOverlay(journeySwapLightballTarget);
-    this.emitMatchAudioAndJuice(result.scoringStats, to);
-    this.emitJourneyAudioAndJuice(result, previousMageCell, to);
-    const scoreDelta = result.scoreDelta + scoreSwapStats(result.scoringStats);
-    if (scoreDelta > 0) {
-      this.run = { ...this.run, score: this.run.score + scoreDelta };
-      this.events.push({ type: "scoreChanged", score: this.run.score });
-    }
-
-    if (result.runtime.result === "won") {
-      this.beginLevelResult("win");
-    } else if (result.runtime.result === "lost") {
-      this.beginLevelResult("loss");
-    }
-  }
-
-  private handleJourneyPowerUpTap(origin: CellCoord): void {
-    if (
-      this.phase !== "IDLE" ||
-      this.currentLevel?.type !== "JOURNEY" ||
-      this.journeyRuntime == null
-    ) {
-      return;
-    }
-
-    const journeyTapPowerUpType = getCell(this.board, origin)?.tile?.type;
-    const journeyTapLightballTarget =
-      journeyTapPowerUpType === "LIGHTBALL" ? selectLightballTapTargetType(this.board, origin) : null;
-    const result = processJourneyPowerUpActivation(
-      this.board,
-      this.journeyRuntime,
-      this.currentLevel,
-      origin,
-      this.rng,
-    );
-
-    if (!result.valid) {
-      return;
-    }
-
-    const previousMageCell = this.journeyRuntime.mageCell;
-    this.board = result.board;
-    this.journeyRuntime = result.runtime;
-    this.levelMatchCount += result.scoringStats.matchCount;
-    this.levelValidSwapCount += result.scoringStats.validSwapCount;
-    this.runMatchesCompleted += result.scoringStats.matchCount;
-    this.runPowerUpsUsed += result.powerUpsUsed;
-    this.captureBoardAnimationTrace(result.animationTrace);
-    this.emitPowerUpActivationSound(journeyTapPowerUpType);
-    this.triggerHeroActivationOverlay(journeyTapLightballTarget);
-    this.emitMatchAudioAndJuice(result.scoringStats, origin);
-    this.emitJourneyAudioAndJuice(result, previousMageCell, origin);
-    const scoreDelta = result.scoreDelta + scoreSwapStats(result.scoringStats);
-    if (scoreDelta > 0) {
-      this.run = { ...this.run, score: this.run.score + scoreDelta };
-      this.events.push({ type: "scoreChanged", score: this.run.score });
-    }
-
-    if (result.runtime.result === "won") {
-      this.beginLevelResult("win");
-    } else if (result.runtime.result === "lost") {
-      this.beginLevelResult("loss");
     }
   }
 
@@ -1534,22 +1358,11 @@ export class MagusMatchGameApp implements GameApp {
   }
 
   private getLevelClearScore(): number {
-    if (this.currentLevel?.type === "JOURNEY" && this.journeyRuntime != null) {
-      return scoreJourneyClear(
-        this.run.difficulty,
-        this.journeyRuntime.movesRemaining,
-      );
-    }
-
-    if (this.currentLevel?.type === "TRIAL") {
-      return scoreTrialClear(
-        this.run.difficulty,
-        this.levelMatchCount,
-        this.elapsedSec,
-      );
-    }
-
-    return 0;
+    return scoreTrialClear(
+      this.run.difficulty,
+      this.levelMatchCount,
+      this.elapsedSec,
+    );
   }
 
   private captureBoardAnimationTrace(
@@ -1572,19 +1385,6 @@ export class MagusMatchGameApp implements GameApp {
 
   private hasLatestBoardAnimationFinished(): boolean {
     return this.animationClockSec >= this.latestBoardAnimationEndsAtSec;
-  }
-
-  private peekJourneySwapPowerUpType(from: CellCoord, to: CellCoord): TileType | null {
-    const fromType = getCell(this.board, from)?.tile?.type;
-    const toType = getCell(this.board, to)?.tile?.type;
-    if (isTapActivatablePowerUpTileType(fromType)) {
-      return fromType;
-    }
-    if (isTapActivatablePowerUpTileType(toType)) {
-      return toType;
-    }
-
-    return null;
   }
 
   private peekTrialSwapPowerUpType(from: CellCoord, to: CellCoord): TileType | null {
@@ -1691,33 +1491,6 @@ export class MagusMatchGameApp implements GameApp {
 
     this.addBoardCue("matchFlash", anchor, 0.3);
     this.triggerBoardShake(stats.matchCount + stats.powerUpsCreated);
-  }
-
-  private emitJourneyAudioAndJuice(
-    result: ReturnType<typeof processJourneySwap>,
-    previousMageCell: CellCoord,
-    anchor: CellCoord,
-  ): void {
-    for (const coord of result.clearedStandardCells.slice(0, 8)) {
-      this.addBoardCue("matchFlash", coord, 0.28);
-    }
-
-    if (result.convertedPathCells.length > 0) {
-      for (const coord of result.convertedPathCells.slice(0, 12)) {
-        this.addBoardCue("pathGlow", coord, 0.55);
-      }
-    }
-
-    if (!coordsEqual(previousMageCell, result.runtime.mageCell)) {
-      this.addBoardCue("pathGlow", result.runtime.mageCell, 0.42);
-    }
-
-    if (
-      result.convertedPathCells.length === 0 &&
-      result.clearedStandardCells.length === 0
-    ) {
-      this.addBoardCue("matchFlash", anchor, 0.22);
-    }
   }
 
   private emitTrialAudioAndJuice(
@@ -2268,32 +2041,7 @@ export class MagusMatchGameApp implements GameApp {
   }
 
   private getObjectiveText(): string {
-    if (this.currentLevel?.type === "TRIAL" && this.trialRuntime != null) {
-      return "";
-    }
-
-    if (this.currentLevel?.type !== "JOURNEY" || this.journeyRuntime == null) {
-      return "Journey";
-    }
-
-    if (this.journeyRuntime.result === "won") {
-      return "Goal reached";
-    }
-
-    if (this.journeyRuntime.result === "lost") {
-      return "Out of moves";
-    }
-
-    const hintVisible =
-      getVisibleJourneyHintCells(
-        this.currentLevel,
-        this.journeyRuntime,
-        this.elapsedSec,
-      ).length > 0;
-
-    return hintVisible
-      ? `Moves ${this.journeyRuntime.movesRemaining} - hinted path swap`
-      : `Moves ${this.journeyRuntime.movesRemaining}`;
+    return "";
   }
 
   private getHeroStageBackdropAssetId(): string {
@@ -2309,55 +2057,9 @@ export class MagusMatchGameApp implements GameApp {
       }),
     ];
 
-    if (this.currentLevel?.type === "TRIAL" && this.trialRuntime != null) {
+    if (this.trialRuntime != null) {
       return [...objects, ...this.getTrialHeroWorldObjects()];
     }
-
-    if (this.currentLevel?.type !== "JOURNEY" || this.journeyRuntime == null) {
-      return objects;
-    }
-
-    for (const coord of getAllPlayableCoords(this.board)) {
-      if (this.board[coord.row][coord.col].isPath) {
-        objects.push(
-          createWorldObject(
-            `journey-path-${coord.col}-${coord.row}`,
-            HeroStageTemplateIds.pathMarker,
-            {
-              position: heroPositionForCell(coord, -0.05),
-              scale: { x: 0.35, y: 0.05, z: 0.35 },
-              renderOrder: 1,
-              replication: "localCosmetic",
-            },
-          ),
-        );
-      }
-    }
-
-    objects.push(
-      createWorldObject("actor-mage", HeroStageTemplateIds.mage, {
-        position: translateY(
-          heroPositionForCell(this.journeyRuntime.mageCell, 0.35),
-          MAGE_WORLD_Y_OFFSET,
-        ),
-        scale: MAGE_WORLD_SCALE,
-        renderOrder: 4,
-        animationId: phaseToMageAnimation(this.phase),
-        animationPaused: actorAnimationsPausedForPhase(this.phase),
-      }),
-      createWorldObject("actor-prince-cage", HeroStageTemplateIds.princeCage, {
-        position: heroPositionForCell(this.currentLevel.journey.goalCell, 0.55),
-        scale: { x: 0.55, y: 0.75, z: 0.55 },
-        renderOrder: 3,
-        animationId: phaseToPrinceAnimation(this.phase),
-      }),
-      createWorldObject("prop-goal-flag", HeroStageTemplateIds.goalFlag, {
-        position: heroPositionForCell(this.currentLevel.journey.goalCell, 0.15),
-        scale: { x: 0.35, y: 0.55, z: 0.35 },
-        renderOrder: 2,
-        replication: "localCosmetic",
-      }),
-    );
 
     return objects;
   }
@@ -2546,8 +2248,6 @@ function assetIdForTileType(type: TileType): string {
       return AssetIds.tiles.lightning;
     case "EARTH":
       return AssetIds.tiles.earth;
-    case "LAND":
-      return AssetIds.tiles.land;
     case "ROCKET_H":
       return AssetIds.powerUps.rocketH;
     case "ROCKET_V":
@@ -2623,18 +2323,6 @@ function phaseToMageAnimation(phase: GamePhase): string {
   }
 
   return "idle";
-}
-
-function phaseToPrinceAnimation(phase: GamePhase): string {
-  if (phase === "WIN") {
-    return "yank";
-  }
-
-  if (phase === "LOSE") {
-    return "cower";
-  }
-
-  return "cower";
 }
 
 function actorAnimationsPausedForPhase(phase: GamePhase): boolean | undefined {
@@ -3076,17 +2764,4 @@ function easeOutCubic(value: number): number {
 function easeInCubic(value: number): number {
   const clamped = clamp01(value);
   return clamped * clamped * clamped;
-}
-
-function heroPositionForCell(
-  coord: CellCoord,
-  z: number,
-): TransformState["position"] {
-  const normalizedX = coord.col / (BOARD_SIZE - 1);
-  const normalizedY = coord.row / (BOARD_SIZE - 1);
-  return {
-    x: -4.6 + normalizedX * 9.2,
-    y: 1.6 - normalizedY * 2.7,
-    z,
-  };
 }

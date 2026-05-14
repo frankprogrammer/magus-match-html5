@@ -1495,7 +1495,7 @@ describe('TrialRules', () => {
   it('ignores Trial Lightball taps without an adjacent standard color', () => {
     const board = createBoardFromTileTypes([
       [null, 'TNT', null],
-      ['LAND', 'LIGHTBALL', 'ROCKET_H'],
+      ['ROCKET_V', 'LIGHTBALL', 'ROCKET_H'],
       [null, 'ROCKET_V', null],
     ]);
     const level = testTrialLevel([monster({ monsterId: 'a', maxHp: 50 })], board);

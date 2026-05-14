@@ -137,7 +137,7 @@ export const HUD_TRIAL_ENEMY_COUNT_VALUE_WIDTH =
   LOGICAL_WIDTH - HUD_TRIAL_FILLBAR_RIGHT_MARGIN - HUD_TRIAL_ENEMY_COUNT_VALUE_X;
 export const HUD_TRIAL_ENEMY_COUNT_FONT_SIZE = HUD_SCORE_VALUE_FONT_SIZE;
 export const HUD_TRIAL_ENEMY_COUNT_MIN_FONT_SIZE = HUD_SCORE_VALUE_MIN_FONT_SIZE;
-/** Journey / non-trial objective column (legacy layout). */
+/** Reserved right-side objective column. */
 export function hudObjectiveTextLayoutLegacy(): { x: number; width: number } {
   const width = Math.min(300, LOGICAL_WIDTH - 2 * HUD_CONTENT_PADDING_X);
   const x = LOGICAL_WIDTH - HUD_CONTENT_PADDING_X - width;

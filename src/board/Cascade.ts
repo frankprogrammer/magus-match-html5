@@ -179,7 +179,6 @@ export function settleBoardWithVoidAwareRefill(
         ? { col: sourceColumn, row: nearestPlayableSourceRow(board, sourceColumn, coord.row) }
         : { col: sourceColumn, row: -1 - sourceIndex },
       to: coord,
-      isPath: board[coord.row][coord.col].isPath,
       movementKind: sourceColumn === coord.col ? 'fall' : 'slide',
     });
   }

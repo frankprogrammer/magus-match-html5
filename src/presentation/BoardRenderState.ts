@@ -7,7 +7,6 @@ export interface BoardCellVisualState {
   coord: CellCoord;
   assetId: string;
   tileType: TileType;
-  isPath: boolean;
   alpha: number;
   renderX?: number;
   renderY?: number;
@@ -102,7 +101,7 @@ export interface BoardRocketCloudSpriteVisualState {
   zIndex: number;
 }
 
-export type BoardVisualCueKind = 'matchFlash' | 'pathGlow' | 'powerPulse' | 'damagePopup';
+export type BoardVisualCueKind = 'matchFlash' | 'powerPulse' | 'damagePopup';
 
 export interface BoardVisualCueState {
   kind: BoardVisualCueKind;
@@ -224,10 +223,6 @@ export interface BoardRenderState {
   tntExplosionSprites?: readonly BoardTntExplosionSpriteVisualState[];
   rocketCloudSprites?: readonly BoardRocketCloudSpriteVisualState[];
   emptyCells?: readonly BoardEmptyCellVisualState[];
-  pathCells: readonly CellCoord[];
-  mageCell: CellCoord | null;
-  goalCell: CellCoord | null;
-  hintedCells: readonly CellCoord[];
   matchHint?: BoardMatchHintVisualState | null;
   tutorialLock?: BoardTutorialLockVisualState | null;
   selectedCell: CellCoord | null;

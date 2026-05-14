@@ -42,10 +42,7 @@ describe('MHS portability boundaries', () => {
   });
 
   it('can advance the app and read presentation state without DOM objects', () => {
-    const app = new MagusMatchGameApp(3129123386, {
-      debugLevelType: 'TRIAL',
-      skipTutorial: true,
-    });
+    const app = new MagusMatchGameApp(3129123386, { skipTutorial: true });
 
     app.update(1 / 60, []);
 
@@ -255,14 +252,9 @@ function oneTileBoardState(): BoardRenderState {
         coord: { col: 0, row: 0 },
         assetId: AssetIds.tiles.fire,
         tileType: 'FIRE',
-        isPath: false,
         alpha: 1,
       },
     ],
-    pathCells: [],
-    mageCell: null,
-    goalCell: null,
-    hintedCells: [],
     selectedCell: null,
     queuedSwap: null,
     shakePixels: 0,

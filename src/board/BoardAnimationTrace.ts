@@ -8,7 +8,6 @@ export interface BoardAnimationSnapshotCell {
   tileId: string;
   tileType: TileType;
   coord: CellCoord;
-  isPath: boolean;
 }
 
 export interface BoardAnimationSnapshot {
@@ -24,7 +23,6 @@ export interface BoardAnimationMovement {
   tileType: TileType;
   from: CellCoord;
   to: CellCoord;
-  isPath: boolean;
   movementKind?: 'fall' | 'slide';
 }
 
@@ -33,7 +31,6 @@ export interface BoardAnimationRefill {
   tileType: TileType;
   from: CellCoord;
   to: CellCoord;
-  isPath: boolean;
   movementKind?: 'fall' | 'slide';
 }
 
@@ -82,7 +79,6 @@ export function snapshotBoard(board: Board): BoardAnimationSnapshot {
           tileId: tile.id,
           tileType: tile.type,
           coord,
-          isPath: cell.isPath,
         };
       })
       .filter((cell): cell is BoardAnimationSnapshotCell => cell != null),
@@ -116,7 +112,6 @@ export function createLevelIntroBoardAnimationTrace(board: Board, revisionId: nu
           tileType: cell.tileType,
           from: { col: cell.coord.col, row: cell.coord.row - BOARD_SIZE },
           to: cell.coord,
-          isPath: cell.isPath,
         }))
         .sort((first, second) => first.to.col - second.to.col || second.to.row - first.to.row);
 
@@ -202,7 +197,6 @@ export function buildBoardAnimationCascadeStep(
         tileType: toCell.tileType,
         from: fromCell.coord,
         to: toCell.coord,
-        isPath: toCell.isPath,
         movementKind: fromCell.coord.col === toCell.coord.col ? 'fall' : 'slide',
       };
       return movement;
@@ -261,7 +255,6 @@ function buildStackedRefillTiles(
         ...override,
         tileType: cell.tileType,
         to: cell.coord,
-        isPath: cell.isPath,
       };
     }
 
@@ -272,7 +265,6 @@ function buildStackedRefillTiles(
       tileType: cell.tileType,
       from: { col: cell.coord.col, row: -1 - columnIndex },
       to: cell.coord,
-      isPath: cell.isPath,
     };
   });
 }
@@ -293,7 +285,6 @@ function buildVoidAwareIntroRefillTiles(
           tileType: cell.tileType,
           from: { col: cell.coord.col, row: -1 - columnIndex },
           to: cell.coord,
-          isPath: cell.isPath,
           movementKind: 'fall' as const,
         };
       }
@@ -304,7 +295,6 @@ function buildVoidAwareIntroRefillTiles(
         tileType: cell.tileType,
         from: { col: sourceCol, row: nearestPlayableSourceRow(board, sourceCol, cell.coord.row) },
         to: cell.coord,
-        isPath: cell.isPath,
         movementKind: 'slide' as const,
       };
     });

@@ -4,7 +4,6 @@ import {
   advanceRunAfterWin,
   createInitialRunState,
   deriveLevelSeed,
-  selectLevelTypeForRun,
 } from '../src/run/RunProgression';
 
 describe('run progression', () => {
@@ -19,16 +18,7 @@ describe('run progression', () => {
     });
   });
 
-  it('selects Trial by default for every run level', () => {
-    expect(selectLevelTypeForRun(42, 1)).toBe('TRIAL');
-    expect(selectLevelTypeForRun(42, 2)).toBe('TRIAL');
-    expect(selectLevelTypeForRun(99, 12)).toBe('TRIAL');
-  });
-
-  it('respects debug level type overrides and derives stable level seeds', () => {
-    expect(selectLevelTypeForRun(42, 1, 'TRIAL')).toBe('TRIAL');
-    expect(selectLevelTypeForRun(42, 1, 'JOURNEY')).toBe('JOURNEY');
-    expect(selectLevelTypeForRun(42, 8, 'JOURNEY')).toBe('JOURNEY');
+  it('derives stable level seeds', () => {
     expect(deriveLevelSeed(42, 5)).toBe(deriveLevelSeed(42, 5));
     expect(deriveLevelSeed(42, 5)).not.toBe(deriveLevelSeed(42, 6));
   });

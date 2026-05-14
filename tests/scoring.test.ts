@@ -1,17 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   createSwapScoringStats,
-  scoreJourneyClear,
   scoreSwapStats,
   scoreTrialClear,
 } from '../src/run/Scoring';
 
 describe('Phase 7 scoring', () => {
-  it('scores Journey clears with difficulty multiplier and remaining moves', () => {
-    expect(scoreJourneyClear(1, 3)).toBe(1250);
-    expect(scoreJourneyClear(5, 0)).toBe(1500);
-  });
-
   it('scores Trial clears with match pace above one match per second', () => {
     expect(scoreTrialClear(1, 10, 10)).toBe(1100);
     expect(scoreTrialClear(1, 20, 10)).toBe(1200);

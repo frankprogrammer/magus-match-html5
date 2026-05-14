@@ -7,7 +7,6 @@ import { findStandardMatchHints } from '../src/board/BoardHints';
 import { findValidMoves, validateSwap } from '../src/board/BoardRules';
 import {
   GAME_OVER_TRY_AGAIN_BUTTON_RECT,
-  BOARD_RECT,
   HERO_STAGE_HEIGHT,
   HUD_BGM_TOGGLE_RECT,
   HUD_MUTE_TOGGLE_RECT,
@@ -66,7 +65,7 @@ describe('MagusMatchGameApp', () => {
   });
 
   it('can start one-life double-speed sessions from an option', () => {
-    const app = new MagusMatchGameApp(111, { debugLevelType: 'TRIAL', oneLifeDoubleSpeed: true });
+    const app = new MagusMatchGameApp(111, { skipTutorial: true, oneLifeDoubleSpeed: true });
     expect(app.getRunStateForDebug().lives).toBe(1);
 
     app.reset(222);
@@ -74,8 +73,8 @@ describe('MagusMatchGameApp', () => {
   });
 
   it('doubles Trial monster walk movement for one-life double-speed sessions only', () => {
-    const normal = new MagusMatchGameApp(777, { debugLevelType: 'TRIAL' });
-    const fast = new MagusMatchGameApp(777, { debugLevelType: 'TRIAL', oneLifeDoubleSpeed: true });
+    const normal = new MagusMatchGameApp(777, { skipTutorial: true });
+    const fast = new MagusMatchGameApp(777, { skipTutorial: true, oneLifeDoubleSpeed: true });
     const normalStart = normal.getTrialRuntimeForDebug()?.monsters[0];
     const fastStart = fast.getTrialRuntimeForDebug()?.monsters[0];
     if (normalStart == null || fastStart == null) {
@@ -128,11 +127,10 @@ describe('MagusMatchGameApp', () => {
     expect(app.getCurrentLevelForDebug()?.type).toBe('TRIAL');
     expect(app.getTrialRuntimeForDebug()?.monsters.length).toBe(3);
     expect(app.getTrialTutorialStateForDebug()).toMatchObject({ phase: 'active' });
-    expect(app.getJourneyRuntimeForDebug()).toBeNull();
   });
 
   it('reports Trial enemies left including unspawned monsters and excluding dead monsters', () => {
-    const app = new MagusMatchGameApp(555, { debugLevelType: 'TRIAL' });
+    const app = new MagusMatchGameApp(555, { skipTutorial: true });
     const runtime = app.getTrialRuntimeForDebug();
     if (runtime == null || runtime.monsters[0] == null) {
       throw new Error('Expected Trial runtime.');
@@ -166,9 +164,6 @@ describe('MagusMatchGameApp', () => {
       defeatedMonsterIds: [],
     });
     expect(app.getHudState().trialEnemyCount).toEqual({ defeated: 2, total: 2 });
-
-    const journeyApp = new MagusMatchGameApp(555, { debugLevelType: 'JOURNEY' });
-    expect(journeyApp.getHudState().trialEnemyCount).toBeNull();
   });
 
   it('starts a normal level 1 Trial session with the forced lightning tutorial immediately', () => {
@@ -348,8 +343,8 @@ describe('MagusMatchGameApp', () => {
     expect(app.getTrialTutorialStateForDebug()?.phase).toBe('resolving');
   });
 
-  it('skips the session tutorial for explicit debug options', () => {
-    const forcedTrial = new MagusMatchGameApp(555, { debugLevelType: 'TRIAL' });
+  it('skips the session tutorial for explicit skip options', () => {
+    const forcedTrial = new MagusMatchGameApp(555, { skipTutorial: true });
     const debugSeedSession = new MagusMatchGameApp(555, { skipTutorial: true });
 
     expect(forcedTrial.getTrialTutorialStateForDebug()).toBeNull();
@@ -372,18 +367,8 @@ describe('MagusMatchGameApp', () => {
     expect(debugSeedSession.getBoardRenderState().tutorialPresentation?.floatingMatch).toBeNull();
   });
 
-  it('can still start level 1 as Journey through an override', () => {
-    const app = new MagusMatchGameApp(555, { debugLevelType: 'JOURNEY' });
-
-    expect(app.getHudState().phase).toBe('IDLE');
-    expect(app.getCurrentLevelForDebug()?.type).toBe('JOURNEY');
-    expect(app.getJourneyRuntimeForDebug()?.movesRemaining).toBe(20);
-    expect(app.getBoardRenderState().mageCell).toEqual({ col: 0, row: 0 });
-    expect(app.getBoardRenderState().goalCell).toEqual({ col: 7, row: 7 });
-  });
-
   it('can start a debug Trial level and apply Trial swap damage', () => {
-    const app = new MagusMatchGameApp(666, { debugLevelType: 'TRIAL' });
+    const app = new MagusMatchGameApp(666, { skipTutorial: true });
     const firstMove = findValidMoves(app.getBoardForDebug())[0];
 
     expect(app.getCurrentLevelForDebug()?.type).toBe('TRIAL');
@@ -401,7 +386,7 @@ describe('MagusMatchGameApp', () => {
   });
 
   it('shows the matching hero activation overlay for swapped Trial Lightballs', () => {
-    const app = new MagusMatchGameApp(666, { debugLevelType: 'TRIAL' });
+    const app = new MagusMatchGameApp(666, { skipTutorial: true });
     finishTrialEntrance(app);
     setBoardForDebug(app, createBoardFromTileTypes([['LIGHTBALL', 'FIRE']]));
 
@@ -433,7 +418,7 @@ describe('MagusMatchGameApp', () => {
   });
 
   it('shows a tweened level-cleared image overlay during win transitions', () => {
-    const app = new MagusMatchGameApp(778, { debugLevelType: 'TRIAL' });
+    const app = new MagusMatchGameApp(778, { skipTutorial: true });
     finishTrialEntrance(app);
     beginLevelResultForDebug(app, 'win');
 
@@ -477,7 +462,7 @@ describe('MagusMatchGameApp', () => {
     expect(transitionImageOverlayAssetIdForPhase('LOSE', 3, 1)).toBe(AssetIds.ui.gameOver);
     expect(transitionImageOverlayAssetIdForPhase('IDLE', 3, 3)).toBeNull();
 
-    const app = new MagusMatchGameApp(778, { debugLevelType: 'TRIAL', debugStartLevel: 3 });
+    const app = new MagusMatchGameApp(778, { skipTutorial: true, debugStartLevel: 3 });
     finishTrialEntrance(app);
     beginLevelResultForDebug(app, 'win');
 
@@ -492,7 +477,7 @@ describe('MagusMatchGameApp', () => {
   });
 
   it('shows a tweened life-lost image overlay during non-final loss transitions', () => {
-    const app = new MagusMatchGameApp(778, { debugLevelType: 'TRIAL' });
+    const app = new MagusMatchGameApp(778, { skipTutorial: true });
     finishTrialEntrance(app);
     beginLevelResultForDebug(app, 'loss');
 
@@ -523,7 +508,7 @@ describe('MagusMatchGameApp', () => {
   });
 
   it('shows a game-over transition image on the final loss before entering Game Over', () => {
-    const app = new MagusMatchGameApp(778, { debugLevelType: 'TRIAL' });
+    const app = new MagusMatchGameApp(778, { skipTutorial: true });
     finishTrialEntrance(app);
     beginLevelResultForDebug(app, 'loss');
     app.update(LEVEL_CLEAR_OVERLAY_TOTAL_SEC, []);
@@ -553,29 +538,8 @@ describe('MagusMatchGameApp', () => {
     expect(app.getScreenState().screen).toBe('gameOver');
   });
 
-  it('shows the selected target overlay for tapped Journey Lightballs', () => {
-    const app = new MagusMatchGameApp(777, { debugLevelType: 'JOURNEY' });
-    setBoardForDebug(
-      app,
-      createBoardFromTileTypes([
-        [null, 'EARTH', null],
-        ['FIRE', 'LIGHTBALL', 'EARTH'],
-        [null, 'ICE', null],
-        [null, 'EARTH', null],
-      ]),
-    );
-
-    tapBoardCell(app, { col: 1, row: 1 });
-
-    expect(app.getBoardRenderState().heroActivationOverlay).toMatchObject({
-      assetId: AssetIds.ui.activateEarth,
-      width: 800,
-      height: 450,
-    });
-  });
-
   it('does not show a hero activation overlay for non-Lightball power-ups', () => {
-    const app = new MagusMatchGameApp(666, { debugLevelType: 'TRIAL' });
+    const app = new MagusMatchGameApp(666, { skipTutorial: true });
     finishTrialEntrance(app);
     setBoardForDebug(app, createBoardFromTileTypes([['TNT', 'EARTH']]));
 
@@ -585,7 +549,7 @@ describe('MagusMatchGameApp', () => {
   });
 
   it('shows a standard match hint after the idle delay', () => {
-    const app = new MagusMatchGameApp(4088670725, { debugLevelType: 'TRIAL', debugStartLevel: 4 });
+    const app = new MagusMatchGameApp(4088670725, { skipTutorial: true, debugStartLevel: 4 });
 
     expect(app.getBoardRenderState().matchHint).toBeNull();
 
@@ -603,7 +567,7 @@ describe('MagusMatchGameApp', () => {
   });
 
   it('pauses and cycles match hints after each active hint window', () => {
-    const app = new MagusMatchGameApp(4088670725, { debugLevelType: 'TRIAL', debugStartLevel: 4 });
+    const app = new MagusMatchGameApp(4088670725, { skipTutorial: true, debugStartLevel: 4 });
     const hints = findStandardMatchHints(app.getBoardForDebug());
 
     app.update(MATCH_HINT_IDLE_DELAY_SEC + 0.2, []);
@@ -617,7 +581,7 @@ describe('MagusMatchGameApp', () => {
   });
 
   it('resets match hints after player board actions', () => {
-    const app = new MagusMatchGameApp(4088670725, { debugLevelType: 'TRIAL', debugStartLevel: 4 });
+    const app = new MagusMatchGameApp(4088670725, { skipTutorial: true, debugStartLevel: 4 });
     app.update(MATCH_HINT_IDLE_DELAY_SEC, []);
     expect(app.getBoardRenderState().matchHint).not.toBeNull();
 
@@ -773,7 +737,7 @@ describe('MagusMatchGameApp', () => {
   });
 
   it('continues Trial projectile visual timers during win transitions', () => {
-    const app = new MagusMatchGameApp(667, { debugLevelType: 'TRIAL' });
+    const app = new MagusMatchGameApp(667, { skipTutorial: true });
     const runtime = app.getTrialRuntimeForDebug();
     const level = app.getCurrentLevelForDebug();
     if (runtime == null || level?.type !== 'TRIAL') {
@@ -810,7 +774,7 @@ describe('MagusMatchGameApp', () => {
   });
 
   it('applies delayed Trial burn tick score and emits hit/defeat sounds during update', () => {
-    const app = new MagusMatchGameApp(667, { debugLevelType: 'TRIAL' });
+    const app = new MagusMatchGameApp(667, { skipTutorial: true });
     const runtime = app.getTrialRuntimeForDebug();
     const level = app.getCurrentLevelForDebug();
     if (runtime == null || level?.type !== 'TRIAL') {
@@ -857,7 +821,7 @@ describe('MagusMatchGameApp', () => {
   });
 
   it('delays Trial win transition until the final defeated monster disappears', () => {
-    const app = new MagusMatchGameApp(666, { debugLevelType: 'TRIAL' });
+    const app = new MagusMatchGameApp(666, { skipTutorial: true });
     const firstMove = findValidMoves(app.getBoardForDebug())[0];
 
     const runtime = app.getTrialRuntimeForDebug();
@@ -909,7 +873,7 @@ describe('MagusMatchGameApp', () => {
   });
 
   it('can start directly at a debug run level', () => {
-    const app = new MagusMatchGameApp(4088670725, { debugLevelType: 'TRIAL', debugStartLevel: 2 });
+    const app = new MagusMatchGameApp(4088670725, { skipTutorial: true, debugStartLevel: 2 });
 
     expect(app.getRunStateForDebug()).toMatchObject({
       levelNumber: 2,
@@ -920,26 +884,8 @@ describe('MagusMatchGameApp', () => {
     expect(app.getBoardRenderState().emptyCells?.length).toBeGreaterThan(0);
   });
 
-  it('emits merge match sound on successful Journey swaps', () => {
-    const app = new MagusMatchGameApp(555, { debugLevelType: 'JOURNEY' });
-    const level = app.getCurrentLevelForDebug();
-    if (level?.type !== 'JOURNEY') {
-      throw new Error('Expected generated Journey level.');
-    }
-
-    app.drainEvents();
-    app.update(0, [{ type: 'swap', from: level.journey.firstHint.from, to: level.journey.firstHint.to }]);
-
-    const sounds = soundEvents(app.drainEvents()).map((event) => event.soundId);
-    expect(sounds).toEqual([
-      AssetIds.sounds.boardMove,
-      AssetIds.sounds.mergeMatch,
-      AssetIds.sounds.matchCoin,
-    ]);
-  });
-
   it('emits Trial spell and monster audio through events', () => {
-    const app = new MagusMatchGameApp(666, { debugLevelType: 'TRIAL' });
+    const app = new MagusMatchGameApp(666, { skipTutorial: true });
     const firstMove = findValidMoves(app.getBoardForDebug())[0];
 
     finishTrialEntrance(app);
@@ -963,14 +909,11 @@ describe('MagusMatchGameApp', () => {
   });
 
   it('keeps board shake and visual cue render state within comfort limits', () => {
-    const app = new MagusMatchGameApp(555, { debugLevelType: 'JOURNEY' });
-    const level = app.getCurrentLevelForDebug();
-    if (level?.type !== 'JOURNEY') {
-      throw new Error('Expected generated Journey level.');
-    }
-
+    const app = new MagusMatchGameApp(555, { skipTutorial: true });
+    finishTrialEntrance(app);
+    const move = findValidMoves(app.getBoardForDebug())[0];
     app.drainEvents();
-    app.update(0, [{ type: 'swap', from: level.journey.firstHint.from, to: level.journey.firstHint.to }]);
+    app.update(0, [{ type: 'swap', from: move.from, to: move.to }]);
     const boardState = app.getBoardRenderState();
 
     expect(boardState.shakePixels).toBeGreaterThanOrEqual(CAMERA_SHAKE_MIN);
@@ -980,14 +923,11 @@ describe('MagusMatchGameApp', () => {
   });
 
   it('accepts another valid swap while a board animation is active', () => {
-    const app = new MagusMatchGameApp(555, { debugLevelType: 'JOURNEY' });
-    const level = app.getCurrentLevelForDebug();
-    if (level?.type !== 'JOURNEY') {
-      throw new Error('Expected generated Journey level.');
-    }
-
+    const app = new MagusMatchGameApp(555, { skipTutorial: true });
+    finishTrialEntrance(app);
+    const firstMove = findValidMoves(app.getBoardForDebug())[0];
     app.drainEvents();
-    app.update(0, [{ type: 'swap', from: level.journey.firstHint.from, to: level.journey.firstHint.to }]);
+    app.update(0, [{ type: 'swap', from: firstMove.from, to: firstMove.to }]);
     const firstStats = app.getLevelStatsForDebug();
     const firstTrace = app.getBoardRenderState().animationTrace;
     const presenter = new BoardAnimationPresenter();
@@ -1004,7 +944,7 @@ describe('MagusMatchGameApp', () => {
   });
 
   it('animates no-match Trial swaps without changing gameplay state', () => {
-    const app = new MagusMatchGameApp(4088670725, { debugLevelType: 'TRIAL', debugStartLevel: 4 });
+    const app = new MagusMatchGameApp(4088670725, { skipTutorial: true, debugStartLevel: 4 });
 
     finishTrialEntrance(app);
     app.drainEvents();
@@ -1028,7 +968,7 @@ describe('MagusMatchGameApp', () => {
   });
 
   it('animates the exact level 4 top-row invalid swap regression without gameplay changes', () => {
-    const app = new MagusMatchGameApp(4088670725, { debugLevelType: 'TRIAL', debugStartLevel: 4 });
+    const app = new MagusMatchGameApp(4088670725, { skipTutorial: true, debugStartLevel: 4 });
 
     finishTrialEntrance(app);
     app.drainEvents();
@@ -1049,7 +989,7 @@ describe('MagusMatchGameApp', () => {
   });
 
   it('accepts a valid Trial swap during an active invalid-swap bounce-back', () => {
-    const app = new MagusMatchGameApp(4088670725, { debugLevelType: 'TRIAL', debugStartLevel: 4 });
+    const app = new MagusMatchGameApp(4088670725, { skipTutorial: true, debugStartLevel: 4 });
 
     finishTrialEntrance(app);
     app.drainEvents();
@@ -1069,7 +1009,7 @@ describe('MagusMatchGameApp', () => {
   });
 
   it('keeps Trial tile IDs unique across the reported two-swap cascade regression', () => {
-    const app = new MagusMatchGameApp(1643426079, { debugLevelType: 'TRIAL' });
+    const app = new MagusMatchGameApp(1643426079, { skipTutorial: true });
     finishTrialEntrance(app);
     app.drainEvents();
 
@@ -1077,23 +1017,6 @@ describe('MagusMatchGameApp', () => {
     expectBoardTileIdsUnique(app.getBoardForDebug());
 
     app.update(0, [{ type: 'swap', from: { col: 3, row: 3 }, to: { col: 4, row: 3 } }]);
-    expectBoardTileIdsUnique(app.getBoardForDebug());
-    expectTraceTileIdsUnique(app.getBoardRenderState().animationTrace);
-  });
-
-  it('keeps Journey tile IDs unique across consecutive refills', () => {
-    const app = new MagusMatchGameApp(555, { debugLevelType: 'JOURNEY' });
-    const level = app.getCurrentLevelForDebug();
-    if (level?.type !== 'JOURNEY') {
-      throw new Error('Expected generated Journey level.');
-    }
-
-    app.drainEvents();
-    app.update(0, [{ type: 'swap', from: level.journey.firstHint.from, to: level.journey.firstHint.to }]);
-    expectBoardTileIdsUnique(app.getBoardForDebug());
-
-    const nextMove = findValidMoves(app.getBoardForDebug())[0];
-    app.update(0, [{ type: 'swap', from: nextMove.from, to: nextMove.to }]);
     expectBoardTileIdsUnique(app.getBoardForDebug());
     expectTraceTileIdsUnique(app.getBoardRenderState().animationTrace);
   });
@@ -1117,7 +1040,7 @@ describe('MagusMatchGameApp', () => {
   });
 
   it('waits for active board collapse before progressing after a win', () => {
-    const app = new MagusMatchGameApp(778, { debugLevelType: 'TRIAL' });
+    const app = new MagusMatchGameApp(778, { skipTutorial: true });
     finishTrialEntrance(app);
     app.drainEvents();
 
@@ -1137,7 +1060,7 @@ describe('MagusMatchGameApp', () => {
   });
 
   it('waits for the Trial mage exit tween before loading the next level after a win', () => {
-    const app = new MagusMatchGameApp(778, { debugLevelType: 'TRIAL' });
+    const app = new MagusMatchGameApp(778, { skipTutorial: true });
     finishTrialEntrance(app);
     app.drainEvents();
     const startingLevel = app.getRunStateForDebug().levelNumber;
@@ -1161,7 +1084,7 @@ describe('MagusMatchGameApp', () => {
   });
 
   it('keeps wins on screen for the level-cleared image hold window', () => {
-    const app = new MagusMatchGameApp(778, { debugLevelType: 'TRIAL' });
+    const app = new MagusMatchGameApp(778, { skipTutorial: true });
     finishTrialEntrance(app);
     app.update(LEVEL_TRANSITION_HOLD_SEC, []);
     app.drainEvents();
@@ -1179,19 +1102,8 @@ describe('MagusMatchGameApp', () => {
     expect(app.getRunStateForDebug().levelNumber).toBe(startingLevel + 1);
   });
 
-  it('does not require the Trial mage exit tween for Journey wins or Trial losses', () => {
-    const journeyApp = new MagusMatchGameApp(778, { debugLevelType: 'JOURNEY' });
-    const journeyStartLevel = journeyApp.getRunStateForDebug().levelNumber;
-    journeyApp.drainEvents();
-    beginLevelResultForDebug(journeyApp, 'win');
-    journeyApp.update(LEVEL_TRANSITION_HOLD_SEC, []);
-    expect(journeyApp.getHudState().phase).toBe('WIN');
-    expect(journeyApp.getRunStateForDebug().levelNumber).toBe(journeyStartLevel);
-    journeyApp.update(LEVEL_CLEAR_OVERLAY_TOTAL_SEC - LEVEL_TRANSITION_HOLD_SEC, []);
-    expect(journeyApp.getHudState().phase).toBe('IDLE');
-    expect(journeyApp.getRunStateForDebug().levelNumber).toBe(journeyStartLevel + 1);
-
-    const trialApp = new MagusMatchGameApp(778, { debugLevelType: 'TRIAL' });
+  it('does not require the Trial mage exit tween for Trial losses', () => {
+    const trialApp = new MagusMatchGameApp(778, { skipTutorial: true });
     finishTrialEntrance(trialApp);
     const trialStartLevel = trialApp.getRunStateForDebug().levelNumber;
     trialApp.drainEvents();
@@ -1269,7 +1181,7 @@ describe('MagusMatchGameApp', () => {
   });
 
   it('continues after one or two losses and enters Game Over after the third failed level', () => {
-    const app = new MagusMatchGameApp(888, { debugLevelType: 'TRIAL' });
+    const app = new MagusMatchGameApp(888, { skipTutorial: true });
     app.drainEvents();
     const startingLevel = app.getRunStateForDebug().levelNumber;
 
@@ -1299,7 +1211,7 @@ describe('MagusMatchGameApp', () => {
   });
 
   it('keeps the debug seed when Try Again is tapped after Game Over', () => {
-    const app = new MagusMatchGameApp(999, { debugLevelType: 'TRIAL' });
+    const app = new MagusMatchGameApp(999, { skipTutorial: true });
     app.update(100, []);
     app.update(100, []);
     app.update(100, []);
@@ -1347,7 +1259,7 @@ describe('MagusMatchGameApp', () => {
   });
 
   it('builds Game Over screen state with leaderboard data and controls', () => {
-    const app = new MagusMatchGameApp(1234, { debugLevelType: 'TRIAL' });
+    const app = new MagusMatchGameApp(1234, { skipTutorial: true });
     app.update(100, []);
     app.update(100, []);
     app.update(100, []);
@@ -1365,7 +1277,7 @@ describe('MagusMatchGameApp', () => {
   });
 
   it('animates Game Over run metrics sequentially before the final score', () => {
-    const app = new MagusMatchGameApp(1234, { debugLevelType: 'TRIAL' });
+    const app = new MagusMatchGameApp(1234, { skipTutorial: true });
     setRunForDebug(app, {
       ...app.getRunStateForDebug(),
       lives: 1,
@@ -1444,16 +1356,6 @@ function tileCenter(tile: { rect: { x: number; y: number; width: number; height:
 
 function tap(app: MagusMatchGameApp, rect: { x: number; y: number; width: number; height: number }): void {
   app.update(0, [{ type: 'tap', x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }]);
-}
-
-function tapBoardCell(app: MagusMatchGameApp, coord: CellCoord): void {
-  app.update(0, [
-    {
-      type: 'tap',
-      x: BOARD_RECT.x + coord.col * BOARD_RECT.cellSize + BOARD_RECT.cellSize / 2,
-      y: BOARD_RECT.y + coord.row * BOARD_RECT.cellSize + BOARD_RECT.cellSize / 2,
-    },
-  ]);
 }
 
 function finishTrialEntrance(app: MagusMatchGameApp): void {
@@ -1570,7 +1472,6 @@ function longCollapseTrace(revisionId: number): BoardAnimationTrace {
     tileId: 'clear',
     tileType: 'FIRE' as const,
     coord: { col: 0, row: 0 },
-    isPath: false,
     clearDelayMs: 4200,
   };
 

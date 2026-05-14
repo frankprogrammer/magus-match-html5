@@ -13,12 +13,6 @@ describe("AssetManifest", () => {
       ...Object.values(AssetIds.materials),
       ...Object.values(AssetIds.spritesheets),
       ...Object.values(AssetIds.sounds),
-      AssetIds.props.princeCage,
-      AssetIds.props.goalFlag,
-      AssetIds.props.abductorGlove,
-      AssetIds.props.abductorHook,
-      AssetIds.props.abductorHand,
-      AssetIds.props.abductorRope,
     ];
 
     for (const id of requiredIds) {

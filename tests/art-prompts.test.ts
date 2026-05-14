@@ -19,13 +19,10 @@ describe('ArtPrompts', () => {
   it('defines all Phase 8 prompt batches', () => {
     const requiredIds: ArtPromptId[] = [
       'prompt.tiles.standard',
-      'prompt.tiles.journey',
       'prompt.powerups.standard',
       'prompt.backdrops.hero',
       'prompt.rig.mage',
-      'prompt.rig.prince',
       'prompt.rig.kobolds',
-      'prompt.props.abductor',
     ];
 
     expect(ArtPrompts.map((prompt) => prompt.id).sort()).toEqual([...requiredIds].sort());

@@ -637,7 +637,6 @@ describe('BoardAnimationPresenter', () => {
               tileType: 'FIRE' as const,
               from: { col: 0, row: -8 },
               to: { col: 0, row: 0 },
-              isPath: false,
             },
           ],
         },
@@ -694,7 +693,6 @@ function slideMovementTrace(): BoardAnimationTrace {
             tileType: 'FIRE',
             from: { col: 1, row: 0 },
             to: { col: 0, row: 2 },
-            isPath: false,
             movementKind: 'slide',
           },
         ],
@@ -741,7 +739,6 @@ function movementTraceInColumn(revisionId: number, col: number, fromRow: number,
             tileType: 'FIRE',
             from: { col, row: fromRow },
             to: { col, row: toRow },
-            isPath: false,
           },
         ],
         refillTiles: [
@@ -750,7 +747,6 @@ function movementTraceInColumn(revisionId: number, col: number, fromRow: number,
             tileType: 'EARTH',
             from: { col, row: -1 },
             to: { col, row: 0 },
-            isPath: false,
           },
         ],
       },
@@ -794,14 +790,12 @@ function stackedMovementTrace(): BoardAnimationTrace {
             tileType: 'FIRE',
             from: { col: 0, row: 0 },
             to: { col: 0, row: 1 },
-            isPath: false,
           },
           {
             tileId: 'lower',
             tileType: 'ICE',
             from: { col: 0, row: 1 },
             to: { col: 0, row: 2 },
-            isPath: false,
           },
         ],
         refillTiles: [],
@@ -1063,8 +1057,8 @@ function particleColorTrace(): BoardAnimationTrace {
 
 function nonstandardClearTrace(): BoardAnimationTrace {
   const cells = [
-    snapshotCell('land', 'LAND', 0, 0),
-    snapshotCell('rocket', 'ROCKET_H', 1, 0),
+    snapshotCell('rocket-h', 'ROCKET_H', 0, 0),
+    snapshotCell('rocket-v', 'ROCKET_V', 1, 0),
     snapshotCell('tnt', 'TNT', 2, 0),
     snapshotCell('lightball', 'LIGHTBALL', 3, 0),
   ];
@@ -1192,10 +1186,6 @@ function boardState(trace: BoardAnimationTrace): BoardRenderState {
     logicalWidth: LOGICAL_WIDTH,
     logicalHeight: LOGICAL_HEIGHT,
     boardCells: trace.finalSnapshot.cells.map((cell) => renderCell(cell.tileId, cell.tileType, cell.coord.col, cell.coord.row)),
-    pathCells: [],
-    mageCell: null,
-    goalCell: null,
-    hintedCells: [],
     selectedCell: null,
     queuedSwap: null,
     shakePixels: 0,
@@ -1231,7 +1221,6 @@ function snapshotCell(
     tileId,
     tileType,
     coord: { col, row },
-    isPath: false,
   };
 }
 
@@ -1246,7 +1235,6 @@ function renderCell(
     coord: { col, row },
     assetId: `tile.${tileType.toLowerCase()}`,
     tileType,
-    isPath: false,
     alpha: 1,
   };
 }

@@ -54,7 +54,6 @@ export function createEmptyBoard(options: CreateBoardOptions = {}): Board {
       blocker: null,
       modifier: null,
       isVoid: options.voidCells?.some((coord) => coord.col === col && coord.row === row) ?? false,
-      isPath: false,
     })),
   );
 }
@@ -85,7 +84,6 @@ export function cloneBoard(board: Board): Board {
       blocker: cell.blocker == null ? null : cloneBlocker(cell.blocker),
       modifier: cell.modifier,
       isVoid: cell.isVoid,
-      isPath: cell.isPath,
     })),
   );
 }

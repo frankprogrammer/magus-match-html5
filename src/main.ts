@@ -3,7 +3,6 @@ import { MagusMatchGameApp } from './core/GameApp';
 import {
   BrowserInputAdapter,
   parseDebugLevelNumber,
-  parseDebugLevelType,
   parseDebugSeed,
   parseOneLifeDoubleSpeedFlag,
 } from './platform-browser/BrowserInputAdapter';
@@ -21,14 +20,12 @@ if (root == null) {
 }
 
 const debugSeed = parseDebugSeed(window.location.search);
-const debugLevelType = parseDebugLevelType(window.location.search);
 const debugStartLevel = parseDebugLevelNumber(window.location.search);
 const oneLifeDoubleSpeed = parseOneLifeDoubleSpeedFlag(window.location.search);
 const app = new MagusMatchGameApp(debugSeed, {
-  debugLevelType,
   debugStartLevel,
   oneLifeDoubleSpeed,
-  skipTutorial: debugSeed != null || debugLevelType != null || debugStartLevel != null,
+  skipTutorial: debugSeed != null || debugStartLevel != null,
 });
 
 const presentation = new BrowserPresentationHost(root);

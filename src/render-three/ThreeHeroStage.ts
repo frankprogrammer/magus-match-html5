@@ -21,6 +21,7 @@ type OverrideableMaterial = THREE.MeshStandardMaterial | THREE.MeshBasicMaterial
 
 export const LIGHTNING_RAY_THICKNESS_PX = 15;
 export const LIGHTNING_RAY_RENDER_ORDER = 60;
+export const MAGE_PARTICLE_SOURCE_WORLD_OFFSET: ProjectileState['from'] = { x: 0.7, y: 0.24, z: 0 };
 const LIGHTNING_RAY_SEGMENT_COUNT = 18;
 const LIGHTNING_RAY_WAVE_COUNT = 2.35;
 const LIGHTNING_RAY_WAVE_AMPLITUDE = 0.24;
@@ -916,9 +917,9 @@ export function resolveMageParticleSourceWorldPosition(mageObject?: THREE.Object
   particleSource.updateWorldMatrix(true, false);
   const position = particleSource.getWorldPosition(new THREE.Vector3());
   return {
-    x: position.x,
-    y: position.y,
-    z: position.z,
+    x: position.x + MAGE_PARTICLE_SOURCE_WORLD_OFFSET.x,
+    y: position.y + MAGE_PARTICLE_SOURCE_WORLD_OFFSET.y,
+    z: position.z + MAGE_PARTICLE_SOURCE_WORLD_OFFSET.z,
   };
 }
 

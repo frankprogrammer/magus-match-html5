@@ -18,6 +18,7 @@ import {
   lightningRayMaterialSettings,
   lightningRayRibbonGeometryData,
   lightningRayThicknessWorldUnits,
+  MAGE_PARTICLE_SOURCE_WORLD_OFFSET,
   mageChargeMaterialSettings,
   projectWorldPositionToLogicalHeroStage,
   projectileChargeProgress,
@@ -119,7 +120,7 @@ describe('ThreeHeroStage projectile VFX', () => {
     expect(projectileChargeProgress({ activationDelaySec: 0.25, chargeDurationSec: 0.5 })).toBeCloseTo(0.5);
   });
 
-  it('resolves projectile origin from the mage particleSource world position', () => {
+  it('resolves projectile origin from the calibrated mage particleSource world position', () => {
     const mage = new THREE.Group();
     mage.position.set(2, 3, 4);
     mage.scale.set(2, 3, 4);
@@ -132,8 +133,9 @@ describe('ThreeHeroStage projectile VFX', () => {
     const position = resolveMageParticleSourceWorldPosition(mage);
     const renderProjectile = resolveProjectileRenderOrigin(projectile, mage);
 
-    expect(position?.x).toBeCloseTo(2.5);
-    expect(position?.y).toBeCloseTo(4.5);
+    expect(MAGE_PARTICLE_SOURCE_WORLD_OFFSET).toEqual({ x: 0.7, y: 0.24, z: 0 });
+    expect(position?.x).toBeCloseTo(3.2);
+    expect(position?.y).toBeCloseTo(4.74);
     expect(position?.z).toBeCloseTo(3.6);
     expect(renderProjectile.from).toEqual(position);
   });
@@ -287,13 +289,13 @@ describe('ThreeHeroStage projectile VFX', () => {
     const projected = resolveMageParticleSourceLogicalPosition(mage, camera, LOGICAL_WIDTH, HERO_STAGE_HEIGHT);
 
     expect(centered).toEqual({ x: 432, y: 350 });
-    expect(projected?.x).toBeCloseTo(512);
-    expect(projected?.y).toBeCloseTo(270);
+    expect(projected?.x).toBeCloseTo(568);
+    expect(projected?.y).toBeCloseTo(250.8);
 
     particleSource.position.set(2, -0.5, 0);
     const updated = resolveMageParticleSourceLogicalPosition(mage, camera, LOGICAL_WIDTH, HERO_STAGE_HEIGHT);
-    expect(updated?.x).toBeCloseTo(592);
-    expect(updated?.y).toBeCloseTo(390);
+    expect(updated?.x).toBeCloseTo(648);
+    expect(updated?.y).toBeCloseTo(370.8);
   });
 
   it('keeps tutorial match-energy targeting based on the foreground scale and scene offset', () => {
@@ -314,10 +316,10 @@ describe('ThreeHeroStage projectile VFX', () => {
       ? null
       : { x: -50 + projected.x * 1.5, y: projected.y * 1.5 };
 
-    expect(projected?.x).toBeCloseTo(512);
-    expect(projected?.y).toBeCloseTo(270);
-    expect(scaledTutorialTarget?.x).toBeCloseTo(718);
-    expect(scaledTutorialTarget?.y).toBeCloseTo(405);
+    expect(projected?.x).toBeCloseTo(568);
+    expect(projected?.y).toBeCloseTo(250.8);
+    expect(scaledTutorialTarget?.x).toBeCloseTo(802);
+    expect(scaledTutorialTarget?.y).toBeCloseTo(376.2);
   });
 
   it('returns null for logical particleSource projection when the source is missing', () => {
